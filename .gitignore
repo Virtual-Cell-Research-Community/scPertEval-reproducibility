@@ -1,0 +1,13 @@
+# Per-model generated/downloaded artifacts — regenerate by rerunning the model's scripts,
+# don't commit. Follows the same local (uncommitted) convention as ../data/.gitignore,
+# ../de_outputs/.gitignore, ../drf_outputs/.gitignore.
+*/pert_data/
+*/smoke_data/
+*/checkpoints/
+*/__pycache__/
+
+# models/data/ — generated data artifacts, fully reproducible from prepare_data.py/
+# prepare_split.py (deterministic seed) — nothing here needs to be tracked.
+data/*_folds/
+data/*.h5ad
+data/*_kfold_splits.json

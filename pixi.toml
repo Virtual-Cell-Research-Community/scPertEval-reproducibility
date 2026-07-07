@@ -1,0 +1,67 @@
+[workspace]
+name = "scperteval-models"
+description = "Isolated pixi environments for each benchmarked prediction model (one feature/environment per model)."
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+
+# --- GEARS (https://github.com/snap-stanford/GEARS) -------------------------
+[feature.gears.system-requirements]
+cuda = "12"
+
+[feature.gears.dependencies]
+python = "3.11.*"
+pytorch-gpu = ">=2.3"
+pytorch_geometric = "*"
+
+[feature.gears.pypi-dependencies]
+# cell-gears' published wheel has unpinned deps; pin to the versions its own
+# requirements.txt (github.com/snap-stanford/GEARS) expects — newer pandas (3.x)
+# breaks GEARS' `series[0]` positional-fallback usage.
+cell-gears = "*"
+pandas = "==2.2.2"
+
+[feature.gears.tasks]
+smoke-test = "python -c \"import torch, torch_geometric, gears; from importlib.metadata import version; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('pyg', torch_geometric.__version__); print('gears (cell-gears)', version('cell-gears'))\""
+
+# --- scGPT (https://github.com/bowang-lab/scGPT) -----------------------------
+# Real flash-attn (FA2), not the plain-PyTorch fallback: flash-attn's prebuilt wheels
+# only go up to a torch2.8 build, so pytorch-gpu is pinned to 2.8.* here (rather than
+# floating to latest like the `gears` feature) to match one exactly — avoids compiling
+# flash-attn from source. torch 2.8 already fully supports Hopper (H200, sm_90).
+[feature.scgpt.system-requirements]
+cuda = "12"
+
+[feature.scgpt.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.8.*"
+# Conda would otherwise pick the latest fsspec; constrain it here (not as a
+# pypi-dependency) so it flows into the pypi solve already compatible with
+# scgpt's `datasets<3` chain — see pixi's conda/pypi pinning docs.
+fsspec = "<=2024.6.1"
+# scgpt's perturbation fine-tuning pins `cell-gears<0.0.3` (an old GEARS release)
+# for its PertData data-loading pipeline; that in turn needs PyG, same as our
+# separate `gears` environment.
+pytorch_geometric = "*"
+
+[feature.scgpt.pypi-dependencies]
+# The PyPI wheel (0.2.4) predates PR #351 ("cuda-12.8 and FlashAttention 2.x
+# compatibility") and hard-crashes on import here: it imports torchtext.vocab
+# directly, whose compiled extension has an ABI mismatch against modern torch.
+# Install from GitHub main (pinned) instead, which has the fallback shims.
+scgpt = { git = "https://github.com/bowang-lab/scGPT.git", rev = "cebd6fae655b9c585a4807daa3ac31bb764f06b4" }
+# scgpt's utils/util.py imports IPython unconditionally; not declared as a dependency.
+ipython = "*"
+# to fetch the pretrained "whole-human" checkpoint, hosted as a Google Drive folder
+gdown = "*"
+# FA2 prebuilt wheel matching pytorch-gpu 2.8.* + cu12 + cp310 + cxx11abiTRUE, so no
+# from-source compile (flash-attn 1.x needs CUDA 11.7 and predates Hopper support).
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1%2Bcu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" }
+# flash_attn_compat's FA2 wrapper (_FA2FlashMHA) needs einops for the qkv reshape.
+einops = "*"
+
+[feature.scgpt.tasks]
+smoke-test = "python -c \"import torch, scgpt; from scgpt.model.flash_attn_compat import get_flash_attn_info; from importlib.metadata import version; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('scgpt', version('scgpt')); print('flash-attn:', get_flash_attn_info())\""
+
+[environments]
+gears = { features = ["gears"], no-default-feature = true }
+scgpt = { features = ["scgpt"], no-default-feature = true }
