@@ -1,5 +1,6 @@
-"""Compute a 5-fold, full-coverage gene-level cross-validation split (Miller et al. 2025's
-design), replacing GEARS' own one-shot `prepare_split(split="simulation", ...)`.
+"""Compute a k-fold, full-coverage gene-level cross-validation split (Miller et al. 2025's
+design uses 5 folds; `N_FOLDS` is set lower here for a fast-iterating smoke test), replacing
+GEARS' own one-shot `prepare_split(split="simulation", ...)`.
 
 GEARS' `simulation` split draws one random 75/~7.5/~17.5 train/val/test partition of genes —
 see `gears.data_utils.DataSplitter.get_simulation_split` — and stops there: whatever ~25% of
@@ -38,20 +39,21 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 
-N_FOLDS = 5
+N_FOLDS = 3
 SEED = 42
 VAL_FRAC_OF_REMAINDER = 0.125  # 12.5% of the 80% non-test remainder = 10% of the total
 
 
 def kfold_gene_splits(genes: list[str], n_folds: int = N_FOLDS, seed: int = SEED) -> list[dict[str, list[str]]]:
-    """5-fold train/val/test gene assignment: every gene is the test fold exactly once.
+    """k-fold train/val/test gene assignment: every gene is the test fold exactly once.
 
     Parameters
     ----------
     genes : list of str
         Unique perturbed gene symbols (``control`` excluded).
     n_folds : int
-        Number of folds (default 5, matching Miller et al. 2025's single-gene protocol).
+        Number of folds (``N_FOLDS`` by default — 5 for Miller et al. 2025's design, lower
+        here for a fast-iterating smoke test).
     seed : int
         Random seed for the one-time shuffle.
 

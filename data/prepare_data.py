@@ -21,9 +21,9 @@ ad.settings.allow_write_nullable_strings = True
 
 SOURCE = Path(__file__).resolve().parents[2] / "data" / "replogle22k562_processed_complete.h5ad"
 OUT = Path(__file__).resolve().parent / "smoke_k562_raw.h5ad"
-N_PERTS = 40
-CELLS_PER_PERT = 300
-CONTROL_CELLS = 2000
+N_PERTS = 12
+CELLS_PER_PERT = 100
+CONTROL_CELLS = 500
 CELL_TYPE = "K562"
 SEED = 0
 

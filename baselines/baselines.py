@@ -29,6 +29,7 @@ import anndata as ad
 import numpy as np
 from scperteval.dataset import Dataset
 from scperteval.types import RunConfig
+from sklearn.decomposition import PCA
 
 
 def mean_baseline(ds: Dataset) -> np.ndarray:
@@ -42,6 +43,126 @@ def no_change_baseline(ds: Dataset) -> np.ndarray:
 
 
 BASELINES = {"mean": mean_baseline, "no_change": no_change_baseline}
+
+
+def fold_mean_baseline(raw_path: str, fold: dict, min_cells: int = 30, seed: int = 42) -> ad.AnnData:
+    r"""Miller et al. 2025's mean baseline (mu_all).
+
+    The mean of per-perturbation means over *only this fold's training perturbations*,
+    predicted identically for every held-out test perturbation in the fold.
+
+    Unlike :func:`mean_baseline` (leave-one-out over every perturbation the dataset has,
+    regardless of which fold a model actually trained on), this never averages in cells from
+    a perturbation the fold's own model never saw — matching the paper's "average of averages
+    of all *train* perturbations" definition exactly, at the cost of needing the fold's split
+    (``models/data/prepare_split.py``'s ``fold_<i>.pkl`` format: condition strings, ``ctrl``
+    folded into ``"train"``).
+
+    Parameters
+    ----------
+    raw_path : str
+        Path to the raw (unsplit) ``.h5ad`` all folds are drawn from.
+    fold : dict
+        One fold's ``{"train": [...], "val": [...], "test": [...]}`` split (condition strings).
+
+    Returns
+    -------
+    anndata.AnnData
+        One row per fold-test perturbation, every row identical (mu_all).
+    """
+    adata = ad.read_h5ad(raw_path)
+    train_genes = {c.split("+")[0] for c in fold["train"] if c != "ctrl"}
+    test_genes = sorted({c.split("+")[0] for c in fold["test"] if c != "ctrl"})
+    pert = adata.obs["perturbation"].to_numpy()
+    train_mask = np.isin(pert, list(train_genes)) | (pert == "control")
+    cfg = RunConfig(dataset=raw_path, protocols=[], min_cells=min_cells, seed=seed)
+    train_ds = Dataset(adata[train_mask].copy(), cfg)
+    mu_all = train_ds.allpert_mean()
+    pred = ad.AnnData(X=np.tile(mu_all, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes})
+    pred.var_names = train_ds.var_names
+    return pred
+
+
+def _pseudobulk(adata: ad.AnnData, groups: list[str]) -> np.ndarray:
+    """``(genes, len(groups))`` mean-expression matrix, one column per perturbation label."""
+    pert = adata.obs["perturbation"].to_numpy()
+    cols = [np.asarray(adata.X[np.where(pert == g)[0]].mean(axis=0)).ravel() for g in groups]
+    return np.vstack(cols).T
+
+
+def linear_baseline(
+    raw_path: str, fold: dict, pca_dim: int = 10, ridge: float = 0.1, min_cells: int = 30, seed: int = 42
+) -> ad.AnnData:
+    r"""Ahlmann-Eltze et al.'s linear baseline: PCA embeddings + ridge bilinear regression.
+
+    Ported from const-ae/linear_perturbation_prediction-Paper's
+    ``benchmark/src/run_linear_pretrained_model.R`` (``solve_y_axb``), with its script
+    defaults (``pca_dim=10``, one ``ridge`` penalty shared by both embeddings).
+
+    For single-gene perturbations, a perturbation's embedding is *that gene's own* PCA
+    embedding (perturbation names equal gene names) — so a held-out gene's embedding needs no
+    separate fitting step, only the shared low-rank map ``K`` between the two embedding
+    spaces, fit once on the fold's training perturbations:
+
+    1. ``gene_emb = PCA(raw train pseudobulk, k)`` -> ``(genes, k)``; doubles as the
+       perturbation embedding, transposed (``control``'s embedding is the zero vector by
+       convention, since it is not itself a measured gene).
+    2. ``K`` minimizes ``||Y_train - (gene_emb @ K @ pert_emb_train + center)||^2`` via double
+       ridge regression, where ``Y_train`` is each train perturbation's pseudobulk minus the
+       control mean, and ``center`` is ``Y_train``'s row (per-gene) mean.
+    3. Predict a held-out gene ``g`` via ``gene_emb @ K @ pert_emb[:, g] + center + control_mean``.
+
+    Parameters
+    ----------
+    raw_path : str
+        Path to the raw (unsplit) ``.h5ad`` all folds are drawn from.
+    fold : dict
+        One fold's ``{"train": [...], "val": [...], "test": [...]}`` split (condition strings).
+    pca_dim : int
+        Embedding dimension for both the gene and perturbation PCA embeddings (script default
+        10; capped automatically to the number of training conditions available — relevant
+        only at smoke scale, where a fold's training set is far smaller than a real dataset's).
+    ridge : float
+        Ridge penalty shared by both embeddings' regularization terms (script default 0.1).
+
+    Returns
+    -------
+    anndata.AnnData
+        One row per fold-test perturbation.
+    """
+    adata = ad.read_h5ad(raw_path)
+    train_genes = sorted({c.split("+")[0] for c in fold["train"] if c != "ctrl"})
+    test_genes = sorted({c.split("+")[0] for c in fold["test"] if c != "ctrl"})
+
+    train_conditions = ["control", *train_genes]
+    pseudobulk_train = _pseudobulk(adata, train_conditions)  # (genes, 1 + n_train)
+    control_mean = pseudobulk_train[:, 0]
+
+    k = min(pca_dim, pseudobulk_train.shape[1] - 1)
+    gene_emb = PCA(n_components=k, random_state=seed).fit_transform(pseudobulk_train)  # (genes, k)
+    gene_row = {g: i for i, g in enumerate(adata.var_names)}
+
+    def pert_embedding(gene: str) -> np.ndarray:
+        return np.zeros(k) if gene == "control" else gene_emb[gene_row[gene]]
+
+    b_train = np.vstack([pert_embedding(g) for g in train_conditions]).T  # (k, 1 + n_train)
+    y_train = pseudobulk_train - control_mean[:, None]  # delta from control, same columns as b_train
+
+    center = y_train.mean(axis=1)
+    y_centered = y_train - center[:, None]
+    reg_a = np.linalg.inv(gene_emb.T @ gene_emb + ridge * np.eye(k))
+    reg_b = np.linalg.inv(b_train @ b_train.T + ridge * np.eye(k))
+    coef = reg_a @ gene_emb.T @ y_centered @ b_train.T @ reg_b  # (k, k)
+
+    b_test = np.vstack([pert_embedding(g) for g in test_genes]).T  # (k, n_test)
+    pred = gene_emb @ coef @ b_test + center[:, None] + control_mean[:, None]  # (genes, n_test)
+
+    out = ad.AnnData(X=pred.T.astype(np.float32), obs={"perturbation": test_genes})
+    out.var_names = adata.var_names
+    return out
+
+
+FOLD_SCOPED_BASELINES = {"mean": fold_mean_baseline, "linear": linear_baseline}
 
 
 def build_predictions(baseline: str, dataset_path: str, min_cells: int = 30, seed: int = 42) -> ad.AnnData:

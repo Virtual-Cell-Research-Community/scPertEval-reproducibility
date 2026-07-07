@@ -34,7 +34,7 @@ RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
 FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
 PERT_DATA_DIR = HERE / "pert_data"
 OUT_DIR = HERE / "smoke_data"
-EPOCHS = 3
+EPOCHS = 2
 
 
 def main() -> None:

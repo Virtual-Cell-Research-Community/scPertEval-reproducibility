@@ -93,7 +93,7 @@ load_param_prefixs = ["encoder", "value_encoder", "transformer_encoder"]
 lr = 1e-4
 batch_size = 64
 eval_batch_size = 64
-EPOCHS = 3
+EPOCHS = 2
 schedule_interval = 1
 amp = True
 
