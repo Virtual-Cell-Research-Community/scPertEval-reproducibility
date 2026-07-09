@@ -6,6 +6,8 @@
 */checkpoints/
 */__pycache__/
 compare_results.csv
+compare_pairwise.csv
+plots/
 
 # models/data/ — generated data artifacts, fully reproducible from prepare_data.py/
 # prepare_split.py (deterministic seed) — nothing here needs to be tracked.
