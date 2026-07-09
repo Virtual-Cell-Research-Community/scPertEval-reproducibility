@@ -226,9 +226,11 @@ def main() -> None:
         train_one_epoch(epoch)
         scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s")
 
-    def predict(pert_list: list[list[str]], pool_size: int | None = None) -> dict[str, np.ndarray]:
+    def predict(pert_list: list[list[str]], pool_size: int = 300) -> dict[str, np.ndarray]:
+        # 300 matches GEARS' own hardcoded num_samples default (gears.utils.
+        # create_cell_graph_dataset_for_prediction) so both models average
+        # over the same number of resampled control cells.
         ctrl_adata = pert_data.adata[pert_data.adata.obs["condition"] == "ctrl"]
-        pool_size = pool_size or len(ctrl_adata.obs)
         gene_list = pert_data.gene_names.values.tolist()
         model.eval()
         results = {}
