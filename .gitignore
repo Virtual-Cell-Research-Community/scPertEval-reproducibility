@@ -7,6 +7,7 @@
 */cache/
 */wandb/
 */saved_models/
+*/runs/
 */__pycache__/
 compare_results.csv
 compare_pairwise.csv

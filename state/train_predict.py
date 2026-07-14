@@ -1,0 +1,205 @@
+"""Smoke test: train ArcInstitute/state (STATE Transition model) on a small subsample and
+write a scPertEval-compatible predictions.h5ad.
+
+Uses our own 5-fold cross-validation split (models/data/prepare_split.py) rather than the
+official Replogle-Nadig Colab's own hepg2 few-shot holdout — see that script's docstring for
+why full gene coverage across folds beats one arbitrary holdout. STATE's own `cell-load`
+few-shot TOML mechanism (hold out specific genes within a cell type) maps directly onto our
+existing fold format: models/data/*_kfold_splits.json already stores bare gene symbols
+matching our RAW file's own ``obs['perturbation']`` convention, so no new per-fold file is
+needed (unlike PRESAGE's own convention — see ``to_presage_custom_split``).
+
+Unlike gears/presage/sclambda, `arc-state` is a properly packaged, PyPI-published project with
+a real CLI (`state tx ...`, Hydra-config driven) — there's no importable ``Model``/``.train()``
+class to call directly, so this script drives the official CLI via subprocess, the same way a
+human would from the shell. This mirrors the official Colab
+(https://colab.research.google.com/drive/1Ih-KtTEsPqDQnjTh6etVv_f-gRAA86ZN, "STATE Training on
+Replogle-Nadig") with a few deliberate deviations:
+
+- HVGs are computed manually with scanpy (as the Colab itself does — data is already
+  log-transformed), skipping `state tx preprocess_train`'s own normalize_total+log1p: our
+  shared RAW file is already on that scale (models/data/prepare_data.py), and re-normalizing
+  would double-transform it — same reasoning as PRESAGE's ``SmokePRESAGEDataModule``.
+- `data.kwargs.output_space` is left at its default ("all", the full measured gene panel)
+  rather than overridden to "gene" (HVG-only) like the Colab's own run. "gene" would restrict
+  predictions to the ~2000 HVG-selected genes, not directly comparable gene-for-gene with
+  gears/scgpt/presage/sclambda's predictions.h5ad (all four score across the full panel);
+  "all" is an equally official, first-class mode of the same CLI, just not the one the Colab
+  happens to demo.
+- `state tx predict` is run with `--predict-only --pseudobulk` rather than the Colab's bare
+  invocation (which also runs STATE's own internal cell-eval metrics suite). scPertEval scores
+  raw predictions itself downstream — same reasoning as PRESAGE's `training.eval_test=False` —
+  and `--pseudobulk` aggregates to one row per (cell_type, perturbation), matching every other
+  model's predictions.h5ad convention (STATE predicts per-cell by default).
+- `model=pertsets` (the repo's current GPT2-backed preset) is used with no architecture
+  overrides at all, rather than the Colab's `model=state` + hidden_dim=328 (which errors under
+  the repo's current `state.yaml` — see below) or the preprint's own Table 3 numbers for
+  Replogle-Nadig (hidden_dim=128, cell_set_len=32, GPT2, ~10M params). Table 3's exact figures
+  don't correspond to any config actually checked into the repo's git history (a full sweep of
+  real `replogle_*.yaml` configs from past commits clusters at hidden_dim 328-896, never 128) —
+  the closest thing to an authoritative "this is what we ran" artifact is `replogle_best.yaml`
+  (hidden_dim=672, cell_set_len=512, LLaMA), which itself doesn't match Table 3's GPT2 claim
+  either. Rather than chase an unreproducible historical config, this just takes today's
+  shipped `pertsets` preset as-is — a defensible, easy-to-justify choice for this benchmark
+  regardless of which exact configuration produced the paper's own numbers. (For reference, the
+  Colab's `hidden_dim=328` doesn't evenly divide `model=state`'s current 12 attention heads —
+  `transformers`' LlamaConfig validates that strictly and raises at construction — while
+  `pertsets.yaml` already has GPT2 + hidden_dim=328, the Colab's exact values, suggesting
+  `model=state` used to mean what `pertsets.yaml` now is before some repo-side rename.)
+- Only `training.max_steps`/`val_freq`/`ckpt_every_n_steps`/`batch_size` are additionally cut
+  down for smoke-test speed, and `use_wandb=false` since no wandb login is available here (same
+  spirit as PRESAGE's `training.offline=True`).
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import pickle
+import subprocess
+import sys
+from pathlib import Path
+
+import anndata as ad
+import numpy as np
+import pandas as pd
+import scanpy as sc
+
+ad.settings.allow_write_nullable_strings = True
+
+HERE = Path(__file__).resolve().parent
+RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
+KFOLD_SPLITS = HERE.parent / "data" / "smoke_k562_kfold_splits.json"
+DATASET_DIR = HERE / "pert_data" / "smoke_k562"
+RUN_DIR = HERE / "runs"
+OUT_DIR = HERE / "smoke_data"
+DATASET_NAME = "smoke_k562"
+CELL_TYPE = "K562"
+NUM_HVGS = 2000
+MAX_STEPS = 20
+VAL_FREQ = 10
+
+
+def prepare_dataset() -> Path:
+    """Write our shared RAW smoke data in cell-load's expected form: a dataset directory
+    containing one h5ad, with obs['gem_group'] (cell-load's default batch_col — a single
+    placeholder value, we have no real batch/plate info) and obsm['X_hvg'] (HVGs computed
+    directly on the already-normalized data, no redundant normalize_total/log1p — see the
+    module docstring)."""
+    adata = ad.read_h5ad(RAW)
+    adata.obs["gem_group"] = "1"
+
+    sc.pp.highly_variable_genes(adata, n_top_genes=NUM_HVGS)
+    hvg = adata[:, adata.var["highly_variable"]].X
+    adata.obsm["X_hvg"] = hvg.toarray() if hasattr(hvg, "toarray") else np.asarray(hvg)
+
+    DATASET_DIR.mkdir(parents=True, exist_ok=True)
+    out_path = DATASET_DIR / f"{CELL_TYPE}.h5ad"
+    adata.write_h5ad(out_path)
+    return out_path
+
+
+def build_toml(fold: dict[str, list[str]], out_path: Path) -> Path:
+    """cell-load's few-shot TOML format (see its README) — bare gene symbols, same convention
+    our RAW file's obs['perturbation'] already uses, no relabeling needed."""
+    val = ", ".join(f'"{g}"' for g in fold["val"])
+    test = ", ".join(f'"{g}"' for g in fold["test"])
+    out_path.write_text(
+        f"""[datasets]
+{DATASET_NAME} = "{DATASET_DIR}"
+
+[training]
+{DATASET_NAME} = "train"
+
+[zeroshot]
+
+[fewshot]
+[fewshot."{DATASET_NAME}.{CELL_TYPE}"]
+val = [{val}]
+test = [{test}]
+"""
+    )
+    return out_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
+    args = parser.parse_args()
+
+    fold = json.loads(KFOLD_SPLITS.read_text())[args.fold]
+    run_name = f"fold_{args.fold}"
+
+    prepare_dataset()
+    # Written into pert_data/ (already gitignored via */pert_data/) rather than directly under
+    # models/state/, alongside the dataset's own h5ad — both are generated, per-fold artifacts.
+    toml_path = build_toml(fold, DATASET_DIR.parent / f"fold_{args.fold}.toml")
+
+    subprocess.run(
+        [
+            "state",
+            "tx",
+            "train",
+            f"data.kwargs.toml_config_path={toml_path}",
+            "data.kwargs.embed_key=X_hvg",
+            "data.kwargs.pert_col=perturbation",
+            "data.kwargs.control_pert=control",
+            # Default is 12 DataLoader workers — for a few-hundred-cell smoke dataset this
+            # reliably deadlocked (`state tx predict` hung indefinitely: 12 worker
+            # subprocesses sitting at 0% CPU, no progress). 0 runs loading in the main
+            # process, avoiding worker-pool startup/IPC entirely — irrelevant overhead at
+            # this scale anyway. `data_module.save_state()` persists this, so `predict`'s
+            # reloaded data module inherits it without a separate override.
+            "data.kwargs.num_workers=0",
+            f"training.max_steps={MAX_STEPS}",
+            f"training.val_freq={VAL_FREQ}",
+            f"training.ckpt_every_n_steps={MAX_STEPS}",
+            "training.batch_size=4",
+            "model=pertsets",
+            "use_wandb=false",
+            "overwrite=true",
+            f"output_dir={RUN_DIR}",
+            f"name={run_name}",
+        ],
+        check=True,
+    )
+
+    run_output_dir = RUN_DIR / run_name
+    subprocess.run(
+        [
+            "state",
+            "tx",
+            "predict",
+            "--output-dir",
+            str(run_output_dir),
+            "--checkpoint",
+            "final.ckpt",
+            "--predict-only",
+            "--pseudobulk",
+        ],
+        check=True,
+    )
+
+    pred_path = run_output_dir / "eval_final.ckpt" / "adata_pred.h5ad"
+    pred = ad.read_h5ad(pred_path)
+    # --pseudobulk aggregates by (context, perturbation) and, with should_yield_control_cells
+    # defaulting to true, includes a "control" group alongside the actual test genes — drop
+    # it, matching gears/scgpt/presage/sclambda's convention of one row per test perturbation.
+    pred = pred[pred.obs["perturbation"] != "control"].copy()
+
+    with open(run_output_dir / "var_dims.pkl", "rb") as f:
+        var_dims = pickle.load(f)
+
+    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    pred_adata = ad.AnnData(
+        X=np.asarray(pred.X, dtype=np.float32),
+        obs={"perturbation": pred.obs["perturbation"].to_numpy()},
+    )
+    pred_adata.var_names = pd.Index(np.asarray(var_dims["gene_names"]))
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    pred_adata.write_h5ad(out_path)
+    print(f"wrote {pred_adata.shape} predictions to {out_path}")
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -129,8 +129,39 @@ fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl
   "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
 ] }
 
+# --- STATE (https://github.com/ArcInstitute/state) --------------------------
+# Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
+# project (pyproject.toml, hatchling build) — a plain pypi-dependency, no vendoring needed.
+[feature.state.system-requirements]
+cuda = "12"
+
+[feature.state.dependencies]
+python = "3.11.*"
+# arc-state's own pypi torch>=2.7.0 constraint has no upper bound, so pip/uv resolves the
+# latest torch wheel — which bundles a newer CUDA runtime (cu13) than this system's driver
+# supports (RuntimeError: "The NVIDIA driver on your system is too old"). Pin torch via the
+# conda-forge pytorch-gpu package instead, same as every other feature here — it resolves
+# against system-requirements.cuda below, and pixi's pypi resolution then treats arc-state's
+# torch requirement as already satisfied rather than installing a second copy.
+pytorch-gpu = ">=2.7"
+
+[feature.state.pypi-dependencies]
+arc-state = "*"
+# arc-state declares transformers>=4.52.3 with no upper bound; pip/uv resolves the latest 5.x,
+# whose GPT2Attention no longer has a `.bias` causal-mask buffer that arc-state's own
+# GPT2BidirectionalModel wrapper (state/tx/models/utils.py) pokes directly at construction —
+# AttributeError: 'GPT2Attention' object has no attribute 'bias'. Only hit when using a
+# GPT2-backed model config (model=pertsets, needed to match the State preprint's own
+# Replogle-Nadig architecture — see models/state/train_predict.py); pin below 5 to match what
+# arc-state was actually built against.
+transformers = "<5"
+
+[feature.state.tasks]
+smoke-test = "python -c \"import torch, state; from state.tx.models.state_transition import StateTransitionPerturbationModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\" && state --help"
+
 [environments]
 gears = { features = ["gears"], no-default-feature = true }
 scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
+state = { features = ["state"], no-default-feature = true }
