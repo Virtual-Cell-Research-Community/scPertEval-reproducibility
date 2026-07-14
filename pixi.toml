@@ -1,4 +1,7 @@
 [workspace]
+# pixi-build (path/git package dependencies, e.g. the presage feature's vendored
+# presage-src below) is still preview-gated.
+preview = ["pixi-build"]
 name = "scperteval-models"
 description = "Isolated pixi environments for each benchmarked prediction model (one feature/environment per model)."
 channels = ["conda-forge", "pytorch", "nvidia"]
@@ -68,7 +71,41 @@ fetch-checkpoint = { cmd = "pixi exec --spec gdown -- gdown --folder 'https://dr
   "scgpt/checkpoints/scGPT_human/vocab.json",
 ] }
 
+# --- PRESAGE (https://github.com/Genentech/PRESAGE) -------------------------
+# PRESAGE has no pyproject.toml/setup.py (unpackaged research code, Genentech
+# Non-Commercial license) — `presage-src` (models/presage/vendor/presage-src) is a
+# tiny local pixi-build package that fetches it from git at a pinned rev and copies
+# its src/*.py verbatim onto site-packages (see its recipe.yaml), so we get the
+# official model/datamodule code without a submodule or a hand-authored reimplementation.
+[feature.presage.system-requirements]
+cuda = "12"
+
+[feature.presage.dependencies]
+# presage-src's own recipe.yaml declares its real runtime deps (torch, pytorch_geometric,
+# pytorch-lightning, scanpy, wandb, ...) as run requirements — not pinned to PRESAGE's own
+# environment.yml (torch 2.2.0 + the `pyg` channel's matching pyg=2.5.2 build), since
+# conda-forge's pytorch_geometric metapackage already works fine against a newer torch in
+# the `gears` feature above (GATConv, the only PyG op PRESAGE's model uses, is stable
+# across that range). They flow into this environment transitively; nothing to redeclare
+# here unless this feature needs something presage-src itself doesn't.
+presage-src = { path = "presage/vendor/presage-src" }
+
+[feature.presage.tasks]
+smoke-test = "python -c \"import torch, torch_geometric, pytorch_lightning, presage, datamodule, model_harness, train; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('pyg', torch_geometric.__version__); print('pytorch-lightning', pytorch_lightning.__version__)\""
+# Downloads PRESAGE's external gene-embedding cache (Zenodo, ~3.4GB: pathway/other
+# knowledge-source embeddings — STRING, MSigDB, ESM2, GenePT, DepMap, ...) and unpacks it
+# via their own src/prep_dataset_utils/unpack_cache.sh, fetched at the same pinned commit
+# presage-src/recipe.yaml uses, rather than reimplementing its tar/mv/gunzip steps here.
+# `outputs` makes reruns a no-op once the cache is already unpacked.
+fetch-cache = { cmd = "mkdir -p presage/cache && cd presage/cache && curl -fsSL -o cache.tar.gz 'https://zenodo.org/records/15587986/files/cache.tar.gz?download=1' && curl -fsSL -o unpack_cache.sh 'https://raw.githubusercontent.com/Genentech/PRESAGE/2c7b231c60cf110c4aab0acf8ecd2c2b3268fffb/src/prep_dataset_utils/unpack_cache.sh' && bash unpack_cache.sh && rm -f cache.tar.gz unpack_cache.sh temp.txt", outputs = [
+  "presage/cache/data",
+  "presage/cache/splits",
+  "presage/cache/configs",
+  "presage/cache/cache/pathway_embeddings",
+  "presage/cache/cache/other_embeddings",
+] }
 
 [environments]
 gears = { features = ["gears"], no-default-feature = true }
 scgpt = { features = ["scgpt"], no-default-feature = true }
+presage = { features = ["presage"], no-default-feature = true }

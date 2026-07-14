@@ -4,6 +4,9 @@
 */pert_data/
 */smoke_data/
 */checkpoints/
+*/cache/
+*/wandb/
+*/saved_models/
 */__pycache__/
 compare_results.csv
 compare_pairwise.csv

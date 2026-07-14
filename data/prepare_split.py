@@ -23,6 +23,10 @@ Outputs, per input raw `.h5ad`:
   ``pert_data.prepare_split(split="custom", split_dict_path=...)`` expects (condition strings,
   ``ctrl`` folded into train) — so `train_predict.py` scripts keep using GEARS' own
   `PertData`/dataloader machinery for everything except the random split itself.
+- ``<name>_folds/fold_<i>_presage.json`` — the same fold again, in PRESAGE's own
+  ``scPerturbDataModule.setup``/``pert_to_ind`` split format (bare gene symbols, ``"control"``
+  instead of ``ctrl``, folded into train) — see ``to_presage_custom_split``. Same gene membership
+  as ``fold_<i>.pkl``, just relabeled, so gears/scgpt/presage are all scored on identical folds.
 
 Usage::
 
@@ -90,6 +94,22 @@ def to_gears_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
     }
 
 
+def to_presage_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
+    """A fold's gene lists as PRESAGE's split format.
+
+    Unlike GEARS' ``"GENE+ctrl"`` condition strings, PRESAGE's own preprocessing
+    (``PRESAGEDataModule.prepare_data``: ``.replace("+", "_").replace("ctrl", "").strip("_")``,
+    empty string -> ``"control"``) reduces a single-gene condition to the bare gene symbol and
+    the control condition to ``"control"`` — a combo would become ``"GENE1_GENE2"``, but this
+    split is gene-level/single-gene only, so that case doesn't arise here.
+    """
+    return {
+        "train": [*fold["train"], "control"],
+        "val": list(fold["val"]),
+        "test": list(fold["test"]),
+    }
+
+
 def main() -> None:
     if len(sys.argv) != 2:
         raise SystemExit(f"usage: {sys.argv[0]} <raw.h5ad>")
@@ -110,6 +130,10 @@ def main() -> None:
         split_dict = to_gears_custom_split(fold)
         with open(fold_dir / f"fold_{i}.pkl", "wb") as f:
             pickle.dump(split_dict, f)
+
+        presage_split = to_presage_custom_split(fold)
+        (fold_dir / f"fold_{i}_presage.json").write_text(json.dumps(presage_split, indent=2) + "\n")
+
         print(f"  fold {i}: train={len(split_dict['train'])} val={len(split_dict['val'])} test={len(split_dict['test'])}")
 
 
