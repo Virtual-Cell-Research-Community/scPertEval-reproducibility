@@ -105,7 +105,32 @@ fetch-cache = { cmd = "mkdir -p presage/cache && cd presage/cache && curl -fsSL 
   "presage/cache/cache/other_embeddings",
 ] }
 
+# --- scLAMBDA (https://github.com/gefeiwang/scLAMBDA) -----------------------
+# scLAMBDA has no pyproject.toml/setup.py either — `sclambda-src`
+# (models/sclambda/vendor/sclambda-src) vendors it the same way presage-src does: fetch from
+# git at a pinned rev, copy the package verbatim onto site-packages (see its recipe.yaml).
+[feature.sclambda.system-requirements]
+cuda = "12"
+
+[feature.sclambda.dependencies]
+# sclambda-src's own recipe.yaml declares its real runtime deps (torch, scanpy, anndata,
+# scikit-learn, umap-learn, ...) as run requirements — self-describing, same convention as
+# presage-src. Nothing to redeclare here.
+sclambda-src = { path = "sclambda/vendor/sclambda-src" }
+
+[feature.sclambda.tasks]
+smoke-test = "python -c \"import torch, sclambda; from sclambda import model, networks, utils; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+# scLAMBDA's own Model class takes a `gene_embeddings: dict[str, np.array]` as input — it
+# never computes embeddings itself. Its own demo loads a precomputed pickle that traces back
+# to the GenePT project (github.com/yiqunchen/GenePT): OpenAI text-embedding-3-large
+# embeddings of NCBI gene summaries, precomputed once for ~134k gene symbols and deposited on
+# Zenodo — no OpenAI API key needed to reuse them. `outputs` makes reruns a no-op once fetched.
+fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl -fsSL -o GenePT_emebdding_v2.zip 'https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1' && unzip -o GenePT_emebdding_v2.zip && rm -f GenePT_emebdding_v2.zip", outputs = [
+  "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
+] }
+
 [environments]
 gears = { features = ["gears"], no-default-feature = true }
 scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
+sclambda = { features = ["sclambda"], no-default-feature = true }
