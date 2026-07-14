@@ -57,24 +57,10 @@ HERE = Path(__file__).resolve().parent
 RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
 FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
 PERT_DATA_DIR = HERE / "pert_data"
+# Populated by `pixi run -e scgpt fetch-checkpoint` (models/pixi.toml) — not downloaded
+# here, so this script has no gdown dependency of its own.
 CHECKPOINT_DIR = HERE / "checkpoints" / "scGPT_human"
-CHECKPOINT_GDRIVE_URL = "https://drive.google.com/drive/folders/1oWh_-ZRdhtoGQ2Fw24HP41FgLoomVo-y"
-CHECKPOINT_FILES = ("args.json", "best_model.pt", "vocab.json")
 OUT_DIR = HERE / "smoke_data"
-
-
-def ensure_checkpoint(checkpoint_dir: Path, gdrive_url: str = CHECKPOINT_GDRIVE_URL) -> None:
-    """Download the pretrained scGPT `whole-human` checkpoint folder if not already present."""
-    if all((checkpoint_dir / f).exists() for f in CHECKPOINT_FILES):
-        return
-    import gdown
-
-    checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    scg.logger.info(f"checkpoint not found at {checkpoint_dir}, downloading from {gdrive_url}")
-    gdown.download_folder(gdrive_url, output=str(checkpoint_dir), quiet=False)
-    missing = [f for f in CHECKPOINT_FILES if not (checkpoint_dir / f).exists()]
-    if missing:
-        raise RuntimeError(f"checkpoint download incomplete, missing {missing} in {checkpoint_dir}")
 
 pad_token = "<pad>"
 special_tokens = [pad_token, "<cls>", "<eoc>"]
@@ -108,7 +94,10 @@ def main() -> None:
     fold_path = FOLD_DIR / f"fold_{args.fold}.pkl"
     out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
 
-    ensure_checkpoint(CHECKPOINT_DIR)
+    if not (CHECKPOINT_DIR / "best_model.pt").exists():
+        raise FileNotFoundError(
+            f"{CHECKPOINT_DIR} has no checkpoint — run `pixi run -e scgpt fetch-checkpoint` first"
+        )
 
     pert_data = PertData(str(PERT_DATA_DIR))
     pert_data.new_data_process(dataset_name="smoke_k562", adata=ad.read_h5ad(RAW))

@@ -51,8 +51,6 @@ pytorch_geometric = "*"
 scgpt = { git = "https://github.com/bowang-lab/scGPT.git", rev = "cebd6fae655b9c585a4807daa3ac31bb764f06b4" }
 # scgpt's utils/util.py imports IPython unconditionally; not declared as a dependency.
 ipython = "*"
-# to fetch the pretrained "whole-human" checkpoint, hosted as a Google Drive folder
-gdown = "*"
 # FA2 prebuilt wheel matching pytorch-gpu 2.8.* + cu12 + cp310 + cxx11abiTRUE, so no
 # from-source compile (flash-attn 1.x needs CUDA 11.7 and predates Hopper support).
 flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1%2Bcu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" }
@@ -61,6 +59,15 @@ einops = "*"
 
 [feature.scgpt.tasks]
 smoke-test = "python -c \"import torch, scgpt; from scgpt.model.flash_attn_compat import get_flash_attn_info; from importlib.metadata import version; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('scgpt', version('scgpt')); print('flash-attn:', get_flash_attn_info())\""
+# gdown isn't a dependency of scgpt's own code (it only ever downloads the pretrained
+# checkpoint once) — `pixi exec` runs it from its own ephemeral/cached tool environment
+# instead of adding it to this feature's permanent dependency list.
+fetch-checkpoint = { cmd = "pixi exec --spec gdown -- gdown --folder 'https://drive.google.com/drive/folders/1oWh_-ZRdhtoGQ2Fw24HP41FgLoomVo-y' -O scgpt/checkpoints/", outputs = [
+  "scgpt/checkpoints/scGPT_human/args.json",
+  "scgpt/checkpoints/scGPT_human/best_model.pt",
+  "scgpt/checkpoints/scGPT_human/vocab.json",
+] }
+
 
 [environments]
 gears = { features = ["gears"], no-default-feature = true }
