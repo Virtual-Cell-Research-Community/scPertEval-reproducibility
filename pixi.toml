@@ -159,9 +159,39 @@ transformers = "<5"
 [feature.state.tasks]
 smoke-test = "python -c \"import torch, state; from state.tx.models.state_transition import StateTransitionPerturbationModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\" && state --help"
 
+# --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
+# tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
+# tabular foundation models on perturbation-response prediction. It also ships a separate
+# cross-cell-type "cellmatch" pipeline (NN/OT matching between source/target cell types) that
+# doesn't fit our task — `TabICLMultiviewModel` is the piece that does (see
+# models/tabicl/train_predict.py's docstring): X = a perturbed gene's embedding (reusing the
+# same PRESAGE gene-embedding cache as models/presage/cache), y = that perturbation's
+# PCA-reduced logFC, TabICL doing in-context regression from one to the other.
+# TabPFNMultiviewModel (same file, swaps in TabPFNRegressor) was tried first, but TabPFN's own
+# checkpoint download now requires accepting a license through an interactive browser flow
+# (ux.priorlabs.ai) — a `TabPFNLicenseError` with no non-interactive path here. TabICL's
+# checkpoint (`jingang/TabICL` on Hugging Face) downloads with a plain, ungated
+# `huggingface_hub.hf_hub_download` — same tabular-ICL-foundation-model idea, no gate.
+# tfm-perturbation has no PyPI release, so install straight from GitHub, pinned to a commit.
+[feature.tabicl.system-requirements]
+cuda = "12"
+
+[feature.tabicl.dependencies]
+python = "3.11.*"
+# Same reasoning as every other feature here — pin torch via conda-forge so tabicl's own
+# unpinned torch requirement resolves against a CUDA build this system's driver supports.
+pytorch-gpu = ">=2.0"
+
+[feature.tabicl.pypi-dependencies]
+tfm-perturbation = { git = "https://github.com/royerlab/tfm-perturbation.git", rev = "c7b2786c2aee946db1da442c39ad1d9bdb303d14" }
+
+[feature.tabicl.tasks]
+smoke-test = "python -c \"import torch, tabicl, tfm_perturbation; from tfm_perturbation.models.transcriptomics.tabicl_multiview import TabICLMultiviewModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
 [environments]
 gears = { features = ["gears"], no-default-feature = true }
 scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
+tabicl = { features = ["tabicl"], no-default-feature = true }
