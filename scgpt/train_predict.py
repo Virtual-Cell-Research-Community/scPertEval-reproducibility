@@ -11,8 +11,12 @@ ways this script fixes:
   - `eval_perturb` casts to the removed `np.float` alias; replaced with `np.float64`.
 
 Otherwise the logic (data via GEARS' PertData, partial-prefix loading of the pretrained
-encoder, the `TransformerGenerator` fine-tuning loop, and predicting via pooled control-cell
-graphs) is unchanged from the tutorial.
+encoder, the `TransformerGenerator` fine-tuning loop, per-epoch validation with
+patience-based early stopping and best-model selection by validation Pearson correlation,
+and predicting via pooled control-cell graphs) is unchanged from the tutorial — including
+its own `shiftbioscience/Perturbation-Models-Outperform-Baselines` and
+`const-ae/linear_perturbation_prediction-Paper` reimplementations, which both keep the same
+validation/early-stopping/best-model structure.
 
 Reuses the exact same subsampled raw data and 5-fold split as models/gears/train_predict.py
 (models/data/prepare_split.py's fold_<i>.pkl, via GEARS' own split="custom") so the two
@@ -51,7 +55,12 @@ import scgpt as scg  # noqa: E402
 from scgpt.model import TransformerGenerator  # noqa: E402
 from scgpt.loss import masked_mse_loss  # noqa: E402
 from scgpt.tokenizer.gene_tokenizer import GeneVocab  # noqa: E402
-from scgpt.utils import load_pretrained, map_raw_id_to_vocab_id, set_seed  # noqa: E402
+from scgpt.utils import (  # noqa: E402
+    compute_perturbation_metrics,
+    load_pretrained,
+    map_raw_id_to_vocab_id,
+    set_seed,
+)
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
@@ -81,6 +90,8 @@ batch_size = 64
 eval_batch_size = 64
 schedule_interval = 1
 amp = True
+# Matches the tutorial's own early_stop = 10.
+EARLY_STOP = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 set_seed(42)
@@ -214,12 +225,60 @@ def main() -> None:
             total_loss += loss.item()
             n_batches += 1
         scg.logger.info(f"epoch {epoch} mean train loss {total_loss / max(n_batches, 1):.4f}")
-        scheduler.step()
+
+    def eval_perturb(loader: DataLoader) -> dict[str, np.ndarray]:
+        """Mirrors the tutorial's own eval_perturb: run in inference mode over a loader,
+        collecting predictions/truth (all genes and DE-subset) for compute_perturbation_metrics."""
+        model.eval()
+        pert_cat, pred, truth, pred_de, truth_de = [], [], [], [], []
+        with torch.no_grad():
+            for batch_data in loader:
+                batch_data.to(device)
+                pert_cat.extend(batch_data.pert)
+                p = model.pred_perturb(batch_data, include_zero_gene, gene_ids=gene_ids, amp=amp)
+                t = batch_data.y
+                pred.extend(p.cpu())
+                truth.extend(t.cpu())
+                for i, de_idx in enumerate(batch_data.de_idx):
+                    pred_de.append(p[i, de_idx])
+                    truth_de.append(t[i, de_idx])
+        pred, truth = torch.stack(pred), torch.stack(truth)
+        pred_de, truth_de = torch.stack(pred_de), torch.stack(truth_de)
+        # The tutorial casts to the removed np.float alias; np.float64 is the equivalent
+        # replacement (see module docstring).
+        return {
+            "pert_cat": np.array(pert_cat),
+            "pred": pred.numpy().astype(np.float64),
+            "truth": truth.numpy().astype(np.float64),
+            "pred_de": pred_de.cpu().numpy().astype(np.float64),
+            "truth_de": truth_de.cpu().numpy().astype(np.float64),
+        }
+
+    ctrl_adata = pert_data.adata[pert_data.adata.obs["condition"] == "ctrl"]
+    best_val_corr = 0.0
+    best_model = None
+    patience = 0
 
     for epoch in range(1, args.epochs + 1):
         start = time.time()
         train_one_epoch(epoch)
-        scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s")
+        val_res = eval_perturb(pert_data.dataloader["val_loader"])
+        val_score = compute_perturbation_metrics(val_res, ctrl_adata)["pearson"]
+        scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s, val pearson {val_score:.4f}")
+        if val_score > best_val_corr:
+            best_val_corr = val_score
+            best_model = copy.deepcopy(model)
+            patience = 0
+        else:
+            patience += 1
+            if patience >= EARLY_STOP:
+                scg.logger.info(f"early stop at epoch {epoch}")
+                break
+        scheduler.step()
+
+    # best_model can only stay None if validation Pearson never exceeds 0 in any epoch —
+    # the tutorial itself has no guard against this either.
+    model = best_model
 
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's checkpoint.
