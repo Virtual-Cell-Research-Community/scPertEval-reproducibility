@@ -86,8 +86,6 @@ max_seq_len = 1536
 load_param_prefixs = ["encoder", "value_encoder", "transformer_encoder"]
 
 lr = 1e-4
-batch_size = 64
-eval_batch_size = 64
 schedule_interval = 1
 amp = True
 # Matches the tutorial's own early_stop = 10.
@@ -105,7 +103,15 @@ def main() -> None:
         help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
-    parser.add_argument("--epochs", type=int, default=2, help="fine-tuning epochs (default: 2, smoke-test scale)")
+    # The tutorial's own value (epochs = 15), with its patience=10 early stopping doing
+    # the real work — cellsimbench's own scgpt.yaml uses a fixed max_epochs=10 with no
+    # early stopping at all, a different structure, not something to match here (see
+    # module docstring). Smoke scale needs a much lower value passed explicitly.
+    parser.add_argument("--epochs", type=int, default=15, help="fine-tuning epochs (default: 15, full-scale)")
+    # Already matches both smoke and full scale (cell-level batching) and the tutorial's
+    # own value — no smoke/full distinction needed, just exposed for configurability.
+    parser.add_argument("--batch-size", type=int, default=64, help="training batch size (default: 64)")
+    parser.add_argument("--eval-batch-size", type=int, default=64, help="eval batch size (default: 64)")
     args = parser.parse_args()
     raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
     fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
@@ -125,7 +131,7 @@ def main() -> None:
     pert_data.split = "custom"
     with open(fold_path, "rb") as f:
         pert_data.set2conditions = pickle.load(f)
-    pert_data.get_dataloader(batch_size=batch_size, test_batch_size=eval_batch_size)
+    pert_data.get_dataloader(batch_size=args.batch_size, test_batch_size=args.eval_batch_size)
 
     model_config_file = CHECKPOINT_DIR / "args.json"
     model_file = CHECKPOINT_DIR / "best_model.pt"
@@ -299,7 +305,7 @@ def main() -> None:
                 cell_graphs = create_cell_graph_dataset_for_prediction(
                     pert, ctrl_adata, gene_list, device, num_samples=pool_size
                 )
-                loader = DataLoader(cell_graphs, batch_size=eval_batch_size, shuffle=False)
+                loader = DataLoader(cell_graphs, batch_size=args.eval_batch_size, shuffle=False)
                 preds = []
                 for batch_data in loader:
                     preds.append(

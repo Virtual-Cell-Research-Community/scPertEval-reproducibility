@@ -44,7 +44,17 @@ def main() -> None:
         help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
-    parser.add_argument("--epochs", type=int, default=2, help="training epochs (default: 2, smoke-test scale)")
+    # GEARS has no early stopping (gears/gears.py's train() always runs the full fixed
+    # epoch count) — 20 matches train()'s own default, and cellsimbench's own gears.yaml
+    # config uses every other architecture default unchanged, only epochs (10) differs.
+    # Smoke scale needs a much lower value passed explicitly, e.g. --epochs 2.
+    parser.add_argument("--epochs", type=int, default=20, help="training epochs (default: 20, full-scale)")
+    # batch_size=32 already matches both smoke and full scale (cell-level batching, plenty
+    # of cells even in the smoke subsample) — cellsimbench's gears.yaml uses the same value.
+    parser.add_argument("--batch-size", type=int, default=32, help="training batch size (default: 32)")
+    # cellsimbench's gears.yaml uses 512; only affects eval throughput, not results, so
+    # it's safe as the default at every scale.
+    parser.add_argument("--test-batch-size", type=int, default=512, help="eval batch size (default: 512)")
     args = parser.parse_args()
 
     raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
@@ -55,7 +65,7 @@ def main() -> None:
     pert_data = PertData(str(PERT_DATA_DIR))
     pert_data.new_data_process(dataset_name=args.dataset, adata=adata)
     pert_data.prepare_split(split="custom", split_dict_path=str(fold_path))
-    pert_data.get_dataloader(batch_size=32, test_batch_size=128)
+    pert_data.get_dataloader(batch_size=args.batch_size, test_batch_size=args.test_batch_size)
 
     model = GEARS(pert_data, device="cuda")
     model.model_initialize(hidden_size=64)

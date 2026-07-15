@@ -56,6 +56,11 @@ SAVED_MODELS_DIR = HERE / "saved_models"
 # `self.Net = self.model_best` at the end of training raises AttributeError. 10 is the minimum
 # that guarantees at least one checkpoint.
 MIN_EPOCHS = 10
+# training_epochs=200 is scLAMBDA's own Model.__init__ default (sclambda/model.py) and
+# matches cellsimbench's own sclambda.yaml exactly — not an independently tuned value,
+# the benchmark just uses the library's stock default. Smoke scale needs a much lower
+# value passed explicitly (still >= MIN_EPOCHS above).
+DEFAULT_EPOCHS = 200
 
 
 def main() -> None:
@@ -69,8 +74,8 @@ def main() -> None:
     parser.add_argument(
         "--epochs",
         type=int,
-        default=MIN_EPOCHS,
-        help=f"training epochs (default: {MIN_EPOCHS}, smoke-test scale; must be >= {MIN_EPOCHS}, see above)",
+        default=DEFAULT_EPOCHS,
+        help=f"training epochs (default: {DEFAULT_EPOCHS}, full-scale; must be >= {MIN_EPOCHS}, see above)",
     )
     args = parser.parse_args()
     if args.epochs < MIN_EPOCHS:

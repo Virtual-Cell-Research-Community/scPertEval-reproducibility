@@ -134,6 +134,10 @@ def main() -> None:
         default=None,
         help="training.ckpt_every_n_steps (default: same as --max-steps, i.e. checkpoint once at the very end)",
     )
+    # 12 is state's own DataLoader default. At smoke scale (a few hundred cells) 12
+    # worker subprocesses reliably deadlocked `state tx predict` (hung indefinitely,
+    # 0% CPU, no progress) — smoke runs must pass --num-workers 0 explicitly.
+    parser.add_argument("--num-workers", type=int, default=12, help="data.kwargs.num_workers (default: 12, full-scale)")
     args = parser.parse_args()
     ckpt_every_n_steps = args.ckpt_every_n_steps if args.ckpt_every_n_steps is not None else args.max_steps
 
@@ -158,13 +162,9 @@ def main() -> None:
             "data.kwargs.embed_key=X_hvg",
             "data.kwargs.pert_col=perturbation",
             "data.kwargs.control_pert=control",
-            # Default is 12 DataLoader workers — for a few-hundred-cell smoke dataset this
-            # reliably deadlocked (`state tx predict` hung indefinitely: 12 worker
-            # subprocesses sitting at 0% CPU, no progress). 0 runs loading in the main
-            # process, avoiding worker-pool startup/IPC entirely — irrelevant overhead at
-            # this scale anyway. `data_module.save_state()` persists this, so `predict`'s
-            # reloaded data module inherits it without a separate override.
-            "data.kwargs.num_workers=0",
+            # `data_module.save_state()` persists this, so `predict`'s reloaded data
+            # module inherits it without a separate override.
+            f"data.kwargs.num_workers={args.num_workers}",
             f"training.max_steps={args.max_steps}",
             f"training.val_freq={args.val_freq}",
             f"training.ckpt_every_n_steps={ckpt_every_n_steps}",

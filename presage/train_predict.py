@@ -144,7 +144,13 @@ def build_pathway_files(cache_dir: Path, out_path: Path) -> Path:
 
 
 def build_config(
-    dataset: str, data_dir: Path, seed_path: Path, pathway_files: Path, predictions_file: Path, epochs: int
+    dataset: str,
+    data_dir: Path,
+    seed_path: Path,
+    pathway_files: Path,
+    predictions_file: Path,
+    epochs: int,
+    batch_size: int,
 ) -> dict:
     """A flat, dotted-key config matching train_presage.py's own CLI defaults (its argparse
     is bypassed entirely — this dict goes straight into PRESAGE's own ``train()``, which
@@ -221,12 +227,17 @@ def build_config(
         "model.harness": "ModelHarness",
         "data.use_pseudobulk": True,
         "data.preprocessing_zscore": False,
-        # CLI default is 16 — with use_pseudobulk=True (one row per perturbation) and only
-        # ~7 training genes per fold at this smoke scale, train_dataloader()'s drop_last=True
-        # would drop the only (partial) batch and train on zero batches every epoch.
-        "data.batch_size": 4,
-        # CLI default is 10000 (early stopping is expected to end training well before
-        # that); pinned low here to match gears/scgpt's own fast-iterating smoke scale.
+        # CLI default is 16. With use_pseudobulk=True (one row per perturbation),
+        # train_dataloader()'s drop_last=True drops the only (partial) batch and trains
+        # on zero batches every epoch once batch_size exceeds the fold's training-gene
+        # count — true at smoke scale (~7 training genes), not at full scale. Smoke runs
+        # must pass a smaller --batch-size explicitly (e.g. 4).
+        "data.batch_size": batch_size,
+        # CLI default is 10000; early stopping (patience=10 on val_loss, already active
+        # via train()'s own EarlyStopping callback) is expected to end training well
+        # before that. 1000 matches both PRESAGE's own hyperparameter-sweep config and
+        # cellsimbench's presage.yaml. Smoke scale needs a much lower value passed
+        # explicitly so iteration stays fast.
         "training.max_epochs": epochs,
         "training.precision": "32",
         "hyperparameter_tune.tag": "",
@@ -243,7 +254,12 @@ def main() -> None:
         help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>_presage.json to train/predict on")
-    parser.add_argument("--epochs", type=int, default=2, help="training epochs (default: 2, smoke-test scale)")
+    parser.add_argument(
+        "--epochs", type=int, default=1000, help="training.max_epochs (default: 1000, full-scale; early stopping usually ends training well before this)"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=32, help="data.batch_size (default: 32, full-scale; see build_config)"
+    )
     args = parser.parse_args()
 
     raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
@@ -292,6 +308,7 @@ def main() -> None:
         pathway_files=pathway_files_path,
         predictions_file=predictions_csv,
         epochs=args.epochs,
+        batch_size=args.batch_size,
     )
     # train() hardcodes `ReploglePRESAGEDataModule` (bound by name into its own module
     # namespace at import time) rather than taking a datamodule class as a config/argument —
