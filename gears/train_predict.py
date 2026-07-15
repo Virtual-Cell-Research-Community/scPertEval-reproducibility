@@ -34,6 +34,7 @@ RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
 FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
 PERT_DATA_DIR = HERE / "pert_data"
 OUT_DIR = HERE / "smoke_data"
+SAVED_MODELS_DIR = HERE / "saved_models"
 EPOCHS = 2
 
 
@@ -54,6 +55,10 @@ def main() -> None:
     model = GEARS(pert_data, device="cuda")
     model.model_initialize(hidden_size=64)
     model.train(epochs=EPOCHS)
+    # GEARS' own save_model() does a single-level os.mkdir(path), which raises if the
+    # parent (saved_models/) doesn't exist yet.
+    SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
+    model.save_model(str(SAVED_MODELS_DIR / f"fold_{args.fold}"))
 
     test_perts = sorted(pert_data.set2conditions["test"])
     print(f"test perturbations ({len(test_perts)}): {test_perts}")

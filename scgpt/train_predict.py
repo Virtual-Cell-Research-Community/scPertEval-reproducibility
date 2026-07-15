@@ -61,6 +61,7 @@ PERT_DATA_DIR = HERE / "pert_data"
 # here, so this script has no gdown dependency of its own.
 CHECKPOINT_DIR = HERE / "checkpoints" / "scGPT_human"
 OUT_DIR = HERE / "smoke_data"
+SAVED_MODELS_DIR = HERE / "saved_models"
 
 pad_token = "<pad>"
 special_tokens = [pad_token, "<cls>", "<eoc>"]
@@ -214,6 +215,10 @@ def main() -> None:
         start = time.time()
         train_one_epoch(epoch)
         scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s")
+
+    fold_dir = SAVED_MODELS_DIR / f"fold_{args.fold}"
+    fold_dir.mkdir(parents=True, exist_ok=True)
+    torch.save(model.state_dict(), fold_dir / "model.pt")
 
     def predict(pert_list: list[list[str]], pool_size: int = 300) -> dict[str, np.ndarray]:
         # 300 matches GEARS' own hardcoded num_samples default (gears.utils.

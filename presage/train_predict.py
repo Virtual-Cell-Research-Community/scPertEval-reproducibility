@@ -41,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -63,8 +64,29 @@ FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
 PERT_DATA_DIR = HERE / "pert_data"
 CACHE_DIR = HERE / "cache"  # populated by `pixi run -e presage fetch-cache`
 OUT_DIR = HERE / "smoke_data"
+SAVED_MODELS_DIR = HERE / "saved_models"
 DATASET_NAME = "smoke_k562"
 EPOCHS = 2
+
+
+class _CheckpointPreservingOS:
+    """Proxies the stdlib ``os`` module but copies a file into ``dest_dir`` before letting
+    a ``remove()`` call through. train.py's own ``train()`` loads its best checkpoint into
+    the lightning module and then immediately deletes it (``os.remove(best_model_path)``) —
+    there's no config flag or hook to keep it, so this intercepts that one call by replacing
+    the *name* ``os`` inside train.py's own module namespace (not the global ``os`` module
+    itself, which every other import of it still sees unmodified)."""
+
+    def __init__(self, dest_dir: Path) -> None:
+        self._dest_dir = dest_dir
+
+    def remove(self, path) -> None:
+        self._dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, self._dest_dir / Path(path).name)
+        os.remove(path)
+
+    def __getattr__(self, name):
+        return getattr(os, name)
 
 
 class SmokePRESAGEDataModule(ReploglePRESAGEDataModule):
@@ -268,6 +290,7 @@ def main() -> None:
     # in this repo, not a reimplementation of train() itself.
     presage_train_module.ReploglePRESAGEDataModule = SmokePRESAGEDataModule
     presage_train_module.ModelHarness = SmokeModelHarness
+    presage_train_module.os = _CheckpointPreservingOS(SAVED_MODELS_DIR / f"fold_{args.fold}")
     presage_train_module.train(config)
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test
