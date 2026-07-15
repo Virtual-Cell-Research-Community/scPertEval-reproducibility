@@ -1,23 +1,27 @@
 """Baselines that need no training: each predicts a perturbation's profile as a fixed function
 of the dataset's own control/perturbed cells.
 
-Reuses scPertEval's own ``Dataset`` internals rather than reimplementing them, so each baseline's
-definition matches the framework's own calibration sources (src/scperteval/sources.py):
-``mean`` mirrors ``all_perturbed_mean``/``global_mean``, ``no_change`` mirrors ``control``.
+Reuses scPertEval's own ``Dataset`` internals rather than reimplementing them, so ``no_change``
+matches the framework's own ``control`` calibration source (src/scperteval/sources.py). There is
+no plain (non-fold-scoped) ``mean`` baseline here on purpose: a leave-one-out mean over *every*
+perturbation the dataset has — including ones in the current test fold — leaks test-fold
+information into the baseline no real train/test protocol would have access to (a trained model
+only ever sees its own fold's training perturbations). The fold-scoped mean that respects that
+split is :func:`fold_mean_baseline` below, wired up in ``models/compare.py`` via
+``FOLD_SCOPED_BASELINES`` — not something this module's own CLI can drive directly, since it
+needs a fold's train/test split, not just a dataset path.
+
 Add a new baseline by writing a function ``(ds: Dataset) -> np.ndarray`` and registering it in
 ``BASELINES`` below; give it its own ``train_predict.py`` (alongside ``models/gears``,
 ``models/scgpt``) instead if it actually needs a fitting step.
 
 Usage::
 
-    python models/baselines/baselines.py mean data/replogle22k562_processed_complete.h5ad predictions.h5ad
     python models/baselines/baselines.py no_change data/replogle22k562_processed_complete.h5ad predictions.h5ad
 
 Point ``dataset`` at the full processed dataset, not a held-out-only ground truth: scPertEval's
 ``score`` only looks up the perturbations it needs, so a baseline file covering every
-perturbation still scores correctly against a smaller, held-out-only ground truth, while the
-leave-one-out mean is computed over the true full perturbation set rather than just the handful
-of other held-out perturbations.
+perturbation still scores correctly against a smaller, held-out-only ground truth.
 """
 
 from __future__ import annotations
@@ -32,31 +36,25 @@ from scperteval.types import RunConfig
 from sklearn.decomposition import PCA
 
 
-def mean_baseline(ds: Dataset) -> np.ndarray:
-    """One row per perturbation: the leave-one-out mean of all other perturbations."""
-    return np.vstack([ds.allpert_mean_except(p) for p in ds.perturbations])
-
-
 def no_change_baseline(ds: Dataset) -> np.ndarray:
     """One row per perturbation: the control-cell mean (predicts no change at all)."""
     return np.vstack([ds.control_mean() for _ in ds.perturbations])
 
 
-BASELINES = {"mean": mean_baseline, "no_change": no_change_baseline}
+BASELINES = {"no_change": no_change_baseline}
 
 
 def fold_mean_baseline(raw_path: str, fold: dict, min_cells: int = 30, seed: int = 42) -> ad.AnnData:
     r"""Miller et al. 2025's mean baseline (mu_all).
 
     The mean of per-perturbation means over *only this fold's training perturbations*,
-    predicted identically for every held-out test perturbation in the fold.
-
-    Unlike :func:`mean_baseline` (leave-one-out over every perturbation the dataset has,
-    regardless of which fold a model actually trained on), this never averages in cells from
-    a perturbation the fold's own model never saw — matching the paper's "average of averages
-    of all *train* perturbations" definition exactly, at the cost of needing the fold's split
-    (``models/data/prepare_split.py``'s ``fold_<i>.pkl`` format: condition strings, ``ctrl``
-    folded into ``"train"``).
+    predicted identically for every held-out test perturbation in the fold — this never
+    averages in cells from a perturbation the fold's own model never saw, matching the paper's
+    "average of averages of all *train* perturbations" definition exactly, and matching what a
+    real train/test protocol actually has access to (unlike a leave-one-out mean over every
+    perturbation the dataset has, which would leak test-fold information — see the module
+    docstring). Needs the fold's split (``models/data/prepare_split.py``'s ``fold_<i>.pkl``
+    format: condition strings, ``ctrl`` folded into ``"train"``).
 
     Parameters
     ----------
