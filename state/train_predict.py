@@ -31,24 +31,50 @@ Replogle-Nadig") with a few deliberate deviations:
   raw predictions itself downstream — same reasoning as PRESAGE's `training.eval_test=False` —
   and `--pseudobulk` aggregates to one row per (cell_type, perturbation), matching every other
   model's predictions.h5ad convention (STATE predicts per-cell by default).
-- `model=pertsets` (the repo's current GPT2-backed preset) is used with no architecture
-  overrides at all, rather than the Colab's `model=state` + hidden_dim=328 (which errors under
-  the repo's current `state.yaml` — see below) or the preprint's own Table 3 numbers for
-  Replogle-Nadig (hidden_dim=128, cell_set_len=32, GPT2, ~10M params). Table 3's exact figures
-  don't correspond to any config actually checked into the repo's git history (a full sweep of
-  real `replogle_*.yaml` configs from past commits clusters at hidden_dim 328-896, never 128) —
-  the closest thing to an authoritative "this is what we ran" artifact is `replogle_best.yaml`
-  (hidden_dim=672, cell_set_len=512, LLaMA), which itself doesn't match Table 3's GPT2 claim
-  either. Rather than chase an unreproducible historical config, this just takes today's
-  shipped `pertsets` preset as-is — a defensible, easy-to-justify choice for this benchmark
-  regardless of which exact configuration produced the paper's own numbers. (For reference, the
-  Colab's `hidden_dim=328` doesn't evenly divide `model=state`'s current 12 attention heads —
-  `transformers`' LlamaConfig validates that strictly and raises at construction — while
-  `pertsets.yaml` already has GPT2 + hidden_dim=328, the Colab's exact values, suggesting
-  `model=state` used to mean what `pertsets.yaml` now is before some repo-side rename.)
-- Only `training.max_steps`/`val_freq`/`ckpt_every_n_steps`/`batch_size` are additionally cut
-  down for smoke-test speed, and `use_wandb=false` since no wandb login is available here (same
-  spirit as PRESAGE's `training.offline=True`).
+- `model=pertsets` (the repo's current GPT2-backed preset) is used rather than the Colab's
+  `model=state` + hidden_dim=328 (which errors under the repo's current `state.yaml` — see
+  below) or the preprint's own Table 3 numbers for Replogle-Nadig (hidden_dim=128,
+  cell_set_len=32, GPT2, ~10M params). Table 3's exact figures don't correspond to any config
+  actually checked into the repo's git history (a full sweep of real `replogle_*.yaml` configs
+  from past commits clusters at hidden_dim 328-896, never 128) — the closest thing to an
+  authoritative "this is what we ran" artifact is `replogle_best.yaml` (hidden_dim=672,
+  cell_set_len=512, LLaMA), which itself doesn't match Table 3's GPT2 claim either. Rather than
+  chase an unreproducible historical config, this takes today's shipped `pertsets` preset as
+  its architecture base — a defensible, easy-to-justify choice regardless of which exact
+  configuration produced the paper's own numbers. (For reference, the Colab's `hidden_dim=328`
+  doesn't evenly divide `model=state`'s current 12 attention heads — `transformers`'
+  LlamaConfig validates that strictly and raises at construction — while `pertsets.yaml`
+  already has GPT2 + hidden_dim=328, the Colab's exact values, suggesting `model=state` used to
+  mean what `pertsets.yaml` now is before some repo-side rename.)
+- `model.kwargs.cell_set_len` *is* overridden to the Colab's 64 (unlike hidden_dim, which
+  already matches `pertsets.yaml`'s own default) — not `replogle_best.yaml`'s 512, and not
+  `pertsets.yaml`'s own 512 default either. cell_set_len is the transformer's sequence length
+  (`n_positions`/`max_position_embeddings`), i.e. how many cells get processed together as one
+  set — checked directly against the raw replogle22k562 file, cells-per-perturbation is 125 at
+  the median and 44 at the 5th percentile, so 512 would leave most perturbations padded/
+  undersized; 64 is independently justified by that distribution, not just Colab fidelity.
+- `model.kwargs.batch_encoder` stays at `pertsets.yaml`'s own default (`False`), unlike the
+  Colab's `True` — our `obs['gem_group']` is a single placeholder value for every cell (no real
+  batch/plate structure, see `prepare_dataset()` below), so encoding it would just be a
+  constant contributing nothing. The Colab's own dataset apparently had real batch structure
+  its `True` was meant to capture; that doesn't apply here.
+- `training.max_steps`/`val_freq`/`batch_size`/`lr` all take the Colab's own values (80000/
+  2000/64/1e-3) rather than state's bare library defaults (400000/2000/16/1e-4 — val_freq
+  happens to already agree) — the Colab is the validated reference run, not just the
+  framework's blanket defaults. `training.ckpt_every_n_steps` is passed through only if
+  explicitly set: it's a no-op in the installed state version (`get_checkpoint_callbacks()`
+  accepts it as `_ckpt_every_n_steps` and never uses it — `every_n_train_steps=val_freq` on
+  its `ModelCheckpoint` is what actually controls checkpoint cadence), and the Colab never
+  sets it either. `data.kwargs.num_workers` takes the Colab's 4 rather than the data config
+  group's own default of 12 (`state/configs/data/perturbation.yaml`) — that same file confirms
+  `cell_type_key`/`batch_col`/`output_space` already match what this script relies on
+  (`cell_type`/`gem_group`/`all`) without needing an explicit override, and that `pert_col`/
+  `control_pert` (default `gene`/`DMSO_TF`, assuming a different dataset's column naming and
+  drug-perturbation controls) are correctly overridden below, not redundantly. `use_wandb=false`
+  since no wandb login is available here
+  (same spirit as PRESAGE's `training.offline=True`). All of the above are full-scale values;
+  smoke-scale runs need much lower ones passed explicitly (e.g. `--max-steps 20 --val-freq 10
+  --batch-size 4 --num-workers 0`).
 """
 
 from __future__ import annotations
@@ -126,20 +152,48 @@ def main() -> None:
     parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
     parser.add_argument("--cell-type", default="K562", help="cell_type label for the dataset (default: K562)")
     parser.add_argument("--num-hvgs", type=int, default=2000, help="number of HVGs computed for data.kwargs.embed_key=X_hvg (default: 2000)")
-    parser.add_argument("--max-steps", type=int, default=20, help="training.max_steps (default: 20, smoke-test scale)")
-    parser.add_argument("--val-freq", type=int, default=10, help="training.val_freq (default: 10)")
+    # All the following defaults come from ArcInstitute's own "STATE Training on
+    # Replogle-Nadig" Colab (the same one this script's docstring already references),
+    # not state's own bare library defaults (training/default.yaml: max_steps=400000,
+    # val_freq=2000, batch_size=16, lr=1e-4) — the Colab is the actual validated
+    # reference run, not just the framework's blanket defaults. Smoke scale needs much
+    # lower values passed explicitly (e.g. --max-steps 20 --val-freq 10 --batch-size 4).
+    parser.add_argument("--max-steps", type=int, default=80000, help="training.max_steps (default: 80000, full-scale)")
+    # training.val_freq is the *actual* checkpoint-cadence knob (every_n_train_steps=
+    # val_freq in state's own ModelCheckpoint callback — see --ckpt-every-n-steps below),
+    # not just a validation-logging frequency. The Colab doesn't override this, i.e. it
+    # uses the library's own default (2000) as-is.
+    parser.add_argument("--val-freq", type=int, default=2000, help="training.val_freq (default: 2000)")
     parser.add_argument(
         "--ckpt-every-n-steps",
         type=int,
         default=None,
-        help="training.ckpt_every_n_steps (default: same as --max-steps, i.e. checkpoint once at the very end)",
+        help=(
+            "training.ckpt_every_n_steps — currently a no-op in the installed state version: "
+            "get_checkpoint_callbacks() accepts it as `_ckpt_every_n_steps` but never uses it; "
+            "every_n_train_steps=val_freq is what actually controls checkpoint cadence. Kept "
+            "here only for forward-compat / explicit intent; omitted from the command entirely "
+            "unless set, matching the Colab (which never sets it either)."
+        ),
     )
-    # 12 is state's own DataLoader default. At smoke scale (a few hundred cells) 12
-    # worker subprocesses reliably deadlocked `state tx predict` (hung indefinitely,
-    # 0% CPU, no progress) — smoke runs must pass --num-workers 0 explicitly.
-    parser.add_argument("--num-workers", type=int, default=12, help="data.kwargs.num_workers (default: 12, full-scale)")
+    # perturbation.yaml's own data-config default is 12; the Colab explicitly overrides
+    # to 4. At smoke scale even 12 reliably deadlocked `state tx predict` (hung
+    # indefinitely, 0% CPU, no progress) — untested whether 4 is safe at smoke scale too,
+    # so smoke runs should pass --num-workers 0 to be safe.
+    parser.add_argument("--num-workers", type=int, default=4, help="data.kwargs.num_workers (default: 4, per the Colab)")
+    parser.add_argument("--batch-size", type=int, default=64, help="training.batch_size (default: 64, per the Colab)")
+    parser.add_argument("--lr", type=float, default=1e-3, help="training.lr (default: 1e-3, per the Colab; library default is 1e-4)")
+    # model.kwargs.cell_set_len: how many cells the transformer backbone processes as one
+    # set (n_positions/max_position_embeddings in pertsets.yaml) — must fit within what's
+    # actually available per perturbation or sets end up padded/undersized. pertsets.yaml's
+    # own default (512) is tuned for state's own larger pretraining corpora: on
+    # replogle22k562 specifically, cells-per-perturbation is 125 at the median and 44 at
+    # the 5th percentile (checked directly against the raw file), so 512 would leave most
+    # perturbations undersized. The Colab's 64 fits comfortably under that median without
+    # being so small it wastes most perturbations' cells — independently justified here,
+    # not just because the Colab used it.
+    parser.add_argument("--cell-set-len", type=int, default=64, help="model.kwargs.cell_set_len (default: 64, see above)")
     args = parser.parse_args()
-    ckpt_every_n_steps = args.ckpt_every_n_steps if args.ckpt_every_n_steps is not None else args.max_steps
 
     kfold_splits = DATA_DIR / f"{args.dataset}_kfold_splits.json"
     dataset_dir = PERT_DATA_DIR / args.dataset
@@ -153,30 +207,34 @@ def main() -> None:
         fold, dataset_dir.parent / f"{args.dataset}_fold_{args.fold}.toml", args.dataset, dataset_dir, args.cell_type
     )
 
-    subprocess.run(
-        [
-            "state",
-            "tx",
-            "train",
-            f"data.kwargs.toml_config_path={toml_path}",
-            "data.kwargs.embed_key=X_hvg",
-            "data.kwargs.pert_col=perturbation",
-            "data.kwargs.control_pert=control",
-            # `data_module.save_state()` persists this, so `predict`'s reloaded data
-            # module inherits it without a separate override.
-            f"data.kwargs.num_workers={args.num_workers}",
-            f"training.max_steps={args.max_steps}",
-            f"training.val_freq={args.val_freq}",
-            f"training.ckpt_every_n_steps={ckpt_every_n_steps}",
-            "training.batch_size=4",
-            "model=pertsets",
-            "use_wandb=false",
-            "overwrite=true",
-            f"output_dir={RUN_DIR}",
-            f"name={run_name}",
-        ],
-        check=True,
-    )
+    train_overrides = [
+        f"data.kwargs.toml_config_path={toml_path}",
+        "data.kwargs.embed_key=X_hvg",
+        "data.kwargs.pert_col=perturbation",
+        "data.kwargs.control_pert=control",
+        # `data_module.save_state()` persists this, so `predict`'s reloaded data
+        # module inherits it without a separate override.
+        f"data.kwargs.num_workers={args.num_workers}",
+        f"training.max_steps={args.max_steps}",
+        f"training.val_freq={args.val_freq}",
+        f"training.batch_size={args.batch_size}",
+        f"training.lr={args.lr}",
+        f"model.kwargs.cell_set_len={args.cell_set_len}",
+        # batch_encoder stays at pertsets.yaml's own default (False), unlike the Colab's
+        # True — our obs['gem_group'] is a single placeholder value for every cell (no
+        # real batch/plate structure, see prepare_dataset() above), so encoding it would
+        # just be a constant contributing nothing; the Colab's own dataset apparently had
+        # real batch structure its True was meant to capture.
+        "model=pertsets",
+        "use_wandb=false",
+        "overwrite=true",
+        f"output_dir={RUN_DIR}",
+        f"name={run_name}",
+    ]
+    if args.ckpt_every_n_steps is not None:
+        train_overrides.append(f"training.ckpt_every_n_steps={args.ckpt_every_n_steps}")
+
+    subprocess.run(["state", "tx", "train", *train_overrides], check=True)
 
     run_output_dir = RUN_DIR / run_name
     subprocess.run(
