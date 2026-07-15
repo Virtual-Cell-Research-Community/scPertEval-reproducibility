@@ -186,15 +186,20 @@ def main() -> None:
             "predict",
             "--output-dir",
             str(run_output_dir),
+            # best.ckpt (the val_loss-monitored ModelCheckpoint callback, see
+            # get_checkpoint_callbacks in state's own tx/utils/__init__.py) rather than
+            # final.ckpt (an unconditional snapshot taken right after training ends,
+            # whatever step that happened to be) — matches gears/scLAMBDA/PRESAGE's own
+            # convention of predicting with the best validation checkpoint, not the last one.
             "--checkpoint",
-            "final.ckpt",
+            "best.ckpt",
             "--predict-only",
             "--pseudobulk",
         ],
         check=True,
     )
 
-    pred_path = run_output_dir / "eval_final.ckpt" / "adata_pred.h5ad"
+    pred_path = run_output_dir / "eval_best.ckpt" / "adata_pred.h5ad"
     pred = ad.read_h5ad(pred_path)
     # --pseudobulk aggregates by (context, perturbation) and, with should_yield_control_cells
     # defaulting to true, includes a "control" group alongside the actual test genes — drop
