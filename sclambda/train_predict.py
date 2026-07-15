@@ -42,8 +42,7 @@ ad.settings.allow_write_nullable_strings = True
 from sclambda.model import Model  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
+DATA_DIR = HERE.parent / "data"
 # Populated by `pixi run -e sclambda fetch-embeddings` (models/pixi.toml) — not downloaded
 # here, so this script has no direct download dependency of its own.
 GENEPT_PICKLE = (
@@ -56,21 +55,34 @@ SAVED_MODELS_DIR = HERE / "saved_models"
 # at all, on the very last epoch) — below 10 epochs it's never assigned and
 # `self.Net = self.model_best` at the end of training raises AttributeError. 10 is the minimum
 # that guarantees at least one checkpoint.
-EPOCHS = 10
+MIN_EPOCHS = 10
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+    )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=MIN_EPOCHS,
+        help=f"training epochs (default: {MIN_EPOCHS}, smoke-test scale; must be >= {MIN_EPOCHS}, see above)",
+    )
     args = parser.parse_args()
+    if args.epochs < MIN_EPOCHS:
+        raise SystemExit(f"--epochs must be >= {MIN_EPOCHS} (scLAMBDA never checkpoints below that, see module docstring)")
 
-    fold_path = FOLD_DIR / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
 
     if not GENEPT_PICKLE.exists():
         raise FileNotFoundError(f"{GENEPT_PICKLE} missing — run `pixi run -e sclambda fetch-embeddings` first")
 
-    adata = ad.read_h5ad(RAW)
+    adata = ad.read_h5ad(DATA_DIR / f"{args.dataset}_raw.h5ad")
 
     with open(fold_path, "rb") as f:
         fold = pickle.load(f)
@@ -88,8 +100,10 @@ def main() -> None:
         adata,
         gene_embeddings,
         split_name="split",
-        training_epochs=EPOCHS,
-        model_path=str(SAVED_MODELS_DIR / f"fold_{args.fold}"),
+        training_epochs=args.epochs,
+        # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
+        # index would silently overwrite each other's checkpoint.
+        model_path=str(SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"),
         # multi_gene stays at its default (True) despite this being a single-gene dataset:
         # scLAMBDA's README's multi_gene=False path assumes bare-gene-symbol conditions
         # ("gene_a", no suffix). Ours are "<GENE>+ctrl" (the GEARS convention, shared across

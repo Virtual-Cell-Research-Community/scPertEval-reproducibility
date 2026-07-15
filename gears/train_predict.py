@@ -30,35 +30,42 @@ if not hasattr(pd.Series, "nonzero"):
 from gears import GEARS, PertData  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
+DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 OUT_DIR = HERE / "smoke_data"
 SAVED_MODELS_DIR = HERE / "saved_models"
-EPOCHS = 2
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+    )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
+    parser.add_argument("--epochs", type=int, default=2, help="training epochs (default: 2, smoke-test scale)")
     args = parser.parse_args()
 
-    fold_path = FOLD_DIR / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
-    adata = ad.read_h5ad(RAW)
+    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
+    fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    adata = ad.read_h5ad(raw)
 
     pert_data = PertData(str(PERT_DATA_DIR))
-    pert_data.new_data_process(dataset_name="smoke_k562", adata=adata)
+    pert_data.new_data_process(dataset_name=args.dataset, adata=adata)
     pert_data.prepare_split(split="custom", split_dict_path=str(fold_path))
     pert_data.get_dataloader(batch_size=32, test_batch_size=128)
 
     model = GEARS(pert_data, device="cuda")
     model.model_initialize(hidden_size=64)
-    model.train(epochs=EPOCHS)
+    model.train(epochs=args.epochs)
     # GEARS' own save_model() does a single-level os.mkdir(path), which raises if the
-    # parent (saved_models/) doesn't exist yet.
-    SAVED_MODELS_DIR.mkdir(parents=True, exist_ok=True)
-    model.save_model(str(SAVED_MODELS_DIR / f"fold_{args.fold}"))
+    # parent doesn't exist yet. Namespaced by dataset too — otherwise a smoke run and a
+    # full run at the same fold index would silently overwrite each other's checkpoint.
+    saved_model_dir = SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"
+    saved_model_dir.mkdir(parents=True, exist_ok=True)
+    model.save_model(str(saved_model_dir))
 
     test_perts = sorted(pert_data.set2conditions["test"])
     print(f"test perturbations ({len(test_perts)}): {test_perts}")

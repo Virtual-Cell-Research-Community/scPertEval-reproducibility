@@ -69,12 +69,10 @@ from tfm_perturbation.models.transcriptomics.tabicl_multiview import TabICLMulti
 ad.settings.allow_write_nullable_strings = True
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
+DATA_DIR = HERE.parent / "data"
 PRESAGE_CACHE = HERE.parent / "presage" / "cache" / "cache"
 RUN_DIR = HERE / "runs"
 OUT_DIR = HERE / "smoke_data"
-DATASET_NAME = "smoke_k562"
 CONTROL_LABEL = "control"
 
 # Mirrors tfm-perturbation's own experiments/configs/modality/top_plus_perturbseq_k562_essential.yaml,
@@ -92,15 +90,23 @@ MODALITY_PICKLE_PATHS = {
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--fold", type=int, default=0, help="which fold in smoke_k562_folds/ to train/predict on")
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+    )
+    parser.add_argument("--fold", type=int, default=0, help="which fold in <dataset>_folds/ to train/predict on")
     args = parser.parse_args()
 
-    split_json_path = FOLD_DIR / f"fold_{args.fold}_presage.json"
-    run_dir = RUN_DIR / f"fold_{args.fold}"
+    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
+    split_json_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}_presage.json"
+    # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
+    # index would silently overwrite each other's artifact.
+    run_dir = RUN_DIR / args.dataset / f"fold_{args.fold}"
 
     datamodule = PresageAnnDataDataModule(
-        dataset=DATASET_NAME,
-        data_file_path=str(RAW),
+        dataset=args.dataset,
+        data_file_path=str(raw),
         split_json_path=str(split_json_path),
         perturbation_col="perturbation",
         control_label=CONTROL_LABEL,
@@ -131,7 +137,7 @@ def main() -> None:
     pred_adata.var_names = pd.Index(gene_names)
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
     pred_adata.write_h5ad(out_path)
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 

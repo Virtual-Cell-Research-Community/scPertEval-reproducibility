@@ -54,8 +54,7 @@ from scgpt.tokenizer.gene_tokenizer import GeneVocab  # noqa: E402
 from scgpt.utils import load_pretrained, map_raw_id_to_vocab_id, set_seed  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
+DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 # Populated by `pixi run -e scgpt fetch-checkpoint` (models/pixi.toml) — not downloaded
 # here, so this script has no gdown dependency of its own.
@@ -80,7 +79,6 @@ load_param_prefixs = ["encoder", "value_encoder", "transformer_encoder"]
 lr = 1e-4
 batch_size = 64
 eval_batch_size = 64
-EPOCHS = 2
 schedule_interval = 1
 amp = True
 
@@ -90,10 +88,17 @@ set_seed(42)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+    )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
+    parser.add_argument("--epochs", type=int, default=2, help="fine-tuning epochs (default: 2, smoke-test scale)")
     args = parser.parse_args()
-    fold_path = FOLD_DIR / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
+    fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
 
     if not (CHECKPOINT_DIR / "best_model.pt").exists():
         raise FileNotFoundError(
@@ -101,7 +106,7 @@ def main() -> None:
         )
 
     pert_data = PertData(str(PERT_DATA_DIR))
-    pert_data.new_data_process(dataset_name="smoke_k562", adata=ad.read_h5ad(RAW))
+    pert_data.new_data_process(dataset_name=args.dataset, adata=ad.read_h5ad(raw))
     # scgpt pins cell-gears<0.0.3, which predates PertData.prepare_split's split="custom"
     # option (added later in cell-gears 0.1.2, the version models/gears's own environment
     # uses) — replicate that branch's own body directly: it only ever sets these two
@@ -211,12 +216,14 @@ def main() -> None:
         scg.logger.info(f"epoch {epoch} mean train loss {total_loss / max(n_batches, 1):.4f}")
         scheduler.step()
 
-    for epoch in range(1, EPOCHS + 1):
+    for epoch in range(1, args.epochs + 1):
         start = time.time()
         train_one_epoch(epoch)
         scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s")
 
-    fold_dir = SAVED_MODELS_DIR / f"fold_{args.fold}"
+    # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
+    # index would silently overwrite each other's checkpoint.
+    fold_dir = SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"
     fold_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), fold_dir / "model.pt")
 

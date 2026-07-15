@@ -59,14 +59,11 @@ from datamodule import scPerturbDataModule  # noqa: E402
 from presage_datamodule import ReploglePRESAGEDataModule  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-FOLD_DIR = HERE.parent / "data" / "smoke_k562_folds"
+DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 CACHE_DIR = HERE / "cache"  # populated by `pixi run -e presage fetch-cache`
 OUT_DIR = HERE / "smoke_data"
 SAVED_MODELS_DIR = HERE / "saved_models"
-DATASET_NAME = "smoke_k562"
-EPOCHS = 2
 
 
 class _CheckpointPreservingOS:
@@ -91,9 +88,10 @@ class _CheckpointPreservingOS:
 
 class SmokePRESAGEDataModule(ReploglePRESAGEDataModule):
     """``ReploglePRESAGEDataModule``, adapted for our own custom (non-benchmark) dataset —
-    see the module docstring for why each override is needed."""
+    see the module docstring for why each override is needed. ``urls`` is populated with the
+    actual dataset name at runtime in ``main()`` (it must contain the name being used, but the
+    name itself is only known once ``--dataset`` is parsed, after this class body runs)."""
 
-    urls = {**ReploglePRESAGEDataModule.urls, DATASET_NAME: "unused"}
     # ReplogleDataModule's own compute_degs only loads a pre-existing per-gene DEG cache;
     # rebind to the real (wilcoxon rank_genes_groups) implementation on the common base class.
     compute_degs = scPerturbDataModule.compute_degs
@@ -239,11 +237,18 @@ def build_config(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+    )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>_presage.json to train/predict on")
+    parser.add_argument("--epochs", type=int, default=2, help="training epochs (default: 2, smoke-test scale)")
     args = parser.parse_args()
 
-    seed_path = FOLD_DIR / f"fold_{args.fold}_presage.json"
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
+    seed_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}_presage.json"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
 
     if not (CACHE_DIR / "cache" / "pathway_embeddings").exists():
         raise FileNotFoundError(f"{CACHE_DIR} has no gene-embedding cache — run `pixi run -e presage fetch-cache` first")
@@ -255,10 +260,14 @@ def main() -> None:
     # under models/presage/ instead of leaking into the shared models/ workspace root.
     os.chdir(HERE)
 
-    dataset_dir = PERT_DATA_DIR / DATASET_NAME
+    # Must contain args.dataset before ReploglePRESAGEDataModule.prepare_data() runs, or its
+    # own hardcoded-benchmark check rejects an unrecognized name.
+    SmokePRESAGEDataModule.urls = {**ReploglePRESAGEDataModule.urls, args.dataset: "unused"}
+
+    dataset_dir = PERT_DATA_DIR / args.dataset
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
-    adata = ad.read_h5ad(RAW)
+    adata = ad.read_h5ad(raw)
     adata.var["measured_gene"] = True
     # sc.tl.rank_genes_groups (PRESAGE's own compute_degs) assumes this uns key is present
     # once .X is log-transformed (scanpy issue #2239) — our raw file is already on that
@@ -268,21 +277,21 @@ def main() -> None:
     # own vendored code — assumed to already exist on scPerturb.org-sourced data). Same
     # information as obs["perturbation"] here, so just alias it.
     adata.obs["gene"] = adata.obs["perturbation"]
-    preprocessed_path = dataset_dir / f"{DATASET_NAME}_processed.h5ad"
+    preprocessed_path = dataset_dir / f"{args.dataset}_processed.h5ad"
     adata.write_h5ad(preprocessed_path)
 
     pathway_files_path = build_pathway_files(CACHE_DIR, dataset_dir / "pathway_files.txt")
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
-    predictions_csv = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.csv"
+    predictions_csv = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.csv"
 
     config = build_config(
-        dataset=DATASET_NAME,
+        dataset=args.dataset,
         data_dir=PERT_DATA_DIR,
         seed_path=seed_path,
         pathway_files=pathway_files_path,
         predictions_file=predictions_csv,
-        epochs=EPOCHS,
+        epochs=args.epochs,
     )
     # train() hardcodes `ReploglePRESAGEDataModule` (bound by name into its own module
     # namespace at import time) rather than taking a datamodule class as a config/argument —
@@ -290,7 +299,9 @@ def main() -> None:
     # in this repo, not a reimplementation of train() itself.
     presage_train_module.ReploglePRESAGEDataModule = SmokePRESAGEDataModule
     presage_train_module.ModelHarness = SmokeModelHarness
-    presage_train_module.os = _CheckpointPreservingOS(SAVED_MODELS_DIR / f"fold_{args.fold}")
+    # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
+    # index would silently overwrite each other's checkpoint.
+    presage_train_module.os = _CheckpointPreservingOS(SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}")
     presage_train_module.train(config)
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test

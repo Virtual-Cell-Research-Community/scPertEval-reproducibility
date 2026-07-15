@@ -68,53 +68,47 @@ import scanpy as sc
 ad.settings.allow_write_nullable_strings = True
 
 HERE = Path(__file__).resolve().parent
-RAW = HERE.parent / "data" / "smoke_k562_raw.h5ad"
-KFOLD_SPLITS = HERE.parent / "data" / "smoke_k562_kfold_splits.json"
-DATASET_DIR = HERE / "pert_data" / "smoke_k562"
+DATA_DIR = HERE.parent / "data"
+PERT_DATA_DIR = HERE / "pert_data"
 RUN_DIR = HERE / "runs"
 OUT_DIR = HERE / "smoke_data"
-DATASET_NAME = "smoke_k562"
-CELL_TYPE = "K562"
-NUM_HVGS = 2000
-MAX_STEPS = 20
-VAL_FREQ = 10
 
 
-def prepare_dataset() -> Path:
+def prepare_dataset(raw: Path, dataset_dir: Path, cell_type: str, num_hvgs: int) -> Path:
     """Write our shared RAW smoke data in cell-load's expected form: a dataset directory
     containing one h5ad, with obs['gem_group'] (cell-load's default batch_col — a single
     placeholder value, we have no real batch/plate info) and obsm['X_hvg'] (HVGs computed
     directly on the already-normalized data, no redundant normalize_total/log1p — see the
     module docstring)."""
-    adata = ad.read_h5ad(RAW)
+    adata = ad.read_h5ad(raw)
     adata.obs["gem_group"] = "1"
 
-    sc.pp.highly_variable_genes(adata, n_top_genes=NUM_HVGS)
+    sc.pp.highly_variable_genes(adata, n_top_genes=num_hvgs)
     hvg = adata[:, adata.var["highly_variable"]].X
     adata.obsm["X_hvg"] = hvg.toarray() if hasattr(hvg, "toarray") else np.asarray(hvg)
 
-    DATASET_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = DATASET_DIR / f"{CELL_TYPE}.h5ad"
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    out_path = dataset_dir / f"{cell_type}.h5ad"
     adata.write_h5ad(out_path)
     return out_path
 
 
-def build_toml(fold: dict[str, list[str]], out_path: Path) -> Path:
+def build_toml(fold: dict[str, list[str]], out_path: Path, dataset_name: str, dataset_dir: Path, cell_type: str) -> Path:
     """cell-load's few-shot TOML format (see its README) — bare gene symbols, same convention
     our RAW file's obs['perturbation'] already uses, no relabeling needed."""
     val = ", ".join(f'"{g}"' for g in fold["val"])
     test = ", ".join(f'"{g}"' for g in fold["test"])
     out_path.write_text(
         f"""[datasets]
-{DATASET_NAME} = "{DATASET_DIR}"
+{dataset_name} = "{dataset_dir}"
 
 [training]
-{DATASET_NAME} = "train"
+{dataset_name} = "train"
 
 [zeroshot]
 
 [fewshot]
-[fewshot."{DATASET_NAME}.{CELL_TYPE}"]
+[fewshot."{dataset_name}.{cell_type}"]
 val = [{val}]
 test = [{test}]
 """
@@ -124,16 +118,36 @@ test = [{test}]
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        default="smoke_k562",
+        help="models/data/<dataset>_raw.h5ad + <dataset>_kfold_splits.json to train/predict on (default: smoke_k562)",
+    )
     parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
+    parser.add_argument("--cell-type", default="K562", help="cell_type label for the dataset (default: K562)")
+    parser.add_argument("--num-hvgs", type=int, default=2000, help="number of HVGs computed for data.kwargs.embed_key=X_hvg (default: 2000)")
+    parser.add_argument("--max-steps", type=int, default=20, help="training.max_steps (default: 20, smoke-test scale)")
+    parser.add_argument("--val-freq", type=int, default=10, help="training.val_freq (default: 10)")
+    parser.add_argument(
+        "--ckpt-every-n-steps",
+        type=int,
+        default=None,
+        help="training.ckpt_every_n_steps (default: same as --max-steps, i.e. checkpoint once at the very end)",
+    )
     args = parser.parse_args()
+    ckpt_every_n_steps = args.ckpt_every_n_steps if args.ckpt_every_n_steps is not None else args.max_steps
 
-    fold = json.loads(KFOLD_SPLITS.read_text())[args.fold]
-    run_name = f"fold_{args.fold}"
+    kfold_splits = DATA_DIR / f"{args.dataset}_kfold_splits.json"
+    dataset_dir = PERT_DATA_DIR / args.dataset
+    fold = json.loads(kfold_splits.read_text())[args.fold]
+    run_name = f"{args.dataset}_fold_{args.fold}"
 
-    prepare_dataset()
+    prepare_dataset(DATA_DIR / f"{args.dataset}_raw.h5ad", dataset_dir, args.cell_type, args.num_hvgs)
     # Written into pert_data/ (already gitignored via */pert_data/) rather than directly under
     # models/state/, alongside the dataset's own h5ad — both are generated, per-fold artifacts.
-    toml_path = build_toml(fold, DATASET_DIR.parent / f"fold_{args.fold}.toml")
+    toml_path = build_toml(
+        fold, dataset_dir.parent / f"{args.dataset}_fold_{args.fold}.toml", args.dataset, dataset_dir, args.cell_type
+    )
 
     subprocess.run(
         [
@@ -151,9 +165,9 @@ def main() -> None:
             # this scale anyway. `data_module.save_state()` persists this, so `predict`'s
             # reloaded data module inherits it without a separate override.
             "data.kwargs.num_workers=0",
-            f"training.max_steps={MAX_STEPS}",
-            f"training.val_freq={VAL_FREQ}",
-            f"training.ckpt_every_n_steps={MAX_STEPS}",
+            f"training.max_steps={args.max_steps}",
+            f"training.val_freq={args.val_freq}",
+            f"training.ckpt_every_n_steps={ckpt_every_n_steps}",
             "training.batch_size=4",
             "model=pertsets",
             "use_wandb=false",
@@ -190,7 +204,7 @@ def main() -> None:
     with open(run_output_dir / "var_dims.pkl", "rb") as f:
         var_dims = pickle.load(f)
 
-    out_path = OUT_DIR / f"smoke_k562_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
     pred_adata = ad.AnnData(
         X=np.asarray(pred.X, dtype=np.float32),
         obs={"perturbation": pred.obs["perturbation"].to_numpy()},
