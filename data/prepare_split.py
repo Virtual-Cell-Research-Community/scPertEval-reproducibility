@@ -1,5 +1,5 @@
-"""Compute a k-fold, full-coverage gene-level cross-validation split (Miller et al. 2025's
-design uses 5 folds; `N_FOLDS` is set lower here for a fast-iterating smoke test), replacing
+"""Compute a k-fold, full-coverage gene-level cross-validation split (default 5 folds, Miller
+et al. 2025's own design; pass ``--n-folds 3`` for a fast-iterating smoke test), replacing
 GEARS' own one-shot `prepare_split(split="simulation", ...)`.
 
 GEARS' `simulation` split draws one random 75/~7.5/~17.5 train/val/test partition of genes —
@@ -16,34 +16,35 @@ principle GEARS' own split uses — only the *partitioning strategy* changes, fr
 to k full-coverage folds. No GEARS import is needed for this step (it only needs the perturbation
 labels), so it does not need the `gears` pixi environment.
 
-Outputs, per input raw `.h5ad`:
-- ``<name>_kfold_splits.json`` — human-readable train/val/test gene lists per fold.
-- ``<name>_folds/fold_<i>.pkl`` — the same split, one pickle per fold, in the
+Outputs, alongside the input raw.h5ad in its own models/data/<dataset>/ folder:
+- ``kfold_splits.json`` — human-readable train/val/test gene lists per fold.
+- ``folds/fold_<i>.pkl`` — the same split, one pickle per fold, in the
   ``{"train": [...], "val": [...], "test": [...]}`` format GEARS' own
   ``pert_data.prepare_split(split="custom", split_dict_path=...)`` expects (condition strings,
   ``ctrl`` folded into train) — so `train_predict.py` scripts keep using GEARS' own
   `PertData`/dataloader machinery for everything except the random split itself.
-- ``<name>_folds/fold_<i>_presage.json`` — the same fold again, in PRESAGE's own
+- ``folds/fold_<i>_presage.json`` — the same fold again, in PRESAGE's own
   ``scPerturbDataModule.setup``/``pert_to_ind`` split format (bare gene symbols, ``"control"``
   instead of ``ctrl``, folded into train) — see ``to_presage_custom_split``. Same gene membership
   as ``fold_<i>.pkl``, just relabeled, so gears/scgpt/presage are all scored on identical folds.
 
 Usage::
 
-    python models/data/prepare_split.py models/data/smoke_k562_raw.h5ad
+    python models/data/prepare_split.py models/data/replogle22k562/raw.h5ad
+    python models/data/prepare_split.py models/data/smoke_k562/raw.h5ad --n-folds 3
 """
 
 from __future__ import annotations
 
+import argparse
 import json
 import pickle
-import sys
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 
-N_FOLDS = 3
+N_FOLDS = 5
 SEED = 42
 VAL_FRAC_OF_REMAINDER = 0.125  # 12.5% of the 80% non-test remainder = 10% of the total
 
@@ -111,16 +112,19 @@ def to_presage_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
-        raise SystemExit(f"usage: {sys.argv[0]} <raw.h5ad>")
-    raw_path = Path(sys.argv[1])
-    stem = raw_path.stem.removesuffix("_raw")
-    out_json = raw_path.parent / f"{stem}_kfold_splits.json"
-    fold_dir = raw_path.parent / f"{stem}_folds"
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("raw_path", help="path to a prepared raw.h5ad (models/data/<dataset>/raw.h5ad)")
+    parser.add_argument("--n-folds", type=int, default=N_FOLDS, help=f"number of CV folds (default: {N_FOLDS}, Miller's own value)")
+    parser.add_argument("--seed", type=int, default=SEED, help=f"random seed (default: {SEED})")
+    args = parser.parse_args()
+
+    raw_path = Path(args.raw_path)
+    out_json = raw_path.parent / "kfold_splits.json"
+    fold_dir = raw_path.parent / "folds"
 
     adata = ad.read_h5ad(raw_path)
     genes = sorted({c.split("+")[0] for c in adata.obs["condition"].unique() if c != "ctrl"})
-    folds = kfold_gene_splits(genes)
+    folds = kfold_gene_splits(genes, n_folds=args.n_folds, seed=args.seed)
 
     out_json.write_text(json.dumps(folds, indent=2) + "\n")
     print(f"wrote {len(folds)}-fold split over {len(genes)} genes to {out_json}")
@@ -138,4 +142,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -147,7 +147,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         default="smoke_k562",
-        help="models/data/<dataset>_raw.h5ad + <dataset>_kfold_splits.json to train/predict on (default: smoke_k562)",
+        help="models/data/<dataset>/{raw.h5ad,kfold_splits.json} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
     parser.add_argument("--cell-type", default="K562", help="cell_type label for the dataset (default: K562)")
@@ -195,12 +195,12 @@ def main() -> None:
     parser.add_argument("--cell-set-len", type=int, default=64, help="model.kwargs.cell_set_len (default: 64, see above)")
     args = parser.parse_args()
 
-    kfold_splits = DATA_DIR / f"{args.dataset}_kfold_splits.json"
+    kfold_splits = DATA_DIR / args.dataset / "kfold_splits.json"
     dataset_dir = PERT_DATA_DIR / args.dataset
     fold = json.loads(kfold_splits.read_text())[args.fold]
     run_name = f"{args.dataset}_fold_{args.fold}"
 
-    prepare_dataset(DATA_DIR / f"{args.dataset}_raw.h5ad", dataset_dir, args.cell_type, args.num_hvgs)
+    prepare_dataset(DATA_DIR / args.dataset / "raw.h5ad", dataset_dir, args.cell_type, args.num_hvgs)
     # Written into pert_data/ (already gitignored via */pert_data/) rather than directly under
     # models/state/, alongside the dataset's own h5ad — both are generated, per-fold artifacts.
     toml_path = build_toml(

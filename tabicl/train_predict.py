@@ -93,13 +93,13 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         default="smoke_k562",
-        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+        help="models/data/<dataset>/{raw.h5ad,folds/} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold in <dataset>_folds/ to train/predict on")
     args = parser.parse_args()
 
-    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
-    split_json_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}_presage.json"
+    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    split_json_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_presage.json"
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's artifact.
     run_dir = RUN_DIR / args.dataset / f"fold_{args.fold}"

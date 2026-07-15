@@ -251,7 +251,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         default="smoke_k562",
-        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+        help="models/data/<dataset>/{raw.h5ad,folds/} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>_presage.json to train/predict on")
     parser.add_argument(
@@ -262,8 +262,8 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
-    seed_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}_presage.json"
+    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    seed_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_presage.json"
     out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
 
     if not (CACHE_DIR / "cache" / "pathway_embeddings").exists():

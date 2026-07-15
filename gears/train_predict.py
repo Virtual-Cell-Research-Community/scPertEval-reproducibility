@@ -41,7 +41,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         default="smoke_k562",
-        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+        help="models/data/<dataset>/{raw.h5ad,folds/} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
     # GEARS has no early stopping (gears/gears.py's train() always runs the full fixed
@@ -57,8 +57,8 @@ def main() -> None:
     parser.add_argument("--test-batch-size", type=int, default=512, help="eval batch size (default: 512)")
     args = parser.parse_args()
 
-    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
-    fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
+    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
     out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
     adata = ad.read_h5ad(raw)
 

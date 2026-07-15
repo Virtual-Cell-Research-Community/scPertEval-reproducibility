@@ -13,8 +13,7 @@ compare_results.csv
 compare_pairwise.csv
 plots/
 
-# models/data/ — generated data artifacts, fully reproducible from prepare_data.py/
-# prepare_split.py (deterministic seed) — nothing here needs to be tracked.
-data/*_folds/
-data/*.h5ad
-data/*_kfold_splits.json
+# models/data/<dataset>/ — generated data artifacts (raw.h5ad, kfold_splits.json, folds/),
+# fully reproducible from prepare_data.py/prepare_split.py (deterministic seed) — nothing
+# here needs to be tracked.
+data/*/

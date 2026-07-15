@@ -100,7 +100,7 @@ def main() -> None:
     parser.add_argument(
         "--dataset",
         default="smoke_k562",
-        help="models/data/<dataset>_raw.h5ad + <dataset>_folds/ to train/predict on (default: smoke_k562)",
+        help="models/data/<dataset>/{raw.h5ad,folds/} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>.pkl to train/predict on")
     # The tutorial's own value (epochs = 15), with its patience=10 early stopping doing
@@ -113,8 +113,8 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64, help="training batch size (default: 64)")
     parser.add_argument("--eval-batch-size", type=int, default=64, help="eval batch size (default: 64)")
     args = parser.parse_args()
-    raw = DATA_DIR / f"{args.dataset}_raw.h5ad"
-    fold_path = DATA_DIR / f"{args.dataset}_folds" / f"fold_{args.fold}.pkl"
+    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
     out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
 
     if not (CHECKPOINT_DIR / "best_model.pt").exists():
