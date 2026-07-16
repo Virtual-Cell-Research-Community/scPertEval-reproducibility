@@ -17,3 +17,11 @@ plots/
 # fully reproducible from prepare_data.py/prepare_split.py (deterministic seed) — nothing
 # here needs to be tracked.
 data/*/
+
+# sbatch stdout/stderr — regenerated every run, not something to track.
+slurm/logs/*
+
+# EBI cluster infrastructure: one per-job GPU stats dump per GPU job we run (currently just
+# connection-error placeholders — the cluster's DCGM host engine isn't reachable from these
+# nodes), not something we created or need to track.
+dcgm/
