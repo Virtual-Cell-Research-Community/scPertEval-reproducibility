@@ -15,11 +15,26 @@ see ``docs/user-guide/reproducing-literature-protocols.md`` for the full compari
 - Drop perturbations whose own target gene isn't itself a measured feature. GEARS/scGPT's data
   pipeline (``gears.utils.create_cell_graph_dataset_for_prediction``) hard-crashes on these at
   predict time, and even where it doesn't crash (``gears.pertdata.PertData.get_pert_idx``'s own
-  ``try/except`` at train time, which falls back to ``pert_idx=[-1]``) it silently trains on
-  that cell's real post-perturbation expression while flagging the graph as if no gene had been
-  targeted at all. Not something Miller's own ``get_data.py`` resolves either — it only prints a
-  ``Missing genes`` diagnostic after the fact and leaves the cells in — but dropped here rather
-  than left to crash or silently mistrain a model.
+  ``try/except`` at train time, which falls back to ``pert_idx=None`` — the same value used for
+  real control cells) it silently trains on that cell's real post-perturbation expression while
+  flagging the graph as if no gene had been targeted at all. Not something Miller's own
+  ``get_data.py`` resolves either — it only prints a ``Missing genes`` diagnostic after the fact
+  and leaves the cells in — but dropped here rather than left to crash or silently mistrain a model.
+- Drop perturbations ``gears_uncovered_genes()`` flags: measured in our own panel, but missing
+  from GEARS' own bundled GO-annotation reference (``gene2go_all.pkl``, fetched dynamically —
+  see that function) regardless — same crash/silent-mislabeling failure mode as the previous
+  bullet, just a different root cause (GEARS' own fixed external reference not covering the
+  gene, rather than us not measuring it). Only 5 of replogle22k562's 1789 perturbed genes
+  (0.28%: C19orf53, C7orf26, FAU, GNB1L, SEM1) are affected as of this reference snapshot.
+- Drop perturbations ``sclambda_uncovered_genes()`` flags: same idea, different model/reference
+  — scLAMBDA's own GenePT gene-embedding pickle (fetched dynamically — see that function)
+  doesn't cover every gene either. Unlike the GEARS/GO-graph case, this one crashes
+  unconditionally on *every* run (scLAMBDA builds its gene_embeddings dict from every
+  perturbed gene in the whole dataset up front, not per-fold), so leaving it unfixed wouldn't
+  just bias training on some folds — it would hard-crash every single one. 14 of
+  replogle22k562's 1789 perturbed genes (0.78%: C12orf45, C1orf109, C7orf26, C9orf16,
+  CCDC130, INTS2, MBTPS1, PHB, POLR2B, SPATA5, SPATA5L1, WDR61, WDR92, ZNF720) are affected
+  as of this reference snapshot.
 - Per-perturbation downsampling: non-control conditions capped at ``round(mean)`` cells (over
   the surviving population), control capped at ``MAX_CELLS_CONTROL`` (8192, Miller's own value).
 - Gene panel restricted to the top-``N_HVGS`` (8192, Miller's value) HVGs union every remaining
@@ -40,6 +55,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import pickle
+import urllib.request
+import zipfile
 from pathlib import Path
 
 import anndata as ad
@@ -58,11 +76,69 @@ MAX_CELLS_CONTROL = 8192  # Miller's control cap
 N_HVGS = 8192  # Miller's HVG count
 SEED = 42
 
+# GEARS' own bundled GO-annotation reference (PertData.set_pert_genes's gene2go_all.pkl,
+# ~67832 genes globally) doesn't cover every gene — see gears_uncovered_genes() below for why
+# perturbations targeting an uncovered gene need to be dropped for every model, not just
+# gears/scgpt. Same file GEARS' own PertData.__init__ downloads unconditionally (fixed
+# Dataverse URL below, taken directly from its source) into gears/pert_data/ — fetched here
+# too if missing, via a plain HTTP GET (no gears/torch import needed to read a pickled dict),
+# so this script doesn't depend on having run any gears/scgpt code first.
+GEARS_GENE2GO_URL = "https://dataverse.harvard.edu/api/access/datafile/6153417"
+GEARS_GENE2GO_PATH = HERE.parent / "gears" / "pert_data" / "gene2go_all.pkl"
+
+# scLAMBDA's own GenePT gene-embedding reference (~134k gene symbols from NCBI, OpenAI
+# text-embedding-3-large embeddings of gene summaries) doesn't cover every gene either — see
+# sclambda_uncovered_genes() below. scLAMBDA's own gene_embeddings dict construction
+# (models/sclambda/train_predict.py) does a bare per-gene dict lookup with no existence
+# check, hard-crashing (KeyError) on any gene missing from it — and since that dict is built
+# from every perturbed gene in the whole dataset (not just one fold's split), this crashes
+# every single run, immediately, not just some folds. Same zip GEARS' own `pixi run -e
+# sclambda fetch-embeddings` task downloads (URL/target path below, taken directly from
+# models/pixi.toml) — fetched here too if missing, so this script doesn't depend on having
+# run that task first.
+SCLAMBDA_GENEPT_URL = "https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1"
+SCLAMBDA_GENEPT_PATH = (
+    HERE.parent / "sclambda" / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
+)
+
 
 def _target_genes(condition: str) -> list[str]:
     """A condition's own perturbed gene(s) — ``"control"`` has none, a combo splits on ``"+"``
     (scPertEval's own combination convention, docs/user-guide/datasets.md)."""
     return [] if condition == "control" else condition.split("+")
+
+
+def gears_uncovered_genes(genes: set[str]) -> set[str]:
+    """Which of ``genes`` GEARS' own bundled GO-annotation reference doesn't cover — see
+    GEARS_GENE2GO_PATH above for why these need dropping. Downloads that reference itself
+    (into the same path GEARS' own PertData.__init__ would use, so no duplicate download
+    later) if it isn't already there."""
+    if not GEARS_GENE2GO_PATH.exists():
+        GEARS_GENE2GO_PATH.parent.mkdir(parents=True, exist_ok=True)
+        print(f"downloading {GEARS_GENE2GO_URL} to {GEARS_GENE2GO_PATH} ...")
+        urllib.request.urlretrieve(GEARS_GENE2GO_URL, GEARS_GENE2GO_PATH)
+    with open(GEARS_GENE2GO_PATH, "rb") as f:
+        gene2go = pickle.load(f)
+    return genes - set(gene2go.keys())
+
+
+def sclambda_uncovered_genes(genes: set[str]) -> set[str]:
+    """Which of ``genes`` scLAMBDA's own GenePT gene-embedding reference doesn't cover — see
+    SCLAMBDA_GENEPT_PATH above for why these need dropping. Downloads+extracts that reference
+    itself (into the same path `pixi run -e sclambda fetch-embeddings` would use, so no
+    duplicate download later) if it isn't already there."""
+    if not SCLAMBDA_GENEPT_PATH.exists():
+        SCLAMBDA_GENEPT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        cache_dir = SCLAMBDA_GENEPT_PATH.parent.parent
+        zip_path = cache_dir / "GenePT_emebdding_v2.zip"
+        print(f"downloading {SCLAMBDA_GENEPT_URL} to {zip_path} ...")
+        urllib.request.urlretrieve(SCLAMBDA_GENEPT_URL, zip_path)
+        with zipfile.ZipFile(zip_path) as zf:
+            zf.extractall(cache_dir)
+        zip_path.unlink()
+    with open(SCLAMBDA_GENEPT_PATH, "rb") as f:
+        genept = pickle.load(f)
+    return genes - set(genept.keys())
 
 
 def apply_miller_fixes(adata: ad.AnnData, seed: int = SEED) -> ad.AnnData:
@@ -74,6 +150,24 @@ def apply_miller_fixes(adata: ad.AnnData, seed: int = SEED) -> ad.AnnData:
     var_set = set(adata.var_names)
     measured = np.array([all(g in var_set for g in _target_genes(c)) for c in pert])
     adata = adata[measured].copy()
+    pert = adata.obs["perturbation"].to_numpy()
+
+    # See gears_uncovered_genes() above.
+    perturbed_genes = {g for c in pert for g in _target_genes(c)}
+    uncovered = gears_uncovered_genes(perturbed_genes)
+    if uncovered:
+        print(f"dropping {len(uncovered)} perturbations GEARS' own GO reference doesn't cover: {sorted(uncovered)}")
+    covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
+    adata = adata[covered].copy()
+    pert = adata.obs["perturbation"].to_numpy()
+
+    # See sclambda_uncovered_genes() above.
+    perturbed_genes = {g for c in pert for g in _target_genes(c)}
+    uncovered = sclambda_uncovered_genes(perturbed_genes)
+    if uncovered:
+        print(f"dropping {len(uncovered)} perturbations scLAMBDA's own GenePT reference doesn't cover: {sorted(uncovered)}")
+    covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
+    adata = adata[covered].copy()
     pert = adata.obs["perturbation"].to_numpy()
 
     counts = pd.Series(pert).value_counts()
