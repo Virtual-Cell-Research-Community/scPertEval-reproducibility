@@ -90,6 +90,14 @@ cuda = "12"
 # here unless this feature needs something presage-src itself doesn't.
 presage-src = { path = "presage/vendor/presage-src" }
 
+[feature.presage.pypi-dependencies]
+# Not a presage-src dependency — used by our own train_predict.py to replace
+# scPerturbDataModule.compute_degs's per-perturbation scanpy.tl.rank_genes_groups loop with
+# one vectorized illico call (same Wilcoxon test, same output, much faster — see
+# train_predict.py's own compute_degs_fast docstring). scPertEval's own pyproject.toml
+# depends on the same package, unpinned, for the same reason (src/scperteval/blocks/de.py).
+illico = "*"
+
 [feature.presage.tasks]
 smoke-test = "python -c \"import torch, torch_geometric, pytorch_lightning, presage, datamodule, model_harness, train; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('pyg', torch_geometric.__version__); print('pytorch-lightning', pytorch_lightning.__version__)\""
 # Downloads PRESAGE's external gene-embedding cache (Zenodo, ~3.4GB: pathway/other

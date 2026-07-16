@@ -14,19 +14,11 @@ a zip, then normalizes/log1ps/HVG-filters it) and, in ``train.py``'s actual clas
 (``ReploglePRESAGEDataModule``, MRO puts ``ReplogleDataModule`` after ``PRESAGEDataModule``),
 ``compute_degs`` only *loads* a pre-existing per-gene DEG cache shipped for those datasets
 rather than computing DEGs — silently empty for any dataset that isn't one of theirs, which
-later crashes ``ModelHarness.ind_to_pert``'s ``assert key in self.degs``. ``SmokePRESAGEDataModule``
-below is the minimal patch for a custom dataset: accept our name, skip the zip-download dance
-(we write our own already-normalized adata — see models/data/prepare_data.py, its ``.X`` is
-already on the right scale, so PRESAGE's own preprocessing would double-transform it — directly
-to ``preprocessed_path``) and use the real (wilcoxon ``rank_genes_groups``) DEG computation.
-Everything downstream — the model (``PRESAGE``) and prediction extraction (``get_predictions``)
-— is the official code, run through PRESAGE's own ``train()`` entry point. ``train()`` itself
-hardcodes ``ReploglePRESAGEDataModule``/``ModelHarness`` by name rather than accepting them as
-arguments, so ``main()`` below monkeypatches those two names in its module namespace to
-``SmokePRESAGEDataModule``/``SmokeModelHarness`` before calling it — the same kind of small,
-necessary patch as scGPT's ``pert_data.split = "custom"`` elsewhere in this repo, not a
-reimplementation of ``train()``'s own orchestration (Trainer/EarlyStopping/checkpointing/
-prediction-extraction logic, all untouched).
+later crashes ``ModelHarness.ind_to_pert``'s ``assert key in self.degs``. The corrections for
+all of this — a working ``compute_degs``, a datamodule/harness that accept a custom dataset,
+and the checkpoint-preserving ``os`` proxy — live in ``patch.py`` (``_patch.apply()`` below),
+kept separate so this script stays a straightforward reading of PRESAGE's own ``train()`` entry
+point (Trainer/EarlyStopping/checkpointing/prediction-extraction logic, all untouched).
 
 ``model.pathway_files`` uses PRESAGE's own curated list of external knowledge-source
 embeddings (``sample.knowledge_experimental.txt``, vendored via presage-src), fetched into
@@ -41,22 +33,19 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import sys
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import pandas as pd
-import scanpy as sc
 
 ad.settings.allow_write_nullable_strings = True
 
 import datamodule as presage_datamodule_module  # noqa: E402
-import model_harness as presage_model_harness_module  # noqa: E402
 import train as presage_train_module  # noqa: E402
-from datamodule import scPerturbDataModule  # noqa: E402
-from presage_datamodule import ReploglePRESAGEDataModule  # noqa: E402
+
+import patch as _patch  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
@@ -64,62 +53,6 @@ PERT_DATA_DIR = HERE / "pert_data"
 CACHE_DIR = HERE / "cache"  # populated by `pixi run -e presage fetch-cache`
 OUT_DIR = HERE / "smoke_data"
 SAVED_MODELS_DIR = HERE / "saved_models"
-
-
-class _CheckpointPreservingOS:
-    """Proxies the stdlib ``os`` module but copies a file into ``dest_dir`` before letting
-    a ``remove()`` call through. train.py's own ``train()`` loads its best checkpoint into
-    the lightning module and then immediately deletes it (``os.remove(best_model_path)``) —
-    there's no config flag or hook to keep it, so this intercepts that one call by replacing
-    the *name* ``os`` inside train.py's own module namespace (not the global ``os`` module
-    itself, which every other import of it still sees unmodified)."""
-
-    def __init__(self, dest_dir: Path) -> None:
-        self._dest_dir = dest_dir
-
-    def remove(self, path) -> None:
-        self._dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, self._dest_dir / Path(path).name)
-        os.remove(path)
-
-    def __getattr__(self, name):
-        return getattr(os, name)
-
-
-class SmokePRESAGEDataModule(ReploglePRESAGEDataModule):
-    """``ReploglePRESAGEDataModule``, adapted for our own custom (non-benchmark) dataset —
-    see the module docstring for why each override is needed. ``urls`` is populated with the
-    actual dataset name at runtime in ``main()`` (it must contain the name being used, but the
-    name itself is only known once ``--dataset`` is parsed, after this class body runs)."""
-
-    # ReplogleDataModule's own compute_degs only loads a pre-existing per-gene DEG cache;
-    # rebind to the real (wilcoxon rank_genes_groups) implementation on the common base class.
-    compute_degs = scPerturbDataModule.compute_degs
-
-    def prepare_data(self) -> None:
-        if self._data_prepared:
-            return
-        if not os.path.exists(self.merged_deg_file):
-            adata = sc.read(self.preprocessed_path)
-            self.compute_degs(adata)
-        else:
-            print(f"Found local preprocessed DEG file {self.merged_deg_file}")
-        self._data_prepared = True
-
-
-class SmokeModelHarness(presage_model_harness_module.ModelHarness):
-    """``ModelHarness`` with ``on_test_epoch_end`` (PRESAGE's own internal functional-metrics
-    logging, via ``Evaluator``) disabled. Both its branches (gated by ``training.eval_test``)
-    unconditionally call ``Evaluator._take_topk_union_degs``, which indexes DEGs against a
-    gene panel that doesn't line up at this smoke scale (``KeyError: [...] not in index`` —
-    not something ``eval_test`` can dodge, since it only picks which branch, not whether that
-    call happens). ``train()``'s actual predictions come from a separate, later
-    ``get_predictions()``/``trainer.predict()`` call that never depends on this hook's side
-    effects, so skipping it entirely is safe.
-    """
-
-    def on_test_epoch_end(self) -> None:
-        pass
 
 
 def build_pathway_files(cache_dir: Path, out_path: Path) -> Path:
@@ -276,10 +209,6 @@ def main() -> None:
     # under models/presage/ instead of leaking into the shared models/ workspace root.
     os.chdir(HERE)
 
-    # Must contain args.dataset before ReploglePRESAGEDataModule.prepare_data() runs, or its
-    # own hardcoded-benchmark check rejects an unrecognized name.
-    SmokePRESAGEDataModule.urls = {**ReploglePRESAGEDataModule.urls, args.dataset: "unused"}
-
     dataset_dir = PERT_DATA_DIR / args.dataset
     dataset_dir.mkdir(parents=True, exist_ok=True)
 
@@ -310,15 +239,9 @@ def main() -> None:
         epochs=args.epochs,
         batch_size=args.batch_size,
     )
-    # train() hardcodes `ReploglePRESAGEDataModule` (bound by name into its own module
-    # namespace at import time) rather than taking a datamodule class as a config/argument —
-    # same kind of small necessary patch as scGPT's `pert_data.split = "custom"` elsewhere
-    # in this repo, not a reimplementation of train() itself.
-    presage_train_module.ReploglePRESAGEDataModule = SmokePRESAGEDataModule
-    presage_train_module.ModelHarness = SmokeModelHarness
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's checkpoint.
-    presage_train_module.os = _CheckpointPreservingOS(SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}")
+    _patch.apply(args.dataset, SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}")
     presage_train_module.train(config)
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test

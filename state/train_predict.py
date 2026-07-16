@@ -74,7 +74,9 @@ Replogle-Nadig") with a few deliberate deviations:
   since no wandb login is available here
   (same spirit as PRESAGE's `training.offline=True`). All of the above are full-scale values;
   smoke-scale runs need much lower ones passed explicitly (e.g. `--max-steps 20 --val-freq 10
-  --batch-size 4 --num-workers 0`).
+  --batch-size 4`). `--num-workers` doesn't need lowering for smoke runs specifically — see the
+  `main()` argument's own docstring for why (predict's own dataloader workers are always forced
+  to 0 regardless of this value, which is what smoke-scale `--num-workers 0` was working around).
 """
 
 from __future__ import annotations
@@ -90,6 +92,7 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import torch
 
 ad.settings.allow_write_nullable_strings = True
 
@@ -176,11 +179,13 @@ def main() -> None:
             "unless set, matching the Colab (which never sets it either)."
         ),
     )
-    # perturbation.yaml's own data-config default is 12; the Colab explicitly overrides
-    # to 4. At smoke scale even 12 reliably deadlocked `state tx predict` (hung
-    # indefinitely, 0% CPU, no progress) — untested whether 4 is safe at smoke scale too,
-    # so smoke runs should pass --num-workers 0 to be safe.
-    parser.add_argument("--num-workers", type=int, default=4, help="data.kwargs.num_workers (default: 4, per the Colab)")
+    # perturbation.yaml's own data-config default is 12; the Colab explicitly overrides to 4.
+    # This value only governs *training*'s dataloader workers — state tx predict deadlocks
+    # with worker processes at all (confirmed at both smoke scale with 12 and full scale with
+    # this default of 4: 0% GPU, no CPU progress, indefinitely), so predict's own workers are
+    # unconditionally forced to 0 below regardless of what's passed here (see the
+    # data_module.torch patch after the train subprocess call).
+    parser.add_argument("--num-workers", type=int, default=4, help="data.kwargs.num_workers (default: 4, per the Colab; training only — see below)")
     parser.add_argument("--batch-size", type=int, default=64, help="training.batch_size (default: 64, per the Colab)")
     parser.add_argument("--lr", type=float, default=1e-3, help="training.lr (default: 1e-3, per the Colab; library default is 1e-4)")
     # model.kwargs.cell_set_len: how many cells the transformer backbone processes as one
@@ -237,6 +242,21 @@ def main() -> None:
     subprocess.run(["state", "tx", "train", *train_overrides], check=True)
 
     run_output_dir = RUN_DIR / run_name
+    # state tx predict deserializes this saved PerturbationDataModule config (a plain dict —
+    # cell_load's own PerturbationDataModule.save_state()/load_state()) rather than rebuilding
+    # the data module from config.yaml, so whatever num_workers training used is inherited
+    # unchanged (see the --num-workers override above). Confirmed empirically on the real
+    # full-scale data: num_workers=4 (this script's own default) deadlocks state tx predict
+    # indefinitely (0% GPU utilization, no CPU progress) — a full-scale instance of the same
+    # dataloader-worker deadlock already documented at smoke scale for num_workers=12. Training
+    # itself is unaffected by this (runs fine at num_workers=4), so rather than dropping
+    # num_workers to 0 for training too (and losing real throughput there), patch just the
+    # saved dict's num_workers to 0 before predict loads it.
+    data_module_path = run_output_dir / "data_module.torch"
+    data_module_state = torch.load(data_module_path, map_location="cpu")
+    data_module_state["num_workers"] = 0
+    torch.save(data_module_state, data_module_path)
+
     subprocess.run(
         [
             "state",

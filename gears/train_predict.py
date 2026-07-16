@@ -20,14 +20,11 @@ import pandas as pd
 
 ad.settings.allow_write_nullable_strings = True
 
-# cell-gears 0.1.2 indexes scipy sparse matrices with a raw pandas boolean Series
-# (e.g. `adata.X[adata.obs.condition == 'ctrl']`). Older scipy quietly coerced the
-# Series via `np.asarray` first; current scipy calls `.nonzero()` on it directly,
-# and pandas dropped `Series.nonzero()` back in pandas 1.0. Restore it.
-if not hasattr(pd.Series, "nonzero"):
-    pd.Series.nonzero = lambda self: self.to_numpy().nonzero()
-
 from gears import GEARS, PertData  # noqa: E402
+
+import patch as _patch  # noqa: E402
+
+_patch.apply()
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
@@ -63,8 +60,19 @@ def main() -> None:
     adata = ad.read_h5ad(raw)
 
     pert_data = PertData(str(PERT_DATA_DIR))
-    pert_data.new_data_process(dataset_name=args.dataset, adata=adata)
+    _patch.load_or_build_pert_data(pert_data, args.dataset, adata)
     pert_data.prepare_split(split="custom", split_dict_path=str(fold_path))
+    # model_initialize() below (via get_similarity_network -> get_coexpression_network_from_train)
+    # caches a co-expression network keyed by self.split among other things, but actually
+    # COMPUTES it from this fold's own set2conditions['train'] — genuinely fold-specific, unlike
+    # the PyG graph cache above (which is correctly fold-agnostic). GEARS' own cache filename
+    # never includes a fold index at all, so left as "custom" it would build the network from
+    # whichever fold happens to run first and every other fold would silently (and incorrectly)
+    # reuse it. prepare_split() above requires the literal "custom" (hardcoded allowed-values
+    # check) so this can't be passed in directly; override it after, once already validated —
+    # get_dataloader()'s own branching only special-cases the literal strings "no_split"/
+    # "no_test", so any other value here (including this one) is safe for it.
+    pert_data.split = f"custom_fold{args.fold}"
     pert_data.get_dataloader(batch_size=args.batch_size, test_batch_size=args.test_batch_size)
 
     model = GEARS(pert_data, device="cuda")
@@ -81,6 +89,15 @@ def main() -> None:
     print(f"test perturbations ({len(test_perts)}): {test_perts}")
 
     single_gene_perts = [c.split("+")[0] for c in test_perts if c != "ctrl"]
+    # GEARS' own perturbation-similarity graph (model.pert_list) is built from a fixed,
+    # pre-downloaded GO-annotation reference (PertData.set_pert_genes's gene2go_all.pkl) —
+    # independent of our own data, and doesn't cover every gene we measure. GEARS.predict()
+    # hard-crashes (ValueError) on any gene it doesn't cover; filter those out rather than
+    # let one uncovered test gene kill the whole fold's job after a full training run.
+    ungraphed = [g for g in single_gene_perts if g not in model.pert_list]
+    if ungraphed:
+        print(f"WARNING: {len(ungraphed)} test perturbations not in GEARS' own perturbation graph, skipping: {ungraphed}")
+    single_gene_perts = [g for g in single_gene_perts if g in model.pert_list]
     pred_lists = [[g] for g in single_gene_perts]
     preds = model.predict(pred_lists)
 

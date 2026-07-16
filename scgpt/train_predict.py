@@ -42,14 +42,13 @@ from torch import nn
 
 ad.settings.allow_write_nullable_strings = True
 
-# See models/gears/train_predict.py for why this is needed: cell-gears indexes a scipy
-# sparse matrix with a raw pandas boolean Series, and pandas dropped `Series.nonzero()`.
-if not hasattr(pd.Series, "nonzero"):
-    pd.Series.nonzero = lambda self: self.to_numpy().nonzero()
-
 from gears import PertData  # noqa: E402
 from gears.utils import create_cell_graph_dataset_for_prediction  # noqa: E402
 from torch_geometric.loader import DataLoader  # noqa: E402
+
+import patch as _patch  # noqa: E402
+
+_patch.apply()
 
 import scgpt as scg  # noqa: E402
 from scgpt.model import TransformerGenerator  # noqa: E402
@@ -70,6 +69,7 @@ PERT_DATA_DIR = HERE / "pert_data"
 CHECKPOINT_DIR = HERE / "checkpoints" / "scGPT_human"
 OUT_DIR = HERE / "smoke_data"
 SAVED_MODELS_DIR = HERE / "saved_models"
+
 
 pad_token = "<pad>"
 special_tokens = [pad_token, "<cls>", "<eoc>"]
@@ -123,7 +123,7 @@ def main() -> None:
         )
 
     pert_data = PertData(str(PERT_DATA_DIR))
-    pert_data.new_data_process(dataset_name=args.dataset, adata=ad.read_h5ad(raw))
+    _patch.load_or_build_pert_data(pert_data, args.dataset, ad.read_h5ad(raw))
     # scgpt pins cell-gears<0.0.3, which predates PertData.prepare_split's split="custom"
     # option (added later in cell-gears 0.1.2, the version models/gears's own environment
     # uses) — replicate that branch's own body directly: it only ever sets these two
