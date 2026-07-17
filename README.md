@@ -16,11 +16,22 @@ pixi run -e presage fetch-cache         # PRESAGE's gene-embedding cache (~3.4GB
 pixi run -e sclambda fetch-embeddings   # GenePT gene-embedding pickle (Zenodo)
 ```
 
-`gears`, `state`, and `tabicl` fetch what they need automatically on first run (GEARS' own
-GO-annotation reference, TabICL's pretrained checkpoint from Hugging Face). **`tabicl` also
-needs PRESAGE's cache fetched** (it reuses the same gene-embedding pickles), even though it
-runs in its own separate environment — run the `presage fetch-cache` line above regardless of
-whether you're using PRESAGE itself.
+`gears` and `tabicl` fetch what they need automatically on first run (GEARS' own GO-annotation
+reference from Harvard Dataverse; TabICL's pretrained checkpoint from Hugging Face, via
+`huggingface_hub`'s own lock-protected cache — safe under concurrent folds by construction).
+`state` fetches nothing at our settings — we always train from scratch (`checkpoint: null`),
+so no Hugging Face checkpoint is ever pulled. **`tabicl` also needs PRESAGE's cache fetched**
+(it reuses the same gene-embedding pickles), even though it runs in its own separate
+environment — run the `presage fetch-cache` line above regardless of whether you're using
+PRESAGE itself.
+
+GEARS' own downloads are the one spot worth knowing about if you're launching multiple folds
+at once (`submit_all.sh` does, via a 5-task SLURM array): on a cold cache, all 5 fold
+processes race to fetch the same reference files into the same shared `gears/pert_data/`
+directory. This is patched to be crash-safe in `gears/patch.py` (`_atomic_download`,
+`_atomic_tar_download_and_extract` — downloads land in a private temp file/dir first, only
+atomically renamed into place once complete), so a fold getting preempted or network-dropped
+mid-download can't corrupt another fold's already-good copy.
 
 Sanity-check any environment came up correctly:
 

@@ -18,23 +18,37 @@ with the patched-vs-vanilla behavior and the reasoning for it isolated in one pl
 ``load_or_build_pert_data`` is a different kind of thing and isn't applied via ``apply()`` —
 it's a wrapper *we* call instead of ``PertData.new_data_process()`` directly, correcting a real
 gap in GEARS' own caching (see its own docstring), not a monkeypatch of GEARS' namespace.
+
+Two more genuine bugs, same family as ``load_or_build_pert_data``'s but upstream of it: GEARS'
+own Dataverse-download helpers (``dataverse_download``, ``tar_data_download_wrapper``) are also
+check-then-act with non-atomic writes, and every one of GEARS' three reference downloads
+(``gene2go_all.pkl``, ``essential_all_data_pert_genes.pkl``, ``go_essential_all.tar.gz``) goes
+through them, sharing the same ``PERT_DATA_DIR`` across all 5 concurrently-launched fold
+processes. ``_atomic_download``/``_atomic_tar_download_and_extract`` fix that the same way
+``load_or_build_pert_data`` fixes the PyG graph cache race — patched into GEARS' own namespace
+via ``apply()`` since, unlike the graph cache, these are called from deep inside GEARS' own
+``PertData.__init__``/``set_pert_genes``/``model_initialize``, not somewhere we can wrap directly.
 """
 
 from __future__ import annotations
 
+import os
 import pickle
 import shutil
+import tarfile
 import tempfile
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import pandas as pd
+import requests
 import torch
 from torch_geometric.data import Data
 from tqdm import tqdm
 
 import gears.pertdata as _pertdata
+import gears.utils as _utils
 from gears import PertData
 from gears.utils import print_sys
 
@@ -230,6 +244,92 @@ def fast_create_dataset_file(self) -> None:
     print_sys("Done!")
 
 
+def _atomic_download(url: str, save_path: str) -> None:
+    """Drop-in replacement for ``gears.utils.dataverse_download`` (check-then-act, writes
+    directly to ``save_path`` via a truncating ``open(save_path, 'wb')``) — every one of GEARS'
+    three Dataverse-hosted reference files (``gene2go_all.pkl`` in ``PertData.__init__``,
+    ``essential_all_data_pert_genes.pkl`` in ``set_pert_genes()``, ``go_essential_all.tar.gz``
+    via ``get_similarity_network()``) goes through it, and all three share the same
+    ``PERT_DATA_DIR`` across every fold's ``train_predict.py`` invocation. ``submit_all.sh``
+    launches all 5 folds concurrently, so on a cold cache every one of them can race through the
+    original's ``os.path.exists(save_path)`` check simultaneously, then all open the same
+    destination path in ``'wb'`` mode at once — each writer's own buffered chunks interleave
+    with the others' at essentially arbitrary offsets, producing neither download intact.
+    Downstream ``pickle.load``/``tarfile.open`` on the result then raises, non-deterministically,
+    only on the very first cold run.
+
+    Same fix as ``load_or_build_pert_data``: write to a private per-attempt temp file in the
+    same directory (so the final rename is same-filesystem, hence atomic) and only
+    ``os.replace()`` it into ``save_path`` once the download is known-complete. A concurrent
+    reader's ``os.path.exists(save_path)`` check therefore only ever sees the complete old state
+    (nothing) or the complete new one, never a partially-written file. Replacing a *file*
+    destination is atomic even if another process's download already won the race and landed
+    there first — POSIX ``rename()`` on a file target always succeeds, silently overwriting with
+    what is, here, byte-identical content (unlike the directory case below).
+    """
+    if os.path.exists(save_path):
+        print_sys("Found local copy...")
+        return
+
+    print_sys("Downloading...")
+    response = requests.get(url, stream=True)
+    total_size_in_bytes = int(response.headers.get("content-length", 0))
+    block_size = 1024
+    progress_bar = tqdm(total=total_size_in_bytes, unit="iB", unit_scale=True)
+
+    fd, tmp_path = tempfile.mkstemp(dir=os.path.dirname(save_path) or ".", prefix=".download-")
+    try:
+        with os.fdopen(fd, "wb") as file:
+            for data in response.iter_content(block_size):
+                progress_bar.update(len(data))
+                file.write(data)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
+    finally:
+        progress_bar.close()
+    os.replace(tmp_path, save_path)
+
+
+def _atomic_tar_download_and_extract(url: str, save_path: str, data_path: str) -> None:
+    """Drop-in replacement for ``gears.utils.tar_data_download_wrapper`` — covers the same
+    check-then-act gap as ``_atomic_download`` above, but for the *extraction* step
+    specifically. The tarball download itself is already safe once ``dataverse_download`` is
+    patched to ``_atomic_download`` (see ``apply()`` below); this wraps the
+    ``tarfile.extractall()`` call in the same atomic-rename pattern instead of leaving it as a
+    second, independent race, where multiple folds extract into the same shared ``data_path``
+    concurrently and one fold's ``pd.read_csv`` could catch another fold's extraction mid-write.
+
+    Extracts into a private temp directory first, then renames the tar's own top-level output
+    directory into place at ``save_path`` in one atomic step. Unlike ``_atomic_download``'s
+    file-to-file replace, a directory-to-directory ``os.replace()`` raises ``OSError`` if the
+    destination already exists and is non-empty (POSIX ``rename()``'s own semantics for
+    directories) — so a process that loses this particular race gets an expected, harmless error
+    here instead of a corrupted destination; treated as a no-op, since by the time that happens
+    the winning process's identical extraction is already in place.
+    """
+    if os.path.exists(save_path):
+        print_sys("Found local copy...")
+        return
+
+    _atomic_download(url, save_path + ".tar.gz")
+    print_sys("Extracting tar file...")
+
+    tmp_root = tempfile.mkdtemp(dir=data_path, prefix=".extract-")
+    try:
+        with tarfile.open(save_path + ".tar.gz") as tar:
+            tar.extractall(path=tmp_root)
+        extracted = Path(tmp_root) / Path(save_path).name
+        try:
+            extracted.replace(save_path)
+        except OSError:
+            if not os.path.isdir(save_path):
+                raise
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+    print_sys("Done!")
+
+
 def load_or_build_pert_data(pert_data: PertData, dataset_name: str, adata: ad.AnnData) -> None:
     """PertData.new_data_process() (the entry point for a custom, non-benchmark dataset —
     what we use, since we're not one of GEARS' 4 named datasets) always rebuilds its per-cell
@@ -307,7 +407,19 @@ def apply() -> None:
     module global at call time, and create_dataset_file is looked up on the instance/class at
     call time, so patching the module-level names is enough — no need to touch already-created
     objects, but this must run before new_data_process() is actually called.
+
+    ``dataverse_download``/``tar_data_download_wrapper`` are patched in both
+    ``gears.utils`` (where ``get_similarity_network`` resolves them as its own module globals
+    at call time, regardless of who imported ``get_similarity_network`` itself — e.g.
+    ``gears.gears``) and ``gears.pertdata`` (which imported its own bound name for
+    ``dataverse_download`` at import time, used directly by ``PertData.__init__`` and
+    ``set_pert_genes()``). ``zip_data_download_wrapper`` is left unpatched — it's only reachable
+    via ``PertData.load()``, GEARS' path for its own named benchmark datasets, which
+    ``load_or_build_pert_data`` never calls.
     """
     restore_series_nonzero()
     _pertdata.get_dropout_non_zero_genes = fast_get_dropout_non_zero_genes
     _pertdata.PertData.create_dataset_file = fast_create_dataset_file
+    _utils.dataverse_download = _atomic_download
+    _utils.tar_data_download_wrapper = _atomic_tar_download_and_extract
+    _pertdata.dataverse_download = _atomic_download
