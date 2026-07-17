@@ -16,15 +16,18 @@
 # deliberately for throughput; each benchmark_fold*.json (once added) should still record
 # which GPU it ran on so this is auditable after the fact, not silently lost.
 #
-# V100 is explicitly excluded (--exclude, not just left to node draining): confirmed via
+# V100 was previously excluded here (--exclude=codon-gpu-[017-019]): confirmed via
 # slurm/check_gpu_compat.sbatch that flash-attn 2.x kernels launch fine on l40s/a100/h200
-# (compute capability 8.9/8.0/9.0), but couldn't confirm V100 at all — codon-gpu-[017-019]
-# were drain/down cluster-wide at the time. flash-attn 2.x is known to have dropped Volta
-# (compute capability 7.0) support, so scgpt would likely hard-crash there anyway. Excluded
-# outright rather than left to chance in case those nodes come back online mid-run.
+# (compute capability 8.9/8.0/9.0), but couldn't confirm V100 at all, and flash-attn 2.x is
+# known to have dropped Volta (compute capability 7.0) support, so scgpt would likely
+# hard-crash there. Dropped as of 2026-07-17: those three nodes are no longer in `sinfo`'s
+# node list at all (fully decommissioned, not just drained/down as they were when this was
+# written), and `sinfo -N | grep -i v100` now returns nothing cluster-wide — sbatch rejects
+# --exclude naming nodes that don't exist ("Invalid node name specified"), and there's no
+# longer any V100 node for the exclusion to matter for. If V100 nodes ever reappear under a
+# different name, re-add an --exclude for them.
 #SBATCH --account=dugourd
 #SBATCH --gres=gpu:1
-#SBATCH --exclude=codon-gpu-[017-019]
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=64G
 #SBATCH --time=2-00:00:00
