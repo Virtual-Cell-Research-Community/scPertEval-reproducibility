@@ -55,7 +55,9 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import os
 import pickle
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -108,15 +110,47 @@ def _target_genes(condition: str) -> list[str]:
     return [] if condition == "control" else condition.split("+")
 
 
+def _fetch(url: str, save_path: Path) -> None:
+    """Downloads ``url`` to ``save_path`` if it isn't already there — shared by
+    ``gears_uncovered_genes``/``sclambda_uncovered_genes`` below, both of which fetch a
+    reference file via a plain HTTP GET rather than importing gears/scgpt/torch just to reuse
+    their own model-specific download helpers (this script's whole point is running from any
+    model's environment — see the module docstring).
+
+    Two things this guards against, both hit for real running this script standalone on a
+    fresh checkout: Harvard Dataverse (unlike Zenodo, empirically) returns HTTP 403 for
+    urllib's own default User-Agent ("Python-urllib/x.y") — a common bot-protection heuristic,
+    confirmed by testing the exact same request with/without a browser-like header — so one is
+    set explicitly rather than switching HTTP clients (``requests`` isn't installed in every
+    model's environment; ``urllib`` always is). And this can write to a path GEARS' own
+    PertData.__init__ (via gears/patch.py's ``_atomic_download``) also populates — same
+    check-then-act gap that patch fixes for GEARS' own downloads, fixed the same way here:
+    write to a private temp file in the same directory first, only ``os.replace()`` into
+    ``save_path`` once complete, so a concurrent reader's existence check never sees a
+    partially-written file.
+    """
+    if save_path.exists():
+        return
+    save_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"downloading {url} to {save_path} ...")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (compatible; scPertEval)"})
+    fd, tmp_path = tempfile.mkstemp(dir=str(save_path.parent), prefix=".download-")
+    try:
+        with urllib.request.urlopen(req) as response, os.fdopen(fd, "wb") as out:
+            while chunk := response.read(1 << 20):
+                out.write(chunk)
+    except BaseException:
+        os.remove(tmp_path)
+        raise
+    os.replace(tmp_path, save_path)
+
+
 def gears_uncovered_genes(genes: set[str]) -> set[str]:
     """Which of ``genes`` GEARS' own bundled GO-annotation reference doesn't cover — see
     GEARS_GENE2GO_PATH above for why these need dropping. Downloads that reference itself
     (into the same path GEARS' own PertData.__init__ would use, so no duplicate download
     later) if it isn't already there."""
-    if not GEARS_GENE2GO_PATH.exists():
-        GEARS_GENE2GO_PATH.parent.mkdir(parents=True, exist_ok=True)
-        print(f"downloading {GEARS_GENE2GO_URL} to {GEARS_GENE2GO_PATH} ...")
-        urllib.request.urlretrieve(GEARS_GENE2GO_URL, GEARS_GENE2GO_PATH)
+    _fetch(GEARS_GENE2GO_URL, GEARS_GENE2GO_PATH)
     with open(GEARS_GENE2GO_PATH, "rb") as f:
         gene2go = pickle.load(f)
     return genes - set(gene2go.keys())
@@ -128,11 +162,9 @@ def sclambda_uncovered_genes(genes: set[str]) -> set[str]:
     itself (into the same path `pixi run -e sclambda fetch-embeddings` would use, so no
     duplicate download later) if it isn't already there."""
     if not SCLAMBDA_GENEPT_PATH.exists():
-        SCLAMBDA_GENEPT_PATH.parent.mkdir(parents=True, exist_ok=True)
         cache_dir = SCLAMBDA_GENEPT_PATH.parent.parent
         zip_path = cache_dir / "GenePT_emebdding_v2.zip"
-        print(f"downloading {SCLAMBDA_GENEPT_URL} to {zip_path} ...")
-        urllib.request.urlretrieve(SCLAMBDA_GENEPT_URL, zip_path)
+        _fetch(SCLAMBDA_GENEPT_URL, zip_path)
         with zipfile.ZipFile(zip_path) as zf:
             zf.extractall(cache_dir)
         zip_path.unlink()
