@@ -30,8 +30,12 @@ data/*/
 data/source/*
 !data/source/.gitkeep
 
-# sbatch stdout/stderr — regenerated every run, not something to track.
+# sbatch stdout/stderr — regenerated every run, not something to track. Same gap as
+# data/source/ above: train.sbatch's --output/--error directives assume slurm/logs/ already
+# exists (sbatch doesn't create it), and nothing in our own code does either -- a fresh clone
+# hit exactly this. .gitkeep keeps the directory itself present post-checkout.
 slurm/logs/*
+!slurm/logs/.gitkeep
 
 # EBI cluster infrastructure: one per-job GPU stats dump per GPU job we run (currently just
 # connection-error placeholders — the cluster's DCGM host engine isn't reachable from these
