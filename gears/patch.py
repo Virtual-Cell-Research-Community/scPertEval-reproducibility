@@ -47,6 +47,8 @@ import torch
 from torch_geometric.data import Data
 from tqdm import tqdm
 
+import gears.gears as _gears_module
+import gears.inference as _inference
 import gears.pertdata as _pertdata
 import gears.utils as _utils
 from gears import PertData
@@ -244,6 +246,93 @@ def fast_create_dataset_file(self) -> None:
     print_sys("Done!")
 
 
+def fast_evaluate(loader, model, uncertainty, device):
+    """Drop-in replacement for ``gears.inference.evaluate`` — identical numeric output
+    (verified by exact equality against the original on real full-scale replogle22k562 data),
+    much lower peak host memory.
+
+    The original accumulates ONE separate Python/tensor object per CELL (``list.extend()``)
+    for every one of ``pred``/``truth``/``pred_de``/``truth_de``, then ``torch.stack()``s the
+    whole list into the final array at the very end. ``GEARS.train()`` calls this every epoch,
+    on the *full* ``train_loader`` (not just val/test) — at smoke scale that's nothing, but at
+    full scale it means (a) up to ``len(loader.dataset)`` individual small tensor objects
+    sitting in a Python list simultaneously, each carrying its own tensor-object overhead, and
+    (b) a SECOND full-size buffer materialized by ``stack()`` while the original list (holding
+    the same data, just chunked per-cell instead of as one array) hasn't been freed yet — a
+    genuine ~2x transient peak, on top of whatever's already resident from the epoch that just
+    finished (model, optimizer state, the previous ``best_model`` deepcopy). Confirmed this is
+    the actual cause of GEARS folds OOM-killing partway through real full-scale training: SLURM
+    ``OUT_OF_MEMORY``, ``MaxRSS`` landing right at the ``--mem`` ceiling every time (not a slow
+    monotonic climb), always within the first couple epochs' ``evaluate()`` calls.
+
+    Instead of accumulating per-cell objects then materializing a second full-size copy, the
+    exact final array is pre-allocated once — sized from the loader's own declared length,
+    correctly accounting for ``train_loader``'s ``drop_last=True`` (``PertData.get_dataloader``
+    sets this only for the train split; a naive ``len(loader.dataset)`` would overshoot it and
+    leave trailing uninitialized rows) — and each batch's results are written directly into
+    their slice as they're computed. Peak memory for pred/truth/pred_de/truth_de is therefore
+    close to the theoretical minimum (the final array itself, plus one batch's own working
+    memory), with no per-cell object list and no transient second copy ever materializing.
+    ``pert_cat`` (small, one string per cell) and the rarely-used ``uncertainty``/``logvar``
+    path (unused by our own runs — GEARS' own ``model_initialize`` defaults it to ``False``,
+    and this repo never overrides that) are left as simple per-batch accumulation rather than
+    also pre-allocated, since neither is a meaningful contributor to the actual memory problem.
+    """
+    model.eval()
+    model.to(device)
+
+    n_cells = len(loader) * loader.batch_size if loader.drop_last else len(loader.dataset)
+
+    pert_cat = []
+    logvar = []
+    pred = truth = pred_de = truth_de = None
+    offset = 0
+
+    for batch in loader:
+        batch.to(device)
+        bsz = batch.y.shape[0]
+        pert_cat.extend(batch.pert)
+
+        with torch.no_grad():
+            if uncertainty:
+                p, unc = model(batch)
+                logvar.append(unc.cpu())
+            else:
+                p = model(batch)
+            t = batch.y
+
+            if pred is None:
+                n_genes = p.shape[1]
+                n_de = len(batch.de_idx[0])
+                pred = np.empty((n_cells, n_genes), dtype=np.float32)
+                truth = np.empty((n_cells, n_genes), dtype=np.float32)
+                pred_de = np.empty((n_cells, n_de), dtype=np.float32)
+                truth_de = np.empty((n_cells, n_de), dtype=np.float32)
+
+            pred[offset : offset + bsz] = p.detach().cpu().numpy()
+            truth[offset : offset + bsz] = t.detach().cpu().numpy()
+            for itr, de_idx in enumerate(batch.de_idx):
+                pred_de[offset + itr] = p[itr, de_idx].detach().cpu().numpy()
+                truth_de[offset + itr] = t[itr, de_idx].detach().cpu().numpy()
+            offset += bsz
+
+    # Sliced to :offset as a safety net, not because it should ever differ from n_cells --
+    # if some future PyG/GEARS version changes drop_last/loader-length semantics, this keeps
+    # the function self-correcting (never returning uninitialized trailing rows) instead of
+    # silently wrong.
+    results = {
+        "pert_cat": np.array(pert_cat),
+        "pred": pred[:offset],
+        "truth": truth[:offset],
+        "pred_de": pred_de[:offset],
+        "truth_de": truth_de[:offset],
+    }
+    if uncertainty:
+        results["logvar"] = torch.cat(logvar, dim=0).detach().cpu().numpy()
+
+    return results
+
+
 def _atomic_download(url: str, save_path: str) -> None:
     """Drop-in replacement for ``gears.utils.dataverse_download`` (check-then-act, writes
     directly to ``save_path`` via a truncating ``open(save_path, 'wb')``) — every one of GEARS'
@@ -416,10 +505,17 @@ def apply() -> None:
     ``set_pert_genes()``). ``zip_data_download_wrapper`` is left unpatched — it's only reachable
     via ``PertData.load()``, GEARS' path for its own named benchmark datasets, which
     ``load_or_build_pert_data`` never calls.
+
+    ``evaluate`` is patched in both ``gears.gears`` (``GEARS.train()``'s own bound name,
+    imported at module-load time — this is the one that actually matters, since that's what
+    runs every epoch) and ``gears.inference`` (the defining module, for consistency/anyone
+    else importing it from there).
     """
     restore_series_nonzero()
     _pertdata.get_dropout_non_zero_genes = fast_get_dropout_non_zero_genes
     _pertdata.PertData.create_dataset_file = fast_create_dataset_file
+    _gears_module.evaluate = fast_evaluate
+    _inference.evaluate = fast_evaluate
     _utils.dataverse_download = _atomic_download
     _utils.tar_data_download_wrapper = _atomic_tar_download_and_extract
     _pertdata.dataverse_download = _atomic_download
