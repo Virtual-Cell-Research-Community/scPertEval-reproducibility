@@ -29,7 +29,10 @@ unmodified.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import pickle
+import re
 import sys
 from pathlib import Path
 
@@ -48,8 +51,48 @@ DATA_DIR = HERE.parent / "data"
 GENEPT_PICKLE = (
     HERE / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
 )
-OUT_DIR = HERE / "smoke_data"
+OUT_DIR = HERE / "predictions"
 SAVED_MODELS_DIR = HERE / "saved_models"
+METRICS_DIR = HERE / "metrics"
+
+# sclambda's own Model.train() (sclambda/model.py) only prints every 10 epochs
+# (`if (epoch+1) % 10 == 0`), via plain print() (stdout, unlike GEARS' print_sys which goes
+# to stderr): "\tEpoch N complete! \t Loss: X" always first, then, only when a held-out
+# validation set exists (true for our own usage), "Validation correlation delta X.XXXXX"
+# immediately after — one pair per check, so zipping matches positionally is safe.
+_EPOCH_LOSS_RE = re.compile(r"Epoch (\d+) complete!.*?Loss:\s*([\d.eE+-]+)")
+_VAL_CORR_RE = re.compile(r"Validation correlation delta ([\d.eE+-]+)")
+
+
+@contextlib.contextmanager
+def _tee_stdout():
+    buf = io.StringIO()
+    real_stdout = sys.stdout
+
+    class _Tee:
+        def write(self, s):
+            real_stdout.write(s)
+            buf.write(s)
+
+        def flush(self):
+            real_stdout.flush()
+
+    sys.stdout = _Tee()
+    try:
+        yield buf
+    finally:
+        sys.stdout = real_stdout
+
+
+def _parse_sclambda_metrics(captured: str) -> list[dict]:
+    losses = _EPOCH_LOSS_RE.findall(captured)
+    corrs = _VAL_CORR_RE.findall(captured)
+    rows = []
+    for i, (epoch, loss) in enumerate(losses):
+        row = {"epoch": int(epoch), "train_loss": float(loss)}
+        row["val_corr"] = float(corrs[i]) if i < len(corrs) else None
+        rows.append(row)
+    return rows
 # scLAMBDA's own `Model.train()` only ever updates `self.model_best` inside its
 # `(epoch+1) % 10 == 0` validation checkpoints (or, if there are no validation perturbations
 # at all, on the very last epoch) — below 10 epochs it's never assigned and
@@ -82,7 +125,7 @@ def main() -> None:
         raise SystemExit(f"--epochs must be >= {MIN_EPOCHS} (scLAMBDA never checkpoints below that, see module docstring)")
 
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
 
     if not GENEPT_PICKLE.exists():
         raise FileNotFoundError(f"{GENEPT_PICKLE} missing — run `pixi run -e sclambda fetch-embeddings` first")
@@ -119,7 +162,11 @@ def main() -> None:
         # instead splits on "+" and sums (gene_emb['GENE'] + gene_emb['ctrl'] == gene_emb['GENE']
         # since 'ctrl' embeds to zero) — the correct behavior for our convention.
     )
-    model.train()
+    with _tee_stdout() as captured:
+        model.train()
+    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(_parse_sclambda_metrics(captured.getvalue())).to_csv(metrics_path, index=False)
 
     test_conditions = fold["test"]
     print(f"test perturbations ({len(test_conditions)}): {test_conditions}")

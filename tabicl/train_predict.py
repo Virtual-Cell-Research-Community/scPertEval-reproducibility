@@ -72,7 +72,7 @@ HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
 PRESAGE_CACHE = HERE.parent / "presage" / "cache" / "cache"
 RUN_DIR = HERE / "runs"
-OUT_DIR = HERE / "smoke_data"
+OUT_DIR = HERE / "predictions"
 CONTROL_LABEL = "control"
 
 # Mirrors tfm-perturbation's own experiments/configs/modality/top_plus_perturbseq_k562_essential.yaml,
@@ -136,8 +136,8 @@ def main() -> None:
     )
     pred_adata.var_names = pd.Index(gene_names)
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     pred_adata.write_h5ad(out_path)
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 

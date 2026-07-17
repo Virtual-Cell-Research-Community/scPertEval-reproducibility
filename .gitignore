@@ -2,7 +2,8 @@
 # don't commit. Follows the same local (uncommitted) convention as ../data/.gitignore,
 # ../de_outputs/.gitignore, ../drf_outputs/.gitignore.
 */pert_data/
-*/smoke_data/
+*/predictions/
+*/metrics/
 */checkpoints/
 */cache/
 */wandb/

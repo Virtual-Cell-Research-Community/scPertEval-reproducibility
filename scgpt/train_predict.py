@@ -67,8 +67,9 @@ PERT_DATA_DIR = HERE / "pert_data"
 # Populated by `pixi run -e scgpt fetch-checkpoint` (models/pixi.toml) — not downloaded
 # here, so this script has no gdown dependency of its own.
 CHECKPOINT_DIR = HERE / "checkpoints" / "scGPT_human"
-OUT_DIR = HERE / "smoke_data"
+OUT_DIR = HERE / "predictions"
 SAVED_MODELS_DIR = HERE / "saved_models"
+METRICS_DIR = HERE / "metrics"
 
 
 pad_token = "<pad>"
@@ -115,7 +116,7 @@ def main() -> None:
     args = parser.parse_args()
     raw = DATA_DIR / args.dataset / "raw.h5ad"
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
 
     if not (CHECKPOINT_DIR / "best_model.pt").exists():
         raise FileNotFoundError(
@@ -189,7 +190,7 @@ def main() -> None:
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, schedule_interval, gamma=0.9)
     scaler = torch.cuda.amp.GradScaler(enabled=amp)
 
-    def train_one_epoch(epoch: int) -> None:
+    def train_one_epoch(epoch: int) -> float:
         model.train()
         total_loss, n_batches = 0.0, 0
         for batch_data in pert_data.dataloader["train_loader"]:
@@ -230,7 +231,9 @@ def main() -> None:
             scaler.update()
             total_loss += loss.item()
             n_batches += 1
-        scg.logger.info(f"epoch {epoch} mean train loss {total_loss / max(n_batches, 1):.4f}")
+        mean_loss = total_loss / max(n_batches, 1)
+        scg.logger.info(f"epoch {epoch} mean train loss {mean_loss:.4f}")
+        return mean_loss
 
     def eval_perturb(loader: DataLoader) -> dict[str, np.ndarray]:
         """Mirrors the tutorial's own eval_perturb: run in inference mode over a loader,
@@ -264,13 +267,15 @@ def main() -> None:
     best_val_corr = 0.0
     best_model = None
     patience = 0
+    metrics_rows = []
 
     for epoch in range(1, args.epochs + 1):
         start = time.time()
-        train_one_epoch(epoch)
+        train_loss = train_one_epoch(epoch)
         val_res = eval_perturb(pert_data.dataloader["val_loader"])
         val_score = compute_perturbation_metrics(val_res, ctrl_adata)["pearson"]
         scg.logger.info(f"epoch {epoch} done in {time.time() - start:.1f}s, val pearson {val_score:.4f}")
+        metrics_rows.append({"epoch": epoch, "train_loss": train_loss, "val_pearson": val_score})
         if val_score > best_val_corr:
             best_val_corr = val_score
             best_model = copy.deepcopy(model)
@@ -281,6 +286,10 @@ def main() -> None:
                 scg.logger.info(f"early stop at epoch {epoch}")
                 break
         scheduler.step()
+
+    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(metrics_rows).to_csv(metrics_path, index=False)
 
     # best_model can only stay None if validation Pearson never exceeds 0 in any epoch —
     # the tutorial itself has no guard against this either.

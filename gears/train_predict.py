@@ -11,6 +11,9 @@ per-cell samples).
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
+import re
 import sys
 from pathlib import Path
 
@@ -29,8 +32,56 @@ _patch.apply()
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
-OUT_DIR = HERE / "smoke_data"
+OUT_DIR = HERE / "predictions"
 SAVED_MODELS_DIR = HERE / "saved_models"
+METRICS_DIR = HERE / "metrics"
+
+_EPOCH_MSE_RE = re.compile(r"Epoch (\d+): Train Overall MSE: ([\d.]+) Validation Overall MSE: ([\d.]+)\.")
+_EPOCH_DE_MSE_RE = re.compile(r"Train Top 20 DE MSE: ([\d.]+) Validation Top 20 DE MSE: ([\d.]+)\.")
+
+
+@contextlib.contextmanager
+def _tee_stderr():
+    """GEARS' own train() reports per-epoch metrics only via gears.utils.print_sys, which
+    prints to stderr (not stdout) — see that function's own one-line body. Capture it here
+    while still passing everything through to the real stderr live, rather than swallowing
+    progress output for the run's duration."""
+    buf = io.StringIO()
+    real_stderr = sys.stderr
+
+    class _Tee:
+        def write(self, s):
+            real_stderr.write(s)
+            buf.write(s)
+
+        def flush(self):
+            real_stderr.flush()
+
+    sys.stderr = _Tee()
+    try:
+        yield buf
+    finally:
+        sys.stderr = real_stderr
+
+
+def _parse_gears_metrics(captured: str) -> list[dict]:
+    """GEARS prints two lines per epoch (see gears.py's train()): overall MSE first, then
+    top-20 DE MSE — always in that order, one pair per epoch, so zipping the two regexes'
+    matches positionally is safe."""
+    overall = _EPOCH_MSE_RE.findall(captured)
+    de = _EPOCH_DE_MSE_RE.findall(captured)
+    rows = []
+    for (epoch, train_mse, val_mse), (train_mse_de, val_mse_de) in zip(overall, de):
+        rows.append(
+            {
+                "epoch": int(epoch),
+                "train_mse": float(train_mse),
+                "val_mse": float(val_mse),
+                "train_mse_de": float(train_mse_de),
+                "val_mse_de": float(val_mse_de),
+            }
+        )
+    return rows
 
 
 def main() -> None:
@@ -56,7 +107,7 @@ def main() -> None:
 
     raw = DATA_DIR / args.dataset / "raw.h5ad"
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
     adata = ad.read_h5ad(raw)
 
     pert_data = PertData(str(PERT_DATA_DIR))
@@ -77,7 +128,11 @@ def main() -> None:
 
     model = GEARS(pert_data, device="cuda")
     model.model_initialize(hidden_size=64)
-    model.train(epochs=args.epochs)
+    with _tee_stderr() as captured:
+        model.train(epochs=args.epochs)
+    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(_parse_gears_metrics(captured.getvalue())).to_csv(metrics_path, index=False)
     # GEARS' own save_model() does a single-level os.mkdir(path), which raises if the
     # parent doesn't exist yet. Namespaced by dataset too — otherwise a smoke run and a
     # full run at the same fold index would silently overwrite each other's checkpoint.

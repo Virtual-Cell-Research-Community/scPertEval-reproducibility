@@ -33,7 +33,9 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import anndata as ad
@@ -51,13 +53,26 @@ HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 CACHE_DIR = HERE / "cache"  # populated by `pixi run -e presage fetch-cache`
-OUT_DIR = HERE / "smoke_data"
+OUT_DIR = HERE / "predictions"
 SAVED_MODELS_DIR = HERE / "saved_models"
+METRICS_DIR = HERE / "metrics"
 
 
 def build_pathway_files(cache_dir: Path, out_path: Path) -> Path:
     """Rewrite PRESAGE's vendored sample pathway-source list as absolute paths into our
-    own fetched cache, one per line, in the format ``model.pathway_files`` expects."""
+    own fetched cache, one per line, in the format ``model.pathway_files`` expects.
+
+    Content only depends on cache_dir, not on args.fold — identical for every fold of a
+    dataset — so this skips rebuilding if out_path already exists, and writes via a
+    temp-file-then-atomic-rename when it does rebuild, so a concurrently-running fold can
+    never read a partially-written file (see main()'s preprocessed_path handling below for
+    the same pattern, applied to a case where it actually bit us once). The temp path itself
+    comes from tempfile.mkstemp() rather than a fixed "out_path + suffix" name — two folds
+    racing to rebuild this (both missing it at the same time) must not end up writing through
+    the *same* temp path concurrently, which would reintroduce the exact corruption this is
+    meant to avoid, just one level down."""
+    if out_path.exists():
+        return out_path
     sample_file = (
         Path(presage_datamodule_module.__file__).parent
         / "presage_sample_files"
@@ -72,8 +87,41 @@ def build_pathway_files(cache_dir: Path, out_path: Path) -> Path:
         # lines look like "../cache/other_embeddings/X.pkl" or "../cache/pathway_embeddings/Y.pkl"
         rel = line.split("cache/", 1)[1]
         resolved.append(str(cache_dir / "cache" / rel))
-    out_path.write_text("\n".join(resolved) + "\n")
+    fd, tmp_out_path = tempfile.mkstemp(dir=str(out_path.parent), prefix=out_path.name + ".", suffix=".tmp")
+    with os.fdopen(fd, "w") as fp:
+        fp.write("\n".join(resolved) + "\n")
+    os.replace(tmp_out_path, out_path)
     return out_path
+
+
+def load_presage_official_config(cache_dir: Path) -> dict:
+    """Reproduce PRESAGE's own official config-loading recipe exactly, straight from the
+    JSON files ``pixi run -e presage fetch-cache`` already fetches — the single source of
+    truth for these values instead of a hand-copied second version that can drift from it.
+
+    Traced directly from Genentech/PRESAGE's own ``notebooks/PRESAGE_example.ipynb`` and
+    ``src/train_presage.py`` (this env's vendored CLI script): load ``defaults_config.json``,
+    layer ``singles_config.json`` on top (the general settings PRESAGE's own example applies
+    for single-gene-perturbation tasks — exactly our task type, as opposed to combinatorial),
+    then layer a dataset-specific config on top of that (dataset wins on conflict) — here
+    ``replogle_k562_essential_config.json``, the closest official match to our own Replogle
+    K562 essential-genome data (models/data/prepare_data.py), applied regardless of the
+    --dataset flag since smoke/full-scale are both resamples of this one underlying source.
+    Underscore keys in the singles/dataset layers are translated to dotted ones
+    (``key.replace("_", ".", 1)``) exactly as the notebook's own merge step does."""
+    configs_dir = cache_dir / "configs"
+    config = json.loads((configs_dir / "defaults_config.json").read_text())
+    singles = json.loads((configs_dir / "singles_config.json").read_text())
+    dataset_specific = json.loads((configs_dir / "replogle_k562_essential_config.json").read_text())
+    singles.update(dataset_specific)
+    config.update(
+        {
+            key.replace("_", ".", 1): value
+            for key, value in singles.items()
+            if value is not None and key not in {"config", "data_config"}
+        }
+    )
+    return config
 
 
 def build_config(
@@ -84,99 +132,52 @@ def build_config(
     predictions_file: Path,
     epochs: int,
     batch_size: int,
+    cache_dir: Path,
 ) -> dict:
-    """A flat, dotted-key config matching train_presage.py's own CLI defaults (its argparse
-    is bypassed entirely — this dict goes straight into PRESAGE's own ``train()``, which
-    groups dotted keys into ``{"model": ..., "data": ..., "training": ..., ...}`` itself),
-    with the handful of overrides needed to point it at our own data/split/cache/output."""
-    return {
-        "model.lr": 2.4e-3,
-        "model.weight_decay": 2.17e-13,
-        "model.momentum": 0.9,
-        "model.optimizer": "Adam",
-        "data.noisy_pseudobulk": False,
-        "model.n_nmf_embedding": 128,
-        "model.node2vec_walk_length": 100,
-        "model.node2vec_context_size": 5,
-        "model.node2vec_walks_per_node": 3,
-        "model.node2vec_num_negative_samples": 3,
-        "model.node2vec_p": 1.0,
-        "model.node2vec_q": 2.0,
-        "model.node2vec_batchsize": 32,
-        "model.pathway_files": str(pathway_files),
-        "model.embedding_files": "None",
-        "model.dim_red_alg": "Node2Vec",
-        "model.cosine_loss_scale": 1.0,
-        "model.contrastive_loss_scale": 0,
-        "model.contrastive_nneigh": 5,
-        "model.contrastive_neigh_metric": "minkowski",
-        "model.univariate_cosine_loss_scale": 0.0,
-        "model.mse_loss_scale": 1.0,
-        "model.vector_norm_loss_scale": 1.0,
-        "model.added_singles_loss_scale": 1.0,
-        "model.nonlinear_offset_sparsity_loss_scale": 0.001,
-        "model.item_hidden_size": 512,
-        "model.item_nlayers": 0,
-        "model.pathway_item_hidden_size": 128,
-        "model.pathway_item_nlayers": 2,
-        "model.pathway_pool_type": "sum",
-        "model.pathway_weight_type": "gat",
-        "model.pool_nlayers": 2,
-        "model.softmax_temperature": 0.15,
-        "model.gat_weight": 0.85,
-        "model.linear_coefficient_hidden_size": 32,
-        "model.linear_coefficient_nlayers": 3,
-        "model.linear_coefficient_features": "both",
-        "model.batch_norm": True,
-        "model.pathway_pma_layer_norm": False,
-        "model.set_hidden_size": 32,
-        "model.set_nlayers": 2,
-        "model.pca_trainable_decoder": False,
-        "model.pca_loss_scale": 1.0,
-        # not part of the CLI's own offline default (False) — no wandb login available here
-        "training.offline": True,
-        # CLI default is True, which routes into PRESAGE's own internal functional-metrics
-        # suite (top-K union DEG eval etc, model_harness.py's on_test_epoch_end). We don't
-        # use any of that — scPertEval scores the raw predictions.h5ad itself downstream —
-        # and it's fragile at this smoke scale (KeyErrors indexing DEGs against a gene panel
-        # that doesn't line up at this size). False routes to the lighter evaluator(..., False)
-        # path, which is what actually produces the predictions we read out below.
-        "training.eval_test": False,
-        "model.learnable_gene_embedding": False,
-        "hyperparameter_tune.sweep": False,
-        "data.dataset": dataset,
-        "data.data_dir": str(data_dir),
-        "data.seed": str(seed_path),
-        "data.latent_dim": "None",
-        "model.n_neigh_prune": "5",
-        "model.min_cos": -1.0,
-        "model.min_genes_per_kg": 10,
-        "model.input_preparation": "prep_gene_embeddings",
-        "data.source": "scperturb",
-        "model.gex_coexpression_style": "coexpression",
-        "training.predictions_file": str(predictions_file),
-        "training.embedding_file": None,
-        "training.attention_file": None,
-        "model.harness": "ModelHarness",
-        "data.use_pseudobulk": True,
-        "data.preprocessing_zscore": False,
-        # CLI default is 16. With use_pseudobulk=True (one row per perturbation),
-        # train_dataloader()'s drop_last=True drops the only (partial) batch and trains
-        # on zero batches every epoch once batch_size exceeds the fold's training-gene
-        # count — true at smoke scale (~7 training genes), not at full scale. Smoke runs
-        # must pass a smaller --batch-size explicitly (e.g. 4).
-        "data.batch_size": batch_size,
-        # CLI default is 10000; early stopping (patience=10 on val_loss, already active
-        # via train()'s own EarlyStopping callback) is expected to end training well
-        # before that. 1000 matches both PRESAGE's own hyperparameter-sweep config and
-        # cellsimbench's presage.yaml. Smoke scale needs a much lower value passed
-        # explicitly so iteration stays fast.
-        "training.max_epochs": epochs,
-        "training.precision": "32",
-        "hyperparameter_tune.tag": "",
-        "training.devices": 1,
-        "training.seed": 42,
-    }
+    """PRESAGE's own official config (load_presage_official_config above), plus the
+    handful of train_presage.py argparse-only defaults that aren't in any of its shipped
+    config JSON (model.set_hidden_size/set_nlayers, data.latent_dim, training.devices),
+    plus the overrides needed to point it at our own data/split/cache/output."""
+    config = load_presage_official_config(cache_dir)
+    config.update(
+        {
+            "model.set_hidden_size": 32,
+            "model.set_nlayers": 2,
+            "data.latent_dim": "None",
+            "training.devices": 1,
+            "model.pathway_files": str(pathway_files),
+            # not part of the CLI's own offline default (False) — no wandb login available here
+            "training.offline": True,
+            # CLI/official default is True, which routes into PRESAGE's own internal functional-metrics
+            # suite (top-K union DEG eval etc, model_harness.py's on_test_epoch_end). We don't
+            # use any of that — scPertEval scores the raw predictions.h5ad itself downstream —
+            # and it's fragile at this smoke scale (KeyErrors indexing DEGs against a gene panel
+            # that doesn't line up at this size). False routes to the lighter evaluator(..., False)
+            # path, which is what actually produces the predictions we read out below.
+            "training.eval_test": False,
+            # legacy unused parameter — PRESAGE's own example notebook sets this by hand too,
+            # outside of any config file.
+            "model.learnable_gene_embedding": False,
+            "data.dataset": dataset,
+            "data.data_dir": str(data_dir),
+            "data.seed": str(seed_path),
+            "data.source": "scperturb",
+            "training.predictions_file": str(predictions_file),
+            # official default (from replogle_k562_essential_config.json) is 16. With
+            # use_pseudobulk=True (one row per perturbation), train_dataloader()'s
+            # drop_last=True drops the only (partial) batch and trains on zero batches
+            # every epoch once batch_size exceeds the fold's training-gene count — true at
+            # smoke scale (~7 training genes). Smoke runs must pass a smaller --batch-size
+            # explicitly (e.g. 4).
+            "data.batch_size": batch_size,
+            # official default (singles_config.json) is 1000, matching this script's own
+            # --epochs default already; early stopping (patience=10 on val_loss, already
+            # active via train()'s own EarlyStopping callback) is expected to end training
+            # well before that. Smoke scale needs a much lower value passed explicitly.
+            "training.max_epochs": epochs,
+        }
+    )
+    return config
 
 
 def main() -> None:
@@ -191,13 +192,16 @@ def main() -> None:
         "--epochs", type=int, default=1000, help="training.max_epochs (default: 1000, full-scale; early stopping usually ends training well before this)"
     )
     parser.add_argument(
-        "--batch-size", type=int, default=32, help="data.batch_size (default: 32, full-scale; see build_config)"
+        "--batch-size",
+        type=int,
+        default=16,
+        help="data.batch_size (default: 16, PRESAGE's own official replogle_k562_essential override; see build_config)",
     )
     args = parser.parse_args()
 
     raw = DATA_DIR / args.dataset / "raw.h5ad"
     seed_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_presage.json"
-    out_path = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.h5ad"
+    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
 
     if not (CACHE_DIR / "cache" / "pathway_embeddings").exists():
         raise FileNotFoundError(f"{CACHE_DIR} has no gene-embedding cache — run `pixi run -e presage fetch-cache` first")
@@ -223,12 +227,28 @@ def main() -> None:
     # information as obs["perturbation"] here, so just alias it.
     adata.obs["gene"] = adata.obs["perturbation"]
     preprocessed_path = dataset_dir / f"{args.dataset}_processed.h5ad"
-    adata.write_h5ad(preprocessed_path)
+    if not preprocessed_path.exists():
+        # Fold-independent (none of the transforms above depend on args.fold), so skip
+        # rebuilding once another fold has already written it, and never write directly to
+        # this shared path: anndata's h5ad write isn't atomic, so a fold reading this file
+        # while another fold's write is still in progress could see a truncated, unreadable
+        # file — not hypothetical, reproduced exactly this for STATE's own equivalent shared
+        # h5ad by killing a job mid-write (see state/train_predict.py's prepare_dataset()).
+        # tempfile.mkstemp() claims a genuinely unique temp path — two folds racing on a cold
+        # cache (both missing preprocessed_path at the same time) must not both write through
+        # the same fixed "preprocessed_path + suffix" name concurrently, which would
+        # reintroduce the exact corruption this is meant to avoid, just one level down.
+        fd, tmp_preprocessed_path = tempfile.mkstemp(
+            dir=str(preprocessed_path.parent), prefix=preprocessed_path.name + ".", suffix=".tmp"
+        )
+        os.close(fd)  # just reserving a unique name; write_h5ad needs to open the path itself
+        adata.write_h5ad(tmp_preprocessed_path)
+        os.replace(tmp_preprocessed_path, preprocessed_path)
 
     pathway_files_path = build_pathway_files(CACHE_DIR, dataset_dir / "pathway_files.txt")
 
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    predictions_csv = OUT_DIR / f"{args.dataset}_predictions_fold{args.fold}.csv"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    predictions_csv = out_path.parent / f"fold_{args.fold}.csv"
 
     config = build_config(
         dataset=args.dataset,
@@ -238,11 +258,17 @@ def main() -> None:
         predictions_file=predictions_csv,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        cache_dir=CACHE_DIR,
     )
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's checkpoint.
-    _patch.apply(args.dataset, SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}")
+    fold_metrics_dir = METRICS_DIR / args.dataset / f"fold_{args.fold}"
+    _patch.apply(args.dataset, SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}", fold_metrics_dir)
     presage_train_module.train(config)
+    # CSVLogger (injected by _patch.apply above) writes to fold_metrics_dir/metrics.csv —
+    # relocate to a flat file matching predictions/saved_models' own <dataset>/fold_<i>
+    # convention, same as STATE's own metrics.csv relocation.
+    shutil.move(str(fold_metrics_dir / "metrics.csv"), str(METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"))
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test
     # ones ("train are added here so it computes the geometric eval on train" — datamodule.py),

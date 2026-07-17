@@ -33,6 +33,8 @@ gap in this package's own caching (see its own docstring), not a monkeypatch of 
 from __future__ import annotations
 
 import pickle
+import shutil
+import tempfile
 from pathlib import Path
 
 import anndata as ad
@@ -225,13 +227,20 @@ def load_or_build_pert_data(pert_data: PertData, dataset_name: str, adata: ad.An
     cell-gears version has no set_pert_genes()/pert_list mechanism at all (unlike 0.1.2) —
     nothing to replicate there, this script never uses it.
 
-    Written with the temp-file-then-rename pattern (atomic on POSIX) so a fold job starting
-    mid-write from another concurrently-running fold never reads a partially-written cache —
-    doesn't eliminate wasted duplicate work under a race (all folds might still see "no cache
-    yet" if launched at the same time), just guarantees no corruption if that happens.
+    On a cache miss, new_data_process() is never allowed to write directly to the shared
+    adata_fname/dataset_fname paths above, even though that's what it does internally
+    (``pickle.dump(..., open(dataset_fname, "wb"))`` and ``adata.write_h5ad(...)``, both
+    non-atomic, both at the exact paths this function's own cache-hit check inspects) — see
+    models/gears/patch.py's version of this function for the full writeup of why a
+    concurrently-starting fold could otherwise observe one file complete and the other
+    mid-write, and try to load a truncated cache. Same fix here: build into a private,
+    per-attempt temp directory (redirecting ``pert_data.data_path`` for the duration of the
+    build) and only move both outputs into the shared location, via individual atomic
+    renames, once both are known-complete.
     """
     dataset_name = dataset_name.lower()
-    save_data_folder = Path(pert_data.data_path) / dataset_name
+    original_data_path = pert_data.data_path
+    save_data_folder = Path(original_data_path) / dataset_name
     save_data_folder.mkdir(parents=True, exist_ok=True)
     pyg_path = save_data_folder / "data_pyg"
     pyg_path.mkdir(parents=True, exist_ok=True)
@@ -247,11 +256,19 @@ def load_or_build_pert_data(pert_data: PertData, dataset_name: str, adata: ad.An
         with open(dataset_fname, "rb") as f:
             pert_data.dataset_processed = pickle.load(f)
         return
-    pert_data.new_data_process(dataset_name=dataset_name, adata=adata)
-    tmp_fname = dataset_fname.with_suffix(".pkl.tmp")
-    with open(tmp_fname, "wb") as f:
-        pickle.dump(pert_data.dataset_processed, f)
-    tmp_fname.replace(dataset_fname)
+
+    tmp_root = Path(tempfile.mkdtemp(prefix=f".build-{dataset_name}-", dir=str(save_data_folder.parent)))
+    try:
+        pert_data.data_path = str(tmp_root)
+        pert_data.new_data_process(dataset_name=dataset_name, adata=adata)
+        tmp_adata_fname = tmp_root / dataset_name / "perturb_processed.h5ad"
+        tmp_dataset_fname = tmp_root / dataset_name / "data_pyg" / "cell_graphs.pkl"
+        tmp_adata_fname.replace(adata_fname)
+        tmp_dataset_fname.replace(dataset_fname)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+        pert_data.data_path = original_data_path
+        pert_data.dataset_path = str(save_data_folder)
 
 
 def apply() -> None:

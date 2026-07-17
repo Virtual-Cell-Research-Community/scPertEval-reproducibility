@@ -23,6 +23,8 @@ gap in GEARS' own caching (see its own docstring), not a monkeypatch of GEARS' n
 from __future__ import annotations
 
 import pickle
+import shutil
+import tempfile
 from pathlib import Path
 
 import anndata as ad
@@ -240,15 +242,31 @@ def load_or_build_pert_data(pert_data: PertData, dataset_name: str, adata: ad.An
     ctrl_adata/gene_names in both branches — load() only sets those in its cache-miss branch,
     a latent gap in GEARS' own code) so fold 1-4 reuse fold 0's cache instead of rebuilding it.
 
-    Written to the temp-file-then-rename pattern (atomic on POSIX) so a fold job that starts
-    mid-write from another concurrently-running fold never reads a partially-written cache —
-    doesn't eliminate wasted duplicate work under a race (all folds might still see "no cache
-    yet" if launched at the same time), just guarantees no corruption if that happens. Fully
-    avoiding the wasted work under a race means pre-building the cache once (e.g. running
-    fold 0 alone first) before submitting the rest.
+    On a cache miss, new_data_process() is never allowed to write directly to the shared
+    adata_fname/dataset_fname paths above, even though that's what it does internally
+    (``pickle.dump(..., open(dataset_fname, "wb"))`` and ``adata.write_h5ad(...)``, both
+    non-atomic, both at the exact paths this function's own cache-hit check inspects). A
+    prior version of this function let that happen and then atomically rewrote just
+    dataset_fname afterward — which sounds safe but isn't: a concurrently-starting fold's
+    ``is_file()`` check can observe adata_fname (written first, non-atomically, by
+    new_data_process() itself) already complete and dataset_fname mid-write (exists, but only
+    partially written — pickling a multi-GB object is not instantaneous), and try to load a
+    truncated cache. Confirmed this is a real gap, not just theoretical, by tracing
+    new_data_process()'s own source line by line.
+
+    Instead, ``pert_data.data_path`` is pointed at a private, per-attempt temp directory for
+    the whole build, so new_data_process()'s own writes land somewhere no other fold ever
+    looks. Only once both outputs are known-complete are they moved into the shared location,
+    each via its own atomic rename (``Path.replace()``). At every instant, a concurrent
+    reader's ``is_file()`` check therefore sees either the complete old state or the complete
+    new one for each file — and since the cache-hit check requires *both* files present,
+    there's no window (not even between the two renames) where an in-progress build could be
+    mistaken for a finished one. A crash mid-build just leaves an orphaned temp directory
+    (cleaned up below) rather than a corrupted shared file.
     """
     dataset_name = dataset_name.lower()
-    save_data_folder = Path(pert_data.data_path) / dataset_name
+    original_data_path = pert_data.data_path
+    save_data_folder = Path(original_data_path) / dataset_name
     save_data_folder.mkdir(parents=True, exist_ok=True)
     pyg_path = save_data_folder / "data_pyg"
     pyg_path.mkdir(parents=True, exist_ok=True)
@@ -268,14 +286,18 @@ def load_or_build_pert_data(pert_data: PertData, dataset_name: str, adata: ad.An
             pert_data.dataset_processed = pickle.load(f)
         return
 
-    pert_data.new_data_process(dataset_name=dataset_name, adata=adata)
-    # new_data_process() already wrote dataset_fname directly (non-atomically) — rewrite it
-    # via the atomic tmp-then-rename pattern so a concurrently-starting fold never reads a
-    # partial file. Cheap: dataset_processed is already in memory, this just re-serializes it.
-    tmp_fname = dataset_fname.with_suffix(".pkl.tmp")
-    with open(tmp_fname, "wb") as f:
-        pickle.dump(pert_data.dataset_processed, f)
-    tmp_fname.replace(dataset_fname)
+    tmp_root = Path(tempfile.mkdtemp(prefix=f".build-{dataset_name}-", dir=str(save_data_folder.parent)))
+    try:
+        pert_data.data_path = str(tmp_root)
+        pert_data.new_data_process(dataset_name=dataset_name, adata=adata)
+        tmp_adata_fname = tmp_root / dataset_name / "perturb_processed.h5ad"
+        tmp_dataset_fname = tmp_root / dataset_name / "data_pyg" / "cell_graphs.pkl"
+        tmp_adata_fname.replace(adata_fname)
+        tmp_dataset_fname.replace(dataset_fname)
+    finally:
+        shutil.rmtree(tmp_root, ignore_errors=True)
+        pert_data.data_path = original_data_path
+        pert_data.dataset_path = str(save_data_folder)
 
 
 def apply() -> None:

@@ -22,6 +22,16 @@ only known once argparse has run.
   inherited behavior (a ``compute_degs`` that silently no-ops for any non-benchmark dataset;
   an ``on_test_epoch_end`` that unconditionally crashes at this scale) — not literal
   monkeypatches, but the idiomatic way to override behavior PRESAGE gives no hook for.
+- CSVLogger injection — train.py's own train() only configures a
+  ``pl.loggers.WandbLogger(offline=True)`` (no CSVLogger), so unlike gears/sclambda/scgpt
+  (which print per-epoch metrics unconditionally, captured instead via stdout/stderr Tees in
+  those models' own train_predict.py) or STATE (whose CSVLogger output is just relocated),
+  PRESAGE has no plain-text per-epoch metrics artifact at all — offline wandb logs are
+  binary/protobuf, not readable without the wandb SDK. ``apply()`` patches
+  ``presage_train_module.pl.Trainer.__init__`` to inject an additional CSVLogger alongside
+  whatever logger train.py passes, so ``metrics.csv`` (val_loss and whatever else
+  ``ModelHarness`` logs) gets written the same way it does for STATE — train_predict.py then
+  relocates it into ``metrics/<dataset>/fold_<i>.csv`` to match every other model.
 """
 
 from __future__ import annotations
@@ -29,6 +39,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 from pathlib import Path
 
 import scanpy as sc
@@ -142,11 +153,30 @@ def compute_degs_fast(self, adata) -> None:
             sub = result.xs(pert, level=0)
             top = sub["z_score"].abs().sort_values(ascending=False).index[:1000].to_list()
             degs[pert] = top
-            with open(os.path.join(self.deg_dir, f"{pert}.json"), "w") as fp:
+            # Atomic write: two folds racing to compute the same not-yet-cached perturbation
+            # is harmless (same deterministic result, just wasted duplicate work), but a
+            # direct `open(..., "w")` isn't — a fold's own "already computed?" check just above
+            # (`os.path.isfile(target)`) would happily read a file another fold is still
+            # mid-write to, since a file that merely exists but is only partially written still
+            # passes that check. Writing to a temp path and renaming into place means any file
+            # visible at the real path is always complete — but the temp path itself must be
+            # unique per attempt, not just "target + .tmp": two folds racing on the same
+            # not-yet-cached pert would otherwise both write through that same fixed temp
+            # path concurrently, which is exactly the corruption this is meant to avoid, just
+            # moved one level down. tempfile.mkstemp() claims a genuinely unique path.
+            target = os.path.join(self.deg_dir, f"{pert}.json")
+            fd, tmp_target = tempfile.mkstemp(dir=self.deg_dir, prefix=f"{pert}.", suffix=".json.tmp")
+            with os.fdopen(fd, "w") as fp:
                 json.dump(top, fp)
+            os.replace(tmp_target, target)
 
-    with open(self.merged_deg_file, "w") as fp:
+    merged_dir = os.path.dirname(self.merged_deg_file) or "."
+    fd, tmp_merged = tempfile.mkstemp(
+        dir=merged_dir, prefix=os.path.basename(self.merged_deg_file) + ".", suffix=".tmp"
+    )
+    with os.fdopen(fd, "w") as fp:
         json.dump(degs, fp)
+    os.replace(tmp_merged, self.merged_deg_file)
 
 
 class SmokePRESAGEDataModule(ReploglePRESAGEDataModule):
@@ -186,7 +216,28 @@ class SmokeModelHarness(presage_model_harness_module.ModelHarness):
         pass
 
 
-def apply(dataset_name: str, checkpoint_dir: Path) -> None:
+def _install_csv_logger_patch(metrics_dir: Path) -> None:
+    """Wrap pl.Trainer.__init__ so any single `logger=` it's given becomes `[logger,
+    CSVLogger(...)]` — Trainer accepts a list of loggers natively, so this is additive, not a
+    replacement of train.py's own WandbLogger. version is passed as a plain string
+    ("fold_<i>"), not an int, so CSVLogger.log_dir uses it as-is rather than prefixing
+    "version_" (see CSVLogger.log_dir's own source) — landing at exactly
+    metrics_dir/metrics.csv, with metrics_dir named to match SAVED_MODELS_DIR's own
+    <dataset>/fold_<i> convention.
+    """
+    pl = presage_train_module.pl
+    original_init = pl.Trainer.__init__
+
+    def patched_init(self, *args, logger=None, **kwargs):
+        if logger is not None and not isinstance(logger, (list, tuple)):
+            csv_logger = pl.loggers.CSVLogger(save_dir=str(metrics_dir.parent), name="", version=metrics_dir.name)
+            logger = [logger, csv_logger]
+        original_init(self, *args, logger=logger, **kwargs)
+
+    pl.Trainer.__init__ = patched_init
+
+
+def apply(dataset_name: str, checkpoint_dir: Path, metrics_dir: Path) -> None:
     """Monkeypatch train.py's own module namespace with the corrected classes above, and
     register ``dataset_name`` in ``SmokePRESAGEDataModule.urls`` (must be present before
     ``prepare_data()`` runs, or PRESAGE's own hardcoded-benchmark check rejects an
@@ -201,3 +252,4 @@ def apply(dataset_name: str, checkpoint_dir: Path) -> None:
     presage_train_module.ReploglePRESAGEDataModule = SmokePRESAGEDataModule
     presage_train_module.ModelHarness = SmokeModelHarness
     presage_train_module.os = _CheckpointPreservingOS(checkpoint_dir)
+    _install_csv_logger_patch(metrics_dir)
