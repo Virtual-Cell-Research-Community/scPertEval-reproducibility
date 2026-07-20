@@ -267,8 +267,12 @@ def main() -> None:
     presage_train_module.train(config)
     # CSVLogger (injected by _patch.apply above) writes to fold_metrics_dir/metrics.csv —
     # relocate to a flat file matching predictions/saved_models' own <dataset>/fold_<i>
-    # convention, same as STATE's own metrics.csv relocation.
+    # convention, same as STATE's own metrics.csv relocation. CSVLogger only lets us control
+    # the directory (log_dir), not the "metrics.csv" filename itself (hardcoded in Lightning's
+    # ExperimentWriter), hence the move; fold_metrics_dir is empty afterwards, so remove it
+    # rather than leaving a stray dir behind.
     shutil.move(str(fold_metrics_dir / "metrics.csv"), str(METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"))
+    fold_metrics_dir.rmdir()
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test
     # ones ("train are added here so it computes the geometric eval on train" — datamodule.py),
