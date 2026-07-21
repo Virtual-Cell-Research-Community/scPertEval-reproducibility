@@ -280,6 +280,26 @@ def main() -> None:
     # test-fold genes, matching gears/scgpt's own predictions.h5ad convention.
     test_genes = json.loads(seed_path.read_text())["test"]
     preds = pd.read_csv(predictions_csv, index_col=0).loc[test_genes]
+    # PRESAGE predicts log-fold-change (delta from the control mean), not absolute expression —
+    # datamodule.py's PerturbationDataset.__init__ sets self.X = X - self.control_mean as the
+    # actual training/prediction target, matching Littman et al. 2025's own preprocessing
+    # description ("converted to log-fold changes ... by subtracting the gene's mean expression
+    # in [control] cells"). scPertEval's own scoring (context.py's centroid()) subtracts
+    # ds.control_mean() from *both* ground truth and prediction for centered protocols, so it
+    # needs predictions back in absolute-expression units to begin with — exactly why
+    # baselines.py's linear_baseline (also a native delta-predictor) adds control_mean back
+    # before writing its own output. Confirmed against Miller et al.'s own CellSimBench PRESAGE
+    # wrapper, which does the identical conversion for the identical reason.
+    #
+    # Recomputed here (same semantics as scperteval.dataset.Dataset.control_mean(): the mean of
+    # every "control"-labeled cell) rather than importing scperteval, since it isn't a dependency
+    # of this isolated pixi environment. Every fold's own "train" split always includes every
+    # control cell (to_presage_custom_split/to_gears_custom_split fold ctrl into "train"), so this
+    # is identical to what PRESAGE's own per-fold train_dataset.control_mean would be — one
+    # fold-invariant computation over the full raw dataset is correct for every fold.
+    control_mean = np.asarray(adata.X[(adata.obs["perturbation"] == "control").to_numpy()].mean(axis=0)).ravel()
+    control_mean = pd.Series(control_mean, index=adata.var_names)
+    preds = preds.add(control_mean.reindex(preds.columns), axis=1)
     pred_adata = ad.AnnData(X=preds.to_numpy().astype(np.float32), obs={"perturbation": preds.index.to_numpy()})
     pred_adata.var_names = pd.Index(preds.columns)
     pred_adata.write_h5ad(out_path)
