@@ -130,8 +130,22 @@ def main() -> None:
     test = artifact["fused"]["test"]
     gene_names = artifact["metadata"]["gene_names"]
 
+    # TabICLMultiviewModel predicts logFC (perturbed pseudobulk minus control pseudobulk) —
+    # tabicl_multiview.py's _build_rna_logfc_adata subtracts the control profile before ever
+    # handing data to the model, and the fused/test/predictions array is that same delta space,
+    # never converted back. scPertEval's own scoring (context.py's centroid()) subtracts
+    # ds.control_mean() from *both* ground truth and prediction for centered protocols, so it
+    # needs predictions already in absolute-expression units — same reasoning, same fix, as
+    # PRESAGE's train_predict.py (also a native delta-predictor whose control_mean addback was
+    # missing). Recomputed directly from raw.h5ad rather than pulled from the artifact, since
+    # the artifact's own control_profile isn't exposed in "fused"/"metadata" and gene_names here
+    # is the model's full output panel, matching raw.h5ad's var_names.
+    adata = ad.read_h5ad(raw)
+    control_mean = np.asarray(adata.X[(adata.obs["perturbation"] == "control").to_numpy()].mean(axis=0)).ravel()
+    control_mean = pd.Series(control_mean, index=adata.var_names).reindex(gene_names).to_numpy()
+
     pred_adata = ad.AnnData(
-        X=np.asarray(test["predictions"], dtype=np.float32),
+        X=(np.asarray(test["predictions"], dtype=np.float32) + control_mean.astype(np.float32)),
         obs={"perturbation": np.asarray(test["perturbations"])},
     )
     pred_adata.var_names = pd.Index(gene_names)
