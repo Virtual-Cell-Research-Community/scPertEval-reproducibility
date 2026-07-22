@@ -1,139 +1,106 @@
 """Baselines that need no training: each predicts a perturbation's profile as a fixed function
-of the dataset's own control/perturbed cells.
+of the dataset's own control/perturbed cells. Pure AnnData/numpy/sklearn -- no scPertEval import,
+so this drops straight into a notebook cell.
 
-Reuses scPertEval's own ``Dataset`` internals rather than reimplementing them, so ``no_change``
-matches the framework's own ``control`` calibration source (src/scperteval/sources.py). There is
-no plain (non-fold-scoped) ``mean`` baseline here on purpose: a leave-one-out mean over *every*
-perturbation the dataset has — including ones in the current test fold — leaks test-fold
-information into the baseline no real train/test protocol would have access to (a trained model
-only ever sees its own fold's training perturbations). The fold-scoped mean that respects that
-split is :func:`fold_mean_baseline` below, wired up in ``models/compare.py`` via
-``FOLD_SCOPED_BASELINES`` — not something this module's own CLI can drive directly, since it
-needs a fold's train/test split, not just a dataset path.
+There is no plain (non-fold-scoped) ``mean`` baseline here on purpose: a leave-one-out mean over
+*every* perturbation the dataset has -- including ones in the current test fold -- leaks
+test-fold information a real train/test protocol wouldn't have. :func:`fold_mean_baseline` is the
+fold-scoped version that respects that split. :func:`no_change_baseline` is fold-scoped for the
+same reason (consistency, not leakage -- its control-mean prediction doesn't depend on the
+fold): it only predicts the fold's held-out test perturbations, not every perturbation.
 
-Add a new baseline by writing a function ``(ds: Dataset) -> np.ndarray`` and registering it in
-``BASELINES`` below; give it its own ``train_predict.py`` (alongside ``models/gears``,
-``models/scgpt``) instead if it actually needs a fitting step.
+Load the raw ``.h5ad`` once and pass the same ``AnnData`` to every baseline -- it can be several
+GB, so re-reading it per baseline/per fold would multiply the I/O for no reason::
 
-Usage::
+    adata = ad.read_h5ad("data/replogle22k562/raw.h5ad")
+    no_change = no_change_baseline(adata, fold)
+    mu_all = fold_mean_baseline(adata, fold)
+    linear = linear_baseline(adata, fold)
 
-    python models/baselines/baselines.py no_change data/replogle22k562_processed_complete.h5ad predictions.h5ad
+Also runnable from the CLI, computing every baseline against every fold in one process (one
+``raw.h5ad`` read, not one per baseline/per fold)::
 
-Point ``dataset`` at the full processed dataset, not a held-out-only ground truth: scPertEval's
-``score`` only looks up the perturbations it needs, so a baseline file covering every
-perturbation still scores correctly against a smaller, held-out-only ground truth.
+    python baselines.py --dataset replogle22k562
+
+Same ``--dataset <name>`` convention and per-fold output shape as every ``models/*/train_predict.py``:
+reads ``data/<dataset>/{raw.h5ad,folds/}``, writes ``baselines/<name>/predictions/<dataset>/fold_<i>.h5ad``
+for each baseline (``no_change``, ``mean``, ``linear``) -- one owner directory each, nested under
+``baselines/`` rather than sibling to ``gears/``, ``scgpt/``, ... since these aren't trained models.
+Downstream tooling that already knows how to concatenate a model's ``fold_<i>.h5ad`` files needs
+no special case for baselines -- every fold-scoped prediction set is laid out identically.
 """
 
 from __future__ import annotations
 
 import argparse
+import pickle
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
-from scperteval.dataset import Dataset
-from scperteval.types import RunConfig
 from sklearn.decomposition import PCA
 
-
-def no_change_baseline(ds: Dataset) -> np.ndarray:
-    """One row per perturbation: the control-cell mean (predicts no change at all)."""
-    return np.vstack([ds.control_mean() for _ in ds.perturbations])
+HERE = Path(__file__).resolve().parent  # baselines/ -- owner dirs (no_change/, mean/, linear/) nest here
+DATA_DIR = HERE.parent / "data"
 
 
-BASELINES = {"no_change": no_change_baseline}
+def _pseudobulk(adata: ad.AnnData, pert: np.ndarray, groups: list[str]) -> np.ndarray:
+    """``(genes, len(groups))`` mean-expression matrix, one column per perturbation label."""
+    return np.vstack([np.asarray(adata.X[pert == g].mean(axis=0)).ravel() for g in groups]).T
 
 
-def fold_mean_baseline(raw_path: str, fold: dict, min_cells: int = 30, seed: int = 42) -> ad.AnnData:
-    r"""Miller et al. 2025's mean baseline (mu_all).
-
-    The mean of per-perturbation means over *only this fold's training perturbations*,
-    predicted identically for every held-out test perturbation in the fold — this never
-    averages in cells from a perturbation the fold's own model never saw, matching the paper's
-    "average of averages of all *train* perturbations" definition exactly, and matching what a
-    real train/test protocol actually has access to (unlike a leave-one-out mean over every
-    perturbation the dataset has, which would leak test-fold information — see the module
-    docstring). Needs the fold's split (``models/data/prepare_split.py``'s ``fold_<i>.pkl``
-    format: condition strings, ``ctrl`` folded into ``"train"``).
-
-    Parameters
-    ----------
-    raw_path : str
-        Path to the raw (unsplit) ``.h5ad`` all folds are drawn from.
-    fold : dict
-        One fold's ``{"train": [...], "val": [...], "test": [...]}`` split (condition strings).
-
-    Returns
-    -------
-    anndata.AnnData
-        One row per fold-test perturbation, every row identical (mu_all).
-    """
-    adata = ad.read_h5ad(raw_path)
-    train_genes = {c.split("+")[0] for c in fold["train"] if c != "ctrl"}
-    test_genes = sorted({c.split("+")[0] for c in fold["test"] if c != "ctrl"})
+def _fold_genes(adata: ad.AnnData, fold: dict) -> tuple[np.ndarray, list[str], list[str]]:
+    """Perturbation labels, plus this fold's train/test gene names (the literal ``"ctrl"`` entry dropped)."""
     pert = adata.obs["perturbation"].to_numpy()
-    train_mask = np.isin(pert, list(train_genes)) | (pert == "control")
-    cfg = RunConfig(dataset=raw_path, protocols=[], min_cells=min_cells, seed=seed)
-    train_ds = Dataset(adata[train_mask].copy(), cfg)
-    mu_all = train_ds.allpert_mean()
-    pred = ad.AnnData(X=np.tile(mu_all, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes})
-    pred.var_names = train_ds.var_names
+    train_genes = sorted({c.split("+")[0] for c in fold["train"] if c != "ctrl"})
+    test_genes = sorted({c.split("+")[0] for c in fold["test"] if c != "ctrl"})
+    return pert, train_genes, test_genes
+
+
+def no_change_baseline(adata: ad.AnnData, fold: dict, control_label: str = "control") -> ad.AnnData:
+    """One row per fold-test perturbation: the control-cell mean, i.e. no change.
+
+    The prediction itself doesn't depend on the fold (it's always the dataset's control mean) --
+    only *which* perturbations get a row does, so this lines up with :func:`fold_mean_baseline`
+    and :func:`linear_baseline`'s output shape instead of predicting every perturbation at once.
+
+    No cell-count floor: ``data/prepare_data.py`` already prepares every perturbation to have at
+    least 30 cells, so re-filtering here would be a no-op.
+    """
+    pert, _, test_genes = _fold_genes(adata, fold)
+    control_mean = np.asarray(adata.X[pert == control_label].mean(axis=0)).ravel()
+    pred = ad.AnnData(X=np.tile(control_mean, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes})
+    pred.var_names = adata.var_names
     return pred
 
 
-def _pseudobulk(adata: ad.AnnData, groups: list[str]) -> np.ndarray:
-    """``(genes, len(groups))`` mean-expression matrix, one column per perturbation label."""
-    pert = adata.obs["perturbation"].to_numpy()
-    cols = [np.asarray(adata.X[np.where(pert == g)[0]].mean(axis=0)).ravel() for g in groups]
-    return np.vstack(cols).T
+def fold_mean_baseline(adata: ad.AnnData, fold: dict) -> ad.AnnData:
+    r"""Miller et al. 2025's mean baseline (mu_all): mean of this fold's per-*train*-perturbation means.
+
+    Predicted identically for every held-out test perturbation in the fold -- never averages in
+    cells from a perturbation the fold's own model never saw, matching a real train/test
+    protocol's own information access. Needs the fold's split (``data/prepare_split.py``'s
+    ``fold_<i>.pkl`` format: condition strings, ``ctrl`` folded into ``"train"``).
+    """
+    pert, train_genes, test_genes = _fold_genes(adata, fold)
+    mu_all = _pseudobulk(adata, pert, train_genes).mean(axis=1)
+    pred = ad.AnnData(X=np.tile(mu_all, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes})
+    pred.var_names = adata.var_names
+    return pred
 
 
-def linear_baseline(
-    raw_path: str, fold: dict, pca_dim: int = 10, ridge: float = 0.1, min_cells: int = 30, seed: int = 42
-) -> ad.AnnData:
-    r"""Ahlmann-Eltze et al.'s linear baseline: PCA embeddings + ridge bilinear regression.
+def linear_baseline(adata: ad.AnnData, fold: dict, pca_dim: int = 10, ridge: float = 0.1, seed: int = 42) -> ad.AnnData:
+    """Ahlmann-Eltze et al.'s linear baseline: PCA embeddings + ridge bilinear regression.
 
     Ported from const-ae/linear_perturbation_prediction-Paper's
-    ``benchmark/src/run_linear_pretrained_model.R`` (``solve_y_axb``), with its script
-    defaults (``pca_dim=10``, one ``ridge`` penalty shared by both embeddings).
-
-    For single-gene perturbations, a perturbation's embedding is *that gene's own* PCA
-    embedding (perturbation names equal gene names) — so a held-out gene's embedding needs no
-    separate fitting step, only the shared low-rank map ``K`` between the two embedding
-    spaces, fit once on the fold's training perturbations:
-
-    1. ``gene_emb = PCA(raw train pseudobulk, k)`` -> ``(genes, k)``; doubles as the
-       perturbation embedding, transposed (``control``'s embedding is the zero vector by
-       convention, since it is not itself a measured gene).
-    2. ``K`` minimizes ``||Y_train - (gene_emb @ K @ pert_emb_train + center)||^2`` via double
-       ridge regression, where ``Y_train`` is each train perturbation's pseudobulk minus the
-       control mean, and ``center`` is ``Y_train``'s row (per-gene) mean.
-    3. Predict a held-out gene ``g`` via ``gene_emb @ K @ pert_emb[:, g] + center + control_mean``.
-
-    Parameters
-    ----------
-    raw_path : str
-        Path to the raw (unsplit) ``.h5ad`` all folds are drawn from.
-    fold : dict
-        One fold's ``{"train": [...], "val": [...], "test": [...]}`` split (condition strings).
-    pca_dim : int
-        Embedding dimension for both the gene and perturbation PCA embeddings (script default
-        10; capped automatically to the number of training conditions available — relevant
-        only at smoke scale, where a fold's training set is far smaller than a real dataset's).
-    ridge : float
-        Ridge penalty shared by both embeddings' regularization terms (script default 0.1).
-
-    Returns
-    -------
-    anndata.AnnData
-        One row per fold-test perturbation.
+    ``benchmark/src/run_linear_pretrained_model.R`` (``solve_y_axb``). A perturbation's embedding
+    is *that gene's own* PCA embedding (perturbation names equal gene names), so a held-out gene
+    needs no separate fitting step -- only the shared low-rank map ``K`` between the gene and
+    perturbation embedding spaces, fit once on the fold's training perturbations.
     """
-    adata = ad.read_h5ad(raw_path)
-    train_genes = sorted({c.split("+")[0] for c in fold["train"] if c != "ctrl"})
-    test_genes = sorted({c.split("+")[0] for c in fold["test"] if c != "ctrl"})
-
+    pert, train_genes, test_genes = _fold_genes(adata, fold)
     train_conditions = ["control", *train_genes]
-    pseudobulk_train = _pseudobulk(adata, train_conditions)  # (genes, 1 + n_train)
+    pseudobulk_train = _pseudobulk(adata, pert, train_conditions)  # (genes, 1 + n_train)
     control_mean = pseudobulk_train[:, 0]
 
     k = min(pca_dim, pseudobulk_train.shape[1] - 1)
@@ -160,34 +127,42 @@ def linear_baseline(
     return out
 
 
-FOLD_SCOPED_BASELINES = {"mean": fold_mean_baseline, "linear": linear_baseline}
-
-
-def build_predictions(baseline: str, dataset_path: str, min_cells: int = 30, seed: int = 42) -> ad.AnnData:
-    """One predicted row per perturbation, from the named baseline function."""
-    cfg = RunConfig(dataset=dataset_path, protocols=[], min_cells=min_cells, seed=seed)
-    ds = Dataset.load(dataset_path, cfg)
-    rows = BASELINES[baseline](ds)
-    pred = ad.AnnData(X=rows.astype(np.float32), obs={"perturbation": ds.perturbations})
-    pred.var_names = ds.var_names
-    return pred
+def _load_folds(folds_dir: Path) -> list[dict]:
+    """Every ``fold_<i>.pkl`` split in ``folds_dir`` (data/prepare_split.py's output), fold-ordered."""
+    paths = sorted(folds_dir.glob("fold_*.pkl"), key=lambda p: int(p.stem.split("_")[1]))
+    if not paths:
+        raise SystemExit(f"no fold_<i>.pkl files found in {folds_dir}")
+    folds = []
+    for p in paths:
+        with p.open("rb") as f:
+            folds.append(pickle.load(f))
+    return folds
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("baseline", choices=sorted(BASELINES), help="which baseline to compute")
     parser.add_argument(
-        "dataset", help="path to a preprocessed .h5ad (the full dataset, not a scoped ground truth — see above)"
+        "--dataset", default="smoke_k562", help="data/<dataset>/{raw.h5ad,folds/} to predict on (default: smoke_k562)"
     )
-    parser.add_argument("out", help="path to write the predictions .h5ad")
-    parser.add_argument("--min-cells", type=int, default=30)
+    parser.add_argument("--pca-dim", type=int, default=10)
+    parser.add_argument("--ridge", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
-    pred = build_predictions(args.baseline, args.dataset, min_cells=args.min_cells, seed=args.seed)
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    pred.write_h5ad(args.out)
-    print(f"wrote {pred.shape} {args.baseline!r} predictions to {args.out}")
+    folds = _load_folds(DATA_DIR / args.dataset / "folds")
+    adata = ad.read_h5ad(DATA_DIR / args.dataset / "raw.h5ad")  # loaded once, reused for every baseline/fold below
+
+    baselines = {
+        "no_change": lambda fold: no_change_baseline(adata, fold),
+        "mean": lambda fold: fold_mean_baseline(adata, fold),
+        "linear": lambda fold: linear_baseline(adata, fold, pca_dim=args.pca_dim, ridge=args.ridge, seed=args.seed),
+    }
+    for name, predict in baselines.items():
+        out_dir = HERE / name / "predictions" / args.dataset
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for i, fold in enumerate(folds):
+            predict(fold).write_h5ad(out_dir / f"fold_{i}.h5ad")
+        print(f"wrote {len(folds)} fold predictions to {out_dir}")
 
 
 if __name__ == "__main__":

@@ -92,3 +92,21 @@ models/slurm/submit_all.sh replogle22k562 gears scgpt    # just these two
 ```
 
 Submits one independent 5-task SLURM array job per model (`models/slurm/train.sbatch`).
+
+## 5. Baselines that need no training
+
+```bash
+pixi run -e gears python baselines/baselines.py --dataset replogle22k562
+```
+
+Predicts `no_change`, `mean`, and `linear` in one process (reads `raw.h5ad` once, loops every
+fold). Runs from any model's environment, same as `prepare_data.py`/`prepare_split.py` above.
+Writes `baselines/<name>/predictions/<dataset>/fold_<i>.h5ad` per baseline — same per-fold shape
+as `models/*/train_predict.py`, just nested under `baselines/` instead of sitting alongside
+`gears/`, `scgpt/`, ... since these aren't trained models.
+
+```bash
+cd models && sbatch --export=ALL,MODELS_DIR="$(pwd)" slurm/baselines.sbatch
+```
+
+One non-array CPU job (`models/slurm/baselines.sbatch`).
