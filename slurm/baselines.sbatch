@@ -1,5 +1,6 @@
 #!/bin/bash
-# Computes every no-training baseline (no_change, mean, linear) against every fold, one process:
+# Computes every no-training baseline (no_change, mean, linear, interpolated) against every fold,
+# one process:
 # baselines/baselines.py's own CLI already loops baselines/folds internally and reads raw.h5ad
 # once, so this is a single non-array CPU job -- not a per-model, per-fold array like
 # train.sbatch (there's no separate model to train per fold here).
