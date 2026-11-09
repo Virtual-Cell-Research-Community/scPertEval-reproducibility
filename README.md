@@ -19,6 +19,22 @@ Reproduction of the figures from the **scPertEval** preprint:
 The scPertEval code lives in a separate repo:
 <https://github.com/Virtual-Cell-Research-Community/scPertEval>.
 
+This private reproducibility copy uses UV and pins scPertEval to release
+`v0.2.0` (`4685f11927e887745737600170da7a655b727553`). Set up or refresh the
+environment with:
+
+```bash
+uv sync --locked
+uv run jupyter lab
+```
+
+On Beast, keep the environment outside SDS:
+
+```bash
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/scPertEval-figures"
+uv sync --locked
+```
+
 > **GCP is read-only here.** Every bucket access in this repo is download-only from public
 > buckets; nothing is ever written back to GCS.
 
@@ -26,8 +42,7 @@ The scPertEval code lives in a separate repo:
 
 Open and run `scperteval-publication-figures.ipynb` end-to-end. It:
 
-1. installs scPertEval from GitHub
-   (`pip install "scperteval @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git"`),
+1. checks that the UV-managed scPertEval environment is available,
 2. downloads the 7 preprocessed datasets from the public bucket `gs://scperteval/processed`
    (needs the gcloud SDK / `gsutil` on `PATH`),
 3. runs DRF for the 7 datasets and DE export for the 4 DEG datasets,
