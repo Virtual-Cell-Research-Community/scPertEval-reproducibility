@@ -12,6 +12,8 @@ from anndata import AnnData
 from models.data.prepare_data import prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
+from workflows.evaluate import evaluate_bundle, matched_draw, rank_models, summarize_evaluations
+from workflows.predictions import build_prediction_manifest
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
 from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
@@ -160,3 +162,147 @@ def test_semantic_h5ad_checksum_ignores_hdf5_compression(tmp_path: Path) -> None
     assert plain.read_bytes() != compressed.read_bytes()
     assert semantic_h5ad_sha256(plain) == semantic_h5ad_sha256(compressed)
     compare_semantic_h5ad(plain, compressed)
+
+
+def test_prediction_manifest_validates_fold_conditions_and_gene_set(tmp_path: Path) -> None:
+    truth = AnnData(
+        X=sp.csr_matrix(np.array([[1, 0], [0, 2]], dtype=np.float32)),
+        obs=pd.DataFrame({"perturbation": ["control", "G1"]}, index=["c1", "c2"]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    prediction = AnnData(
+        X=np.array([[0.5, 1.5]], dtype=np.float32),
+        obs=pd.DataFrame({"perturbation": ["G1"]}, index=["prediction-G1"]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    dataset_manifest = tmp_path / "example.toml"
+    split_manifest = tmp_path / "split.json"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    dataset_manifest.write_text('id = "example"\n')
+    split_manifest.write_text(
+        json.dumps({"schema_version": 1, "id": "split", "folds": [{"train": [], "val": [], "test": ["G1"]}]})
+    )
+
+    manifest = build_prediction_manifest(
+        prediction_path=prediction_path,
+        truth_path=truth_path,
+        dataset_manifest_path=dataset_manifest,
+        split_manifest_path=split_manifest,
+        capability="point",
+        model_id="model",
+        implementation_revision="upstream-rev",
+        adapter_revision="adapter-rev",
+        fold=0,
+        seed=42,
+        environment="test",
+        command="test command",
+    )
+
+    assert manifest["capability"] == "point"
+    assert manifest["artifact"]["n_obs"] == 1
+    assert len(manifest["artifact"]["sha256"]) == 64
+
+
+def test_matched_population_draw_and_rank_aggregation_are_deterministic() -> None:
+    labels = ["control"] * 4 + ["G1"] * 4 + ["G2"] * 4
+    data = AnnData(
+        X=np.arange(24, dtype=np.float32).reshape(12, 2),
+        obs=pd.DataFrame({"perturbation": labels}, index=[f"cell-{index}" for index in range(12)]),
+        var=pd.DataFrame(index=["a", "b"]),
+    )
+    first = matched_draw(data, ["G1", "G2"], 2, 42, retain_controls=True)
+    second = matched_draw(data, ["G1", "G2"], 2, 42, retain_controls=True)
+    assert first.obs_names.tolist() == second.obs_names.tolist()
+    assert first.obs["perturbation"].value_counts().to_dict() == {"control": 4, "G1": 2, "G2": 2}
+
+    detail = pd.DataFrame(
+        {
+            "model": ["m1", "m1", "m2", "m2"],
+            "dataset": ["d"] * 4,
+            "split": ["s"] * 4,
+            "capability": ["point"] * 4,
+            "variant": ["v"] * 4,
+            "factor": ["reference"] * 4,
+            "level": ["reference"] * 4,
+            "protocol": ["pearson_ctrl"] * 4,
+            "better": ["higher"] * 4,
+            "perturbation": ["G1", "G2", "G1", "G2"],
+            "score": [0.9, 0.7, 0.8, 0.6],
+            "effect_strength": [2.0, 1.0, 2.0, 1.0],
+        }
+    )
+    summary = summarize_evaluations(detail)
+    ranking = rank_models(summary)
+    assert set(summary["aggregation"]) == {"mean", "median", "effect-weighted-mean"}
+    assert (ranking.loc[ranking["model"] == "m1", "rank"] == 1).all()
+
+
+def test_evaluation_grid_scores_a_fixed_point_bundle(tmp_path: Path) -> None:
+    rng = np.random.default_rng(7)
+    labels = ["control"] * 12 + ["G1"] * 12 + ["G2"] * 12
+    truth = AnnData(
+        X=rng.normal(size=(36, 8)).astype(np.float32),
+        obs=pd.DataFrame({"perturbation": labels}, index=[f"cell-{index}" for index in range(36)]),
+        var=pd.DataFrame(index=[f"gene-{index}" for index in range(8)]),
+    )
+    prediction = AnnData(
+        X=np.vstack(
+            [
+                truth.X[truth.obs["perturbation"] == "G1"].mean(axis=0),
+                truth.X[truth.obs["perturbation"] == "G2"].mean(axis=0),
+            ]
+        ),
+        obs=pd.DataFrame({"perturbation": ["G1", "G2"]}, index=["prediction-G1", "prediction-G2"]),
+        var=truth.var.copy(),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    split_path = tmp_path / "split.json"
+    grid_path = tmp_path / "grid.json"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    split_path.write_text(
+        json.dumps(
+            {
+                "id": "split",
+                "dataset": "example",
+                "folds": [{"train": [], "val": [], "test": ["G1", "G2"]}],
+            }
+        )
+    )
+    grid_path.write_text(
+        json.dumps(
+            {
+                "minimum_observed_cells": 12,
+                "population": {"draw_size": 60, "draw_seeds": [42]},
+                "variants": [
+                    {
+                        "id": "reference",
+                        "factor": "reference",
+                        "level": "control-centered-pearson-all-genes",
+                        "protocol": "pearson_ctrl",
+                        "de_method": "t-test",
+                        "better": "higher",
+                        "capabilities": ["point", "population"],
+                    }
+                ],
+            }
+        )
+    )
+
+    detail = evaluate_bundle(
+        truth_path=truth_path,
+        prediction_path=prediction_path,
+        split_manifest_path=split_path,
+        grid_path=grid_path,
+        model_id="example-model",
+        capability="point",
+        fold=0,
+    )
+
+    assert detail["perturbation"].tolist() == ["G1", "G2"]
+    assert detail["score"].notna().all()
+    assert detail["model"].unique().tolist() == ["example-model"]

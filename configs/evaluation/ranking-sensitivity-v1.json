@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "id": "ranking-sensitivity-v1",
+  "scperteval_revision": "4685f11927e887745737600170da7a655b727553",
+  "minimum_observed_cells": 12,
+  "population": {
+    "draw_size": 60,
+    "draw_seeds": [42, 314, 2718, 5772, 8119, 104729, 130363, 155921, 196613, 262147]
+  },
+  "reference_variant": "reference",
+  "variants": [
+    {
+      "id": "reference",
+      "factor": "reference",
+      "level": "control-centered-pearson-all-genes",
+      "protocol": "pearson_ctrl",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "genes-top50",
+      "factor": "gene_set",
+      "level": "top-50-effect-genes",
+      "protocol": "pearson_ctrl_top_k=50",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "genes-degs",
+      "factor": "gene_set",
+      "level": "degs-padj-0.05",
+      "protocol": "pearson_ctrl_degs_padj=0.05",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "genes-heg1000",
+      "factor": "gene_set",
+      "level": "top-1000-control-expressed",
+      "protocol": "pearson_ctrl_heg_k=1000",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "representation-absolute",
+      "factor": "representation",
+      "level": "absolute",
+      "protocol": "pearson",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "representation-all-perturbed-centered",
+      "factor": "representation",
+      "level": "all-perturbed-centered",
+      "protocol": "pearson_pert",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "metric-r2",
+      "factor": "metric",
+      "level": "r2",
+      "protocol": "r2_ctrl",
+      "de_method": "t-test",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "metric-mse",
+      "factor": "metric",
+      "level": "mse",
+      "protocol": "mse",
+      "center_on": "control_mean",
+      "de_method": "t-test",
+      "better": "lower",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "de-method-mwu",
+      "factor": "de_method",
+      "level": "MWU",
+      "protocol": "pearson_ctrl_degs_padj=0.05",
+      "de_method": "MWU",
+      "better": "higher",
+      "capabilities": ["point", "population"]
+    },
+    {
+      "id": "population-mmd-top50",
+      "factor": "population_metric",
+      "level": "MMD-top-50",
+      "protocol": "unbiased_mmd_median_top_k=50",
+      "de_method": "t-test",
+      "better": "lower",
+      "capabilities": ["population"]
+    },
+    {
+      "id": "population-mmd-pca50",
+      "factor": "population_metric",
+      "level": "MMD-PCA-50",
+      "protocol": "unbiased_mmd_median_pca_k=50",
+      "de_method": "t-test",
+      "better": "lower",
+      "capabilities": ["population"]
+    },
+    {
+      "id": "population-energy-top50",
+      "factor": "population_metric",
+      "level": "energy-top-50",
+      "protocol": "energy_distance_top_k=50",
+      "de_method": "t-test",
+      "better": "lower",
+      "capabilities": ["population"]
+    },
+    {
+      "id": "population-energy-pca50",
+      "factor": "population_metric",
+      "level": "energy-PCA-50",
+      "protocol": "energy_distance_pca_k=50",
+      "de_method": "t-test",
+      "better": "lower",
+      "capabilities": ["population"]
+    }
+  ],
+  "aggregations": ["mean", "median", "effect-weighted-mean"]
+}
