@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 #SBATCH --job-name=scperteval-state-context
+#SBATCH --partition=gpu-single
 #SBATCH --gres=gpu:1
 #SBATCH --time=2-00:00:00
 #SBATCH --mem=64gb
