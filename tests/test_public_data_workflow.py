@@ -16,7 +16,14 @@ from models.data.prepare_data import prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
-from workflows.evaluate import evaluate_bundle, matched_draw, rank_models, summarize_evaluations
+from workflows.evaluate import (
+    compare_to_reference,
+    evaluate_bundle,
+    matched_draw,
+    paired_perturbation_bootstrap,
+    rank_models,
+    summarize_evaluations,
+)
 from workflows.predictions import build_prediction_manifest, expected_test_conditions
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
@@ -280,6 +287,80 @@ def test_matched_population_draw_and_rank_aggregation_are_deterministic() -> Non
     ranking = rank_models(summary)
     assert set(summary["aggregation"]) == {"mean", "median", "effect-weighted-mean"}
     assert (ranking.loc[ranking["model"] == "m1", "rank"] == 1).all()
+
+
+def test_one_factor_rank_comparisons_and_paired_bootstrap_report_reversals() -> None:
+    rows = []
+    reference_scores = {
+        "m1": [10.0, 0.0, 0.0, 0.0],
+        "m2": [2.0, 2.0, 2.0, 2.0],
+        "m3": [1.0, 1.0, 1.0, 1.0],
+    }
+    alternative_scores = {
+        "m1": [0.0, 0.0, 0.0, 0.0],
+        "m2": [1.0, 1.0, 1.0, 1.0],
+        "m3": [2.0, 2.0, 2.0, 2.0],
+    }
+    for model, scores in reference_scores.items():
+        for index, score in enumerate(scores):
+            rows.append(
+                {
+                    "model": model,
+                    "dataset": "d",
+                    "split": "s",
+                    "capability": "point",
+                    "variant": "reference",
+                    "factor": "reference",
+                    "level": "reference",
+                    "protocol": "pearson_ctrl",
+                    "better": "higher",
+                    "perturbation": f"G{index}",
+                    "score": score,
+                    "effect_strength": float(index + 1),
+                }
+            )
+    for model, scores in alternative_scores.items():
+        for index, score in enumerate(scores):
+            rows.append(
+                {
+                    "model": model,
+                    "dataset": "d",
+                    "split": "s",
+                    "capability": "point",
+                    "variant": "metric-alternative",
+                    "factor": "metric",
+                    "level": "alternative",
+                    "protocol": "r2_ctrl",
+                    "better": "higher",
+                    "perturbation": f"G{index}",
+                    "score": score,
+                    "effect_strength": float(index + 1),
+                }
+            )
+
+    detail = pd.DataFrame(rows)
+    summary = summarize_evaluations(detail)
+    rank_changes, comparisons = compare_to_reference(summary)
+
+    metric_comparison = comparisons.set_index("scenario").loc["metric-alternative"]
+    assert bool(metric_comparison["winner_changed"])
+    assert metric_comparison["alternative_winners"] == "m3"
+    assert metric_comparison["pairwise_reversal_fraction"] > 0
+    median_comparison = comparisons.set_index("scenario").loc["aggregation-median"]
+    assert bool(median_comparison["winner_changed"])
+    assert median_comparison["alternative_winners"] == "m2"
+    assert not rank_changes.empty
+
+    first_ranks, first_comparisons = paired_perturbation_bootstrap(detail, n_bootstrap=50, seed=7)
+    second_ranks, second_comparisons = paired_perturbation_bootstrap(detail, n_bootstrap=50, seed=7)
+    pd.testing.assert_frame_equal(first_ranks, second_ranks)
+    pd.testing.assert_frame_equal(first_comparisons, second_comparisons)
+    assert set(first_comparisons["scenario"]) == {
+        "metric-alternative",
+        "aggregation-effect-weighted-mean",
+        "aggregation-median",
+    }
+    assert (first_ranks["n_bootstrap"] == 50).all()
 
 
 def test_evaluation_grid_scores_a_fixed_point_bundle(tmp_path: Path) -> None:
