@@ -44,6 +44,33 @@ def _fold(split: dict, fold: int | str) -> dict:
     raise ValueError(f"split has no fold {fold!r}")
 
 
+def _format_number(value: float) -> str:
+    return f"{float(value):g}"
+
+
+def expected_test_conditions(split: dict, fold: int | str, capability: str) -> list[str]:
+    """Expand the frozen cohort declaration into canonical test-condition identifiers."""
+    fold_spec = _fold(split, fold)
+    if "test" in fold_spec:
+        return sorted(map(str, fold_spec["test"]))
+    context = fold_spec["test_context"]
+    if "perturbations" in split:
+        return sorted(f"{context}::{perturbation}" for perturbation in split["perturbations"])
+    if "drugs" in split and "doses" in split:
+        excluded = {
+            (item["drug"], float(item["dose"]))
+            for item in split.get("population_exclusions", [])
+        }
+        conditions = []
+        for drug in split["drugs"]:
+            for dose in split["doses"]:
+                if capability == "population" and (drug["label"], float(dose)) in excluded:
+                    continue
+                conditions.append(f"{context}::{drug['canonical_label']}::{_format_number(dose)}nM")
+        return sorted(conditions)
+    raise ValueError("split fold does not declare explicit or expandable test conditions")
+
+
 def validate_prediction_h5ad(
     prediction_path: Path,
     truth_path: Path,
@@ -53,8 +80,7 @@ def validate_prediction_h5ad(
     minimum_cells_per_condition: int | None = None,
 ) -> tuple[int, int, list[str]]:
     """Validate genes, conditions, row multiplicity, and numeric values."""
-    fold_spec = _fold(split, fold)
-    expected = sorted(map(str, fold_spec["test"]))
+    expected = expected_test_conditions(split, fold, capability)
     prediction = ad.read_h5ad(prediction_path, backed="r")
     truth = ad.read_h5ad(truth_path, backed="r")
     try:

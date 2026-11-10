@@ -55,11 +55,11 @@ so a future dataset where they'd actually matter doesn't fall through unnoticed.
 
 Usage::
 
-    python models/data/prepare_data.py \
+    python -m models.data.prepare_data \
       --input data/derived/replogle-weissman-2022-k562-essential/adata.h5ad \
       --dataset-name replogle-weissman-2022-k562-essential \
       --compatible-models gears state
-    python models/data/prepare_data.py --smoke --dataset-name smoke_k562 --n-perts 12 --cells-per-pert 100
+    python -m models.data.prepare_data --smoke --dataset-name smoke_k562 --n-perts 12 --cells-per-pert 100
 """
 
 from __future__ import annotations

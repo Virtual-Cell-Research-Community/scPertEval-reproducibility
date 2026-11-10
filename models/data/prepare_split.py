@@ -32,8 +32,8 @@ Outputs, alongside the input raw.h5ad in its own models/data/<dataset>/ folder:
 
 Usage::
 
-    python models/data/prepare_split.py models/data/replogle22k562/raw.h5ad
-    python models/data/prepare_split.py models/data/smoke_k562/raw.h5ad --n-folds 3
+    python -m models.data.prepare_split models/data/replogle22k562/raw.h5ad
+    python -m models.data.prepare_split models/data/smoke_k562/raw.h5ad --n-folds 3
 """
 
 from __future__ import annotations

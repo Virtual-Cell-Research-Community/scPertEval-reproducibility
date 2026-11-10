@@ -1,0 +1,20 @@
+schema_version = 1
+id = "linear"
+title = "Bilinear PCA baseline"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+
+[implementation]
+package = "repository-native"
+version = "1"
+reference = "Ahlmann-Eltze et al. linear perturbation prediction baseline"
+
+[adapter]
+path = "models/baselines/baselines.py"
+environment = "root uv.lock"
+
+[prediction]
+pca_dimensions = 10
+ridge = 0.1
+seed = 42

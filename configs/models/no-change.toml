@@ -1,0 +1,18 @@
+schema_version = 1
+id = "no-change"
+title = "No-change baseline"
+capability = "point"
+modalities = ["genetic", "chemical"]
+tasks = ["unseen-perturbation", "leave-one-context-out"]
+
+[implementation]
+package = "repository-native"
+version = "1"
+
+[adapter]
+path = "models/baselines/baselines.py"
+environment = "root uv.lock"
+
+[prediction]
+description = "Context-matched control centroid for every held-out condition"
+seed = 42

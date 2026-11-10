@@ -1,0 +1,31 @@
+schema_version = 1
+id = "state"
+title = "STATE Transition"
+capability = "population"
+modalities = ["genetic", "chemical"]
+tasks = ["unseen-perturbation", "leave-one-context-out"]
+
+[implementation]
+package = "arc-state"
+version = "0.11.1"
+artifact_sha256 = "087a8c12ac4931dd5cb5275cf0eaef8b6d660cf2b422ec769a86859fcd463bf2"
+
+[adapter]
+path = "models/state/train_predict.py"
+environment = "models/pixi.toml#state"
+lockfile = "models/pixi.lock"
+
+[training]
+seed = 42
+max_steps = 10000
+early_stop_patience = 10
+batch_size = 64
+cell_set_len = 64
+hidden_dim = 328
+prediction = "native per-cell predictions; no pseudobulk during inference"
+
+[resources]
+gpus = 1
+cpus = 64
+memory_gb = 64
+time = "2-00:00:00"

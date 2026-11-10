@@ -130,6 +130,122 @@ def semantic_h5ad_sha256(path: Path, *, block_rows: int = 4096) -> str:
     return digest.hexdigest()
 
 
+def _series_value_differences(left: pd.Series, right: pd.Series) -> tuple[int, str]:
+    """Return positional value differences while reporting numeric drift when possible."""
+    left = left.reset_index(drop=True)
+    right = right.reset_index(drop=True)
+    if len(left) != len(right):
+        return max(len(left), len(right)), f"lengths={len(left)}/{len(right)}"
+
+    if pd.api.types.is_numeric_dtype(left.dtype) and pd.api.types.is_numeric_dtype(right.dtype):
+        left_values = left.to_numpy(dtype=np.float64, na_value=np.nan)
+        right_values = right.to_numpy(dtype=np.float64, na_value=np.nan)
+        equal = (left_values == right_values) | (np.isnan(left_values) & np.isnan(right_values))
+        differing = np.flatnonzero(~equal)
+        if not len(differing):
+            return 0, ""
+        finite = np.isfinite(left_values[differing]) & np.isfinite(right_values[differing])
+        max_abs = (
+            float(np.max(np.abs(left_values[differing][finite] - right_values[differing][finite])))
+            if finite.any()
+            else float("nan")
+        )
+        examples = [
+            f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}"
+            for index in differing[:3]
+        ]
+        return len(differing), f"max_abs_difference={max_abs:.17g}; " + "; ".join(examples)
+
+    left_values = left.astype("string")
+    right_values = right.astype("string")
+    equal = left_values.eq(right_values) | (left_values.isna() & right_values.isna())
+    differing = np.flatnonzero(~equal.to_numpy())
+    if not len(differing):
+        return 0, ""
+    examples = [
+        f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}"
+        for index in differing[:3]
+    ]
+    return len(differing), "; ".join(examples)
+
+
+def _frame_difference_report(left: pd.DataFrame, right: pd.DataFrame, name: str) -> list[str]:
+    """Explain frame differences without dumping large annotation tables."""
+    report = [f"{name}: shapes={left.shape}/{right.shape}"]
+    left_columns = list(map(str, left.columns))
+    right_columns = list(map(str, right.columns))
+    if left_columns != right_columns:
+        left_only = sorted(set(left_columns) - set(right_columns))
+        right_only = sorted(set(right_columns) - set(left_columns))
+        report.append(
+            f"{name}: column_order_or_membership_differs; left_only={left_only}; right_only={right_only}"
+        )
+    if not left.index.equals(right.index):
+        left_index = left.index.astype(str)
+        right_index = right.index.astype(str)
+        limit = min(len(left_index), len(right_index))
+        differing = np.flatnonzero(left_index[:limit].to_numpy() != right_index[:limit].to_numpy())
+        examples = [
+            f"row {index}: {left_index[index]!r} != {right_index[index]!r}"
+            for index in differing[:3]
+        ]
+        report.append(
+            f"{name}: index_differs; lengths={len(left_index)}/{len(right_index)}; " + "; ".join(examples)
+        )
+    if list(left.index.names) != list(right.index.names):
+        report.append(f"{name}: index_names={left.index.names!r}/{right.index.names!r}")
+
+    common = [column for column in left.columns if column in right.columns]
+    column_differences = []
+    for column in common:
+        left_series = left[column]
+        right_series = right[column]
+        details = []
+        if str(left_series.dtype) != str(right_series.dtype):
+            details.append(f"dtype={left_series.dtype}/{right_series.dtype}")
+        if isinstance(left_series.dtype, pd.CategoricalDtype) and isinstance(
+            right_series.dtype, pd.CategoricalDtype
+        ):
+            if not left_series.cat.categories.equals(right_series.cat.categories):
+                details.append(
+                    "categories="
+                    f"{len(left_series.cat.categories)}/{len(right_series.cat.categories)}; "
+                    f"first={left_series.cat.categories[:5].tolist()!r}/"
+                    f"{right_series.cat.categories[:5].tolist()!r}"
+                )
+            if left_series.cat.ordered != right_series.cat.ordered:
+                details.append(f"ordered={left_series.cat.ordered}/{right_series.cat.ordered}")
+        n_different, value_details = _series_value_differences(left_series, right_series)
+        if n_different:
+            details.append(f"different_values={n_different}; {value_details}")
+        if details:
+            column_differences.append(f"{name}.{column}: " + "; ".join(details))
+
+    if not column_differences and len(report) == 1:
+        report.append(f"{name}: values match; difference is in frame-level metadata")
+    elif column_differences:
+        report.extend(column_differences[:20])
+        if len(column_differences) > 20:
+            report.append(f"{name}: {len(column_differences) - 20} additional differing columns omitted")
+    return report
+
+
+def _annotation_difference_report(left: Path, right: Path, differing: list[str]) -> list[str]:
+    slots = [name for name in ("obs", "var") if name in differing]
+    if not slots:
+        return []
+    left_data = ad.read_h5ad(left, backed="r")
+    right_data = ad.read_h5ad(right, backed="r")
+    try:
+        report = []
+        for slot in slots:
+            report.extend(_frame_difference_report(getattr(left_data, slot), getattr(right_data, slot), slot))
+        return report
+    finally:
+        left_data.file.close()
+        right_data.file.close()
+
+
 def compare_semantic_h5ad(left: Path, right: Path, *, block_rows: int = 4096) -> dict[str, str]:
     """Require every logical component to match and return the shared component hashes."""
     left_components = semantic_h5ad_components(left, block_rows=block_rows)
@@ -137,7 +253,11 @@ def compare_semantic_h5ad(left: Path, right: Path, *, block_rows: int = 4096) ->
     if left_components != right_components:
         names = sorted(set(left_components) | set(right_components))
         differing = [name for name in names if left_components.get(name) != right_components.get(name)]
-        raise ValueError(f"H5AD semantic components differ: {', '.join(differing)}")
+        details = _annotation_difference_report(left, right, differing)
+        message = f"H5AD semantic components differ: {', '.join(differing)}"
+        if details:
+            message += "\n" + "\n".join(details)
+        raise ValueError(message)
     return left_components
 
 

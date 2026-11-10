@@ -6,14 +6,17 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pytest
 import scipy.sparse as sp
 from anndata import AnnData
 
+from models.baselines.context_baselines import predict_context_baselines
+from models.data.prepare_context import prepare_context_view
 from models.data.prepare_data import prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import evaluate_bundle, matched_draw, rank_models, summarize_evaluations
-from workflows.predictions import build_prediction_manifest
+from workflows.predictions import build_prediction_manifest, expected_test_conditions
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
 from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
@@ -56,6 +59,8 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert genetic["n_perturbations"] == len(genetic["perturbations"]) == 322
     assert genetic["perturbations"] == sorted(set(genetic["perturbations"]))
     assert genetic["n_test_populations"] == len(genetic["contexts"]) * genetic["n_perturbations"]
+    assert len(genetic["folds"]) == len(genetic["contexts"]) == 4
+    assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 322 for fold in genetic["folds"])
 
     chemical = json.loads(
         (ROOT / "configs" / "experiments" / "sciplex3-nine-drug-context-transfer.json").read_text()
@@ -64,6 +69,10 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert chemical["n_point_conditions"] == len(chemical["drugs"]) * len(chemical["doses"]) == 36
     assert chemical["n_population_conditions"] == 33
     assert len(chemical["population_exclusions"]) == 3
+    assert len(chemical["folds"]) == len(chemical["contexts"]) == 3
+    for fold in chemical["folds"]:
+        assert len(expected_test_conditions(chemical, fold["id"], "point")) == 36
+        assert len(expected_test_conditions(chemical, fold["id"], "population")) == 33
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:
@@ -104,6 +113,10 @@ def test_merge_disambiguated_gene_names_sums_duplicate_symbol_columns() -> None:
 def test_all_toml_files_parse() -> None:
     for path in MANIFEST_ROOT.glob("*.toml"):
         assert tomllib.loads(path.read_text())["id"] == path.stem
+    for path in (ROOT / "configs" / "models").glob("*.toml"):
+        manifest = tomllib.loads(path.read_text())
+        assert manifest["id"] == path.stem
+        assert manifest["capability"] in {"point", "population"}
 
 
 def test_canonical_raw_model_view_maps_controls_and_normalizes_without_mutating_source() -> None:
@@ -162,6 +175,30 @@ def test_semantic_h5ad_checksum_ignores_hdf5_compression(tmp_path: Path) -> None
     assert plain.read_bytes() != compressed.read_bytes()
     assert semantic_h5ad_sha256(plain) == semantic_h5ad_sha256(compressed)
     compare_semantic_h5ad(plain, compressed)
+
+
+def test_semantic_h5ad_mismatch_reports_annotation_columns(tmp_path: Path) -> None:
+    left = AnnData(
+        X=sp.csr_matrix(np.eye(2, dtype=np.float32)),
+        obs=pd.DataFrame({"score": [1.0, 2.0], "label": ["a", "b"]}, index=["c1", "c2"]),
+        var=pd.DataFrame({"selected": [True, False]}, index=["g1", "g2"]),
+    )
+    right = left.copy()
+    right.obs["score"] = [1.0, 2.5]
+    right.var["selected"] = right.var["selected"].astype(str)
+    left_path = tmp_path / "left.h5ad"
+    right_path = tmp_path / "right.h5ad"
+    left.write_h5ad(left_path)
+    right.write_h5ad(right_path)
+
+    with pytest.raises(ValueError) as error:
+        compare_semantic_h5ad(left_path, right_path)
+    message = str(error.value)
+    assert "H5AD semantic components differ: obs, var" in message
+    assert "obs.score" in message
+    assert "different_values=1" in message
+    assert "var.selected" in message
+    assert "dtype=bool/object" in message
 
 
 def test_prediction_manifest_validates_fold_conditions_and_gene_set(tmp_path: Path) -> None:
@@ -306,3 +343,62 @@ def test_evaluation_grid_scores_a_fixed_point_bundle(tmp_path: Path) -> None:
     assert detail["perturbation"].tolist() == ["G1", "G2"]
     assert detail["score"].notna().all()
     assert detail["model"].unique().tolist() == ["example-model"]
+
+
+def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_path: Path) -> None:
+    inputs = {}
+    for context in ["context-a", "context-b"]:
+        labels = ["non-targeting"] * 2 + ["G1"] * 2 + ["G2"] * 2
+        canonical = AnnData(
+            X=sp.csr_matrix(np.ones((6, 201), dtype=np.float32)),
+            obs=pd.DataFrame(
+                {
+                    "perturbation": labels,
+                    "is_control": [True, True, False, False, False, False],
+                    "batch": ["b1"] * 6,
+                },
+                index=[f"{context}-cell-{index}" for index in range(6)],
+            ),
+            var=pd.DataFrame(index=[f"gene-{index}" for index in range(201)]),
+        )
+        path = tmp_path / f"{context}.h5ad"
+        canonical.write_h5ad(path)
+        inputs[context] = path
+    config = {
+        "id": "context-test",
+        "contexts": ["context-a", "context-b"],
+        "perturbations": ["G1", "G2"],
+    }
+
+    result = prepare_context_view(
+        config,
+        inputs,
+        minimum_cells=2,
+        max_cells=2,
+        max_controls=2,
+        seed=42,
+    )
+
+    assert result.shape == (12, 201)
+    assert set(result.obs["model_perturbation"].astype(str)) == {"control", "G1", "G2"}
+    assert set(result.obs.loc[~result.obs["is_control"], "evaluation_condition"].astype(str)) == {
+        "context-a::G1",
+        "context-a::G2",
+        "context-b::G1",
+        "context-b::G2",
+    }
+
+    split = {
+        **config,
+        "folds": [
+            {
+                "id": "holdout-context-b",
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    predictions = predict_context_baselines(result, split, 0)
+    assert set(predictions) == {"no-change", "fold-mean"}
+    assert predictions["no-change"].obs["perturbation"].tolist() == ["context-b::G1", "context-b::G2"]
+    assert predictions["fold-mean"].shape == (2, 201)

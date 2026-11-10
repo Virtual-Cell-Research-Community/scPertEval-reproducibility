@@ -2,6 +2,8 @@
   "schema_version": 1,
   "id": "replogle-nadig-four-context-60-cell",
   "task": "leave-one-context-out",
+  "models": ["state", "no-change", "fold-mean"],
+  "condition_id_format": "{context}::{perturbation}",
   "contexts": [
     "replogle-weissman-2022-k562-essential",
     "replogle-weissman-2022-rpe1",
@@ -11,6 +13,48 @@
   "minimum_treated_cells_per_context": 60,
   "n_perturbations": 322,
   "n_test_populations": 1288,
+  "folds": [
+    {
+      "id": "holdout-k562-essential",
+      "test_context": "replogle-weissman-2022-k562-essential",
+      "train_contexts": [
+        "replogle-weissman-2022-rpe1",
+        "nadig-oconner-2024-hepg2",
+        "nadig-oconner-2024-jurkat"
+      ],
+      "n_test_conditions": 322
+    },
+    {
+      "id": "holdout-rpe1",
+      "test_context": "replogle-weissman-2022-rpe1",
+      "train_contexts": [
+        "replogle-weissman-2022-k562-essential",
+        "nadig-oconner-2024-hepg2",
+        "nadig-oconner-2024-jurkat"
+      ],
+      "n_test_conditions": 322
+    },
+    {
+      "id": "holdout-hepg2",
+      "test_context": "nadig-oconner-2024-hepg2",
+      "train_contexts": [
+        "replogle-weissman-2022-k562-essential",
+        "replogle-weissman-2022-rpe1",
+        "nadig-oconner-2024-jurkat"
+      ],
+      "n_test_conditions": 322
+    },
+    {
+      "id": "holdout-jurkat",
+      "test_context": "nadig-oconner-2024-jurkat",
+      "train_contexts": [
+        "replogle-weissman-2022-k562-essential",
+        "replogle-weissman-2022-rpe1",
+        "nadig-oconner-2024-hepg2"
+      ],
+      "n_test_conditions": 322
+    }
+  ],
   "perturbations": [
     "ABCF1", "ACOT12", "ACTR2", "ACTR8", "ADAT3", "ALDOA", "ALG1L", "ANAPC11",
     "ANAPC15", "ANKRD11", "ANKS6", "ARCN1", "ARMC7", "ARPC2", "ARPC4", "ATP2A2",

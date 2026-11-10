@@ -49,14 +49,14 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 # Apply the model-only normalization and Miller-consistent preparation. The selected public
 # study models are GEARS and STATE, so only GEARS' external gene reference constrains the
 # shared perturbation cohort.
-uv run python models/data/prepare_data.py \
+uv run python -m models.data.prepare_data \
   --input data/processed/replogle-weissman-2022-k562-essential/adata.h5ad \
   --dataset-name replogle-weissman-2022-k562-essential \
   --cell-type K562 \
   --compatible-models gears state
 
 # Freeze the five-fold split and its checksum-bearing archival manifest.
-uv run python models/data/prepare_split.py \
+uv run python -m models.data.prepare_split \
   models/data/replogle-weissman-2022-k562-essential/raw.h5ad \
   --dataset-id replogle-weissman-2022-k562-essential
 ```

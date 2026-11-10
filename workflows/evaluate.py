@@ -11,6 +11,8 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 
+from workflows.predictions import expected_test_conditions
+
 
 def _dense_mean(matrix) -> np.ndarray:
     return np.asarray(matrix.mean(axis=0)).ravel()
@@ -59,15 +61,28 @@ def _load_fold(
     prediction_path: Path,
     split_manifest: dict,
     fold: int,
+    capability: str,
 ) -> tuple[ad.AnnData, ad.AnnData, list[str]]:
-    expected = sorted(map(str, split_manifest["folds"][fold]["test"]))
+    expected = expected_test_conditions(split_manifest, fold, capability)
     source = ad.read_h5ad(truth_path, backed="r")
-    labels = source.obs["perturbation"].astype(str)
-    mask = labels.isin(["control", *expected]).to_numpy()
+    fold_spec = split_manifest["folds"][fold]
+    if "test_context" in fold_spec:
+        required = {"context", "evaluation_condition"}
+        missing = sorted(required - set(source.obs.columns))
+        if missing:
+            raise ValueError(f"context-transfer truth is missing obs fields: {', '.join(missing)}")
+        context_mask = source.obs["context"].astype(str) == str(fold_spec["test_context"])
+        labels = source.obs["evaluation_condition"].astype(str)
+        mask = (context_mask & labels.isin(["control", *expected])).to_numpy()
+    else:
+        labels = source.obs["perturbation"].astype(str)
+        mask = labels.isin(["control", *expected]).to_numpy()
     try:
         truth = source[mask].to_memory()
     finally:
         source.file.close()
+    if "test_context" in fold_spec:
+        truth.obs["perturbation"] = truth.obs["evaluation_condition"].astype(str).to_numpy()
     prediction = ad.read_h5ad(prediction_path)
     observed = sorted(prediction.obs["perturbation"].astype(str).unique().tolist())
     if observed != expected:
@@ -129,7 +144,7 @@ def evaluate_bundle(
     """Evaluate one fixed model/fold bundle; no training or prediction occurs here."""
     split = json.loads(split_manifest_path.read_text())
     grid = json.loads(grid_path.read_text())
-    truth, prediction, conditions = _load_fold(truth_path, prediction_path, split, fold)
+    truth, prediction, conditions = _load_fold(truth_path, prediction_path, split, fold, capability)
     effects = observed_effect_strengths(truth)
 
     point_variants = [

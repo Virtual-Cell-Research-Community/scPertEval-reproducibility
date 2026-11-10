@@ -2,6 +2,8 @@
   "schema_version": 1,
   "id": "sciplex3-nine-drug-context-transfer",
   "task": "leave-one-context-out",
+  "models": ["state", "no-change", "fold-mean"],
+  "condition_id_format": "{context}::{perturbation}::{dose:g}nM",
   "dataset": "srivatsan-trapnell-2020-sciplex3",
   "contexts": ["A549", "K562", "MCF7"],
   "dose_unit": "nM",
@@ -9,6 +11,29 @@
   "n_drugs": 9,
   "n_point_conditions": 36,
   "n_population_conditions": 33,
+  "folds": [
+    {
+      "id": "holdout-a549",
+      "test_context": "A549",
+      "train_contexts": ["K562", "MCF7"],
+      "n_point_conditions": 36,
+      "n_population_conditions": 33
+    },
+    {
+      "id": "holdout-k562",
+      "test_context": "K562",
+      "train_contexts": ["A549", "MCF7"],
+      "n_point_conditions": 36,
+      "n_population_conditions": 33
+    },
+    {
+      "id": "holdout-mcf7",
+      "test_context": "MCF7",
+      "train_contexts": ["A549", "K562"],
+      "n_point_conditions": 36,
+      "n_population_conditions": 33
+    }
+  ],
   "population_minimum_cells_per_context": 60,
   "drugs": [
     {"label": "Alvespimycin", "canonical_label": "Alvespimycin (17-DMAG) HCl"},

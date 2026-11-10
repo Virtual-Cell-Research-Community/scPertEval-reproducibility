@@ -8,3 +8,10 @@ cluster resource defaults.
 Capability is explicit: a point model is not silently converted into a
 population model solely to make it eligible for distributional metrics.
 
+The initial ranking-sensitivity study freezes two substantive models: GEARS for
+point prediction on unseen genetic perturbations, and STATE for native
+population prediction across genetic and chemical tracks. No-change,
+training-condition mean, and—where gene embeddings make sense—the bilinear PCA
+baseline anchor the rankings. The interpolated technical duplicate remains a
+positive control, not a ranked model.
+

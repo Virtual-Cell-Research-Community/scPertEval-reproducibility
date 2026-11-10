@@ -35,14 +35,14 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 
 echo "[$(date -Is)] Creating selected-model view from canonical raw counts"
-"${UV_BIN}" run --frozen python models/data/prepare_data.py \
+"${UV_BIN}" run --frozen python -m models.data.prepare_data \
   --input "${SCPERTEVAL_CANONICAL_H5AD}" \
   --dataset-name "${DATASET}" \
   --cell-type K562 \
   --compatible-models gears state
 
 echo "[$(date -Is)] Freezing five-fold unseen-perturbation split"
-"${UV_BIN}" run --frozen python models/data/prepare_split.py \
+"${UV_BIN}" run --frozen python -m models.data.prepare_split \
   "models/data/${DATASET}/raw.h5ad" \
   --dataset-id "${DATASET}" \
   --split-id "${DATASET}-unseen-perturbation-5-fold"

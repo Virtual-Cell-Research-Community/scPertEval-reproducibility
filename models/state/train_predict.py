@@ -205,7 +205,9 @@ def prepare_dataset(raw: Path, dataset_dir: Path, cell_type: str, num_hvgs: int)
         return out_path
 
     adata = ad.read_h5ad(raw)
-    adata.obs["gem_group"] = "1"
+    adata.obs["gem_group"] = (
+        adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
+    )
 
     sc.pp.highly_variable_genes(adata, n_top_genes=num_hvgs)
     hvg = adata[:, adata.var["highly_variable"]].X
@@ -251,6 +253,11 @@ def main() -> None:
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
     parser.add_argument("--cell-type", default="K562", help="cell_type label for the dataset (default: K562)")
+    parser.add_argument(
+        "--perturbation-key",
+        default="perturbation",
+        help="obs column STATE uses as its perturbation identity (default: perturbation)",
+    )
     parser.add_argument("--num-hvgs", type=int, default=2000, help="number of HVGs computed for data.kwargs.embed_key=X_hvg (default: 2000)")
     # All the following defaults come from ArcInstitute's own "STATE Training on
     # Replogle-Nadig" Colab (the same one this script's docstring already references),
@@ -332,7 +339,7 @@ def main() -> None:
     train_overrides = [
         f"data.kwargs.toml_config_path={toml_path}",
         "data.kwargs.embed_key=X_hvg",
-        "data.kwargs.pert_col=perturbation",
+        f"data.kwargs.pert_col={args.perturbation_key}",
         "data.kwargs.control_pert=control",
         # `data_module.save_state()` persists this, so `predict`'s reloaded data
         # module inherits it without a separate override.
