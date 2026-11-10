@@ -1,0 +1,65 @@
+context:
+  version: "0.1.0"
+  # Pinned commit on Genentech/PRESAGE's main branch (unpackaged research code — no
+  # pyproject.toml/setup.py, so this is a plain file copy, not a `pip install`).
+  rev: "2c7b231c60cf110c4aab0acf8ecd2c2b3268fffb"
+
+package:
+  name: presage-src
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/Genentech/PRESAGE.git
+    rev: ${{ rev }}
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    # noarch: generic copies whatever we place under $PREFIX verbatim into every
+    # consuming environment's $PREFIX — there's no python-version remapping like
+    # noarch: python gets. That's fine here: this package is only ever consumed by
+    # models/pixi.toml's own `presage` feature, which pins python = "3.11.*" to match.
+    #
+    # rm -rf first: on an incremental (non-clean) rebuild, $PREFIX/.../presage_sample_files
+    # can already exist from a prior run, and `cp -r sample_files presage_sample_files`
+    # then copies *into* it (nesting a second sample_files/ inside) instead of creating it
+    # fresh — makes the script idempotent regardless of build-dir state.
+    - rm -rf "$PREFIX/lib/python3.11/site-packages/presage_sample_files"
+    - mkdir -p "$PREFIX/lib/python3.11/site-packages"
+    - cp src/*.py "$PREFIX/lib/python3.11/site-packages/"
+    - cp -r sample_files "$PREFIX/lib/python3.11/site-packages/presage_sample_files"
+
+requirements:
+  # What presage.py/datamodule.py/model_harness.py/train.py/evaluator.py actually import
+  # at module level (plus wandb: train.py unconditionally constructs a pl.loggers.
+  # WandbLogger, which dynamically imports wandb even though no file here does `import
+  # wandb` directly). Declared here, not on the consuming `presage` feature in
+  # models/pixi.toml, so this package is self-describing — the feature only adds what
+  # it needs beyond presage-src itself (currently nothing extra).
+  run:
+    - python 3.11.*
+    - pytorch-gpu >=2.3
+    - pytorch_geometric
+    - pytorch-lightning
+    - scanpy
+    - anndata
+    - scikit-learn
+    - pandas
+    - numpy
+    - scipy
+    - requests
+    - tqdm
+    - wandb
+
+tests:
+  - python:
+      imports:
+        - presage
+        - datamodule
+        - model_harness
+        - train
+
+about:
+  license: LicenseRef-Genentech-NonCommercial-1.0
+  summary: Vendored Genentech/PRESAGE source (unpackaged), fetched via git for models/presage's pixi feature.

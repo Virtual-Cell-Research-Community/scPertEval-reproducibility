@@ -1,0 +1,205 @@
+[workspace]
+# pixi-build (path/git package dependencies, e.g. the presage feature's vendored
+# presage-src below) is still preview-gated.
+preview = ["pixi-build"]
+name = "scperteval-models"
+description = "Isolated pixi environments for each benchmarked prediction model (one feature/environment per model)."
+channels = ["conda-forge", "pytorch", "nvidia"]
+platforms = ["linux-64"]
+
+# --- GEARS (https://github.com/snap-stanford/GEARS) -------------------------
+[feature.gears.system-requirements]
+cuda = "12"
+
+[feature.gears.dependencies]
+python = "3.11.*"
+pytorch-gpu = ">=2.3"
+pytorch_geometric = "*"
+
+[feature.gears.pypi-dependencies]
+# cell-gears' published wheel has unpinned deps; pin to the versions its own
+# requirements.txt (github.com/snap-stanford/GEARS) expects — newer pandas (3.x)
+# breaks GEARS' `series[0]` positional-fallback usage.
+cell-gears = "*"
+pandas = "==2.2.2"
+
+[feature.gears.tasks]
+smoke-test = "python -c \"import torch, torch_geometric, gears; from importlib.metadata import version; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('pyg', torch_geometric.__version__); print('gears (cell-gears)', version('cell-gears'))\""
+
+# --- scGPT (https://github.com/bowang-lab/scGPT) -----------------------------
+# Real flash-attn (FA2), not the plain-PyTorch fallback: flash-attn's prebuilt wheels
+# only go up to a torch2.8 build, so pytorch-gpu is pinned to 2.8.* here (rather than
+# floating to latest like the `gears` feature) to match one exactly — avoids compiling
+# flash-attn from source. torch 2.8 already fully supports Hopper (H200, sm_90).
+[feature.scgpt.system-requirements]
+cuda = "12"
+
+[feature.scgpt.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.8.*"
+# Conda would otherwise pick the latest fsspec; constrain it here (not as a
+# pypi-dependency) so it flows into the pypi solve already compatible with
+# scgpt's `datasets<3` chain — see pixi's conda/pypi pinning docs.
+fsspec = "<=2024.6.1"
+# scgpt's perturbation fine-tuning pins `cell-gears<0.0.3` (an old GEARS release)
+# for its PertData data-loading pipeline; that in turn needs PyG, same as our
+# separate `gears` environment.
+pytorch_geometric = "*"
+
+[feature.scgpt.pypi-dependencies]
+# The PyPI wheel (0.2.4) predates PR #351 ("cuda-12.8 and FlashAttention 2.x
+# compatibility") and hard-crashes on import here: it imports torchtext.vocab
+# directly, whose compiled extension has an ABI mismatch against modern torch.
+# Install from GitHub main (pinned) instead, which has the fallback shims.
+scgpt = { git = "https://github.com/bowang-lab/scGPT.git", rev = "cebd6fae655b9c585a4807daa3ac31bb764f06b4" }
+# scgpt's utils/util.py imports IPython unconditionally; not declared as a dependency.
+ipython = "*"
+# FA2 prebuilt wheel matching pytorch-gpu 2.8.* + cu12 + cp310 + cxx11abiTRUE, so no
+# from-source compile (flash-attn 1.x needs CUDA 11.7 and predates Hopper support).
+flash-attn = { url = "https://github.com/Dao-AILab/flash-attention/releases/download/v2.8.3.post1/flash_attn-2.8.3.post1%2Bcu12torch2.8cxx11abiTRUE-cp310-cp310-linux_x86_64.whl" }
+# flash_attn_compat's FA2 wrapper (_FA2FlashMHA) needs einops for the qkv reshape.
+einops = "*"
+
+[feature.scgpt.tasks]
+smoke-test = "python -c \"import torch, scgpt; from scgpt.model.flash_attn_compat import get_flash_attn_info; from importlib.metadata import version; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('scgpt', version('scgpt')); print('flash-attn:', get_flash_attn_info())\""
+# gdown isn't a dependency of scgpt's own code (it only ever downloads the pretrained
+# checkpoint once) — `pixi exec` runs it from its own ephemeral/cached tool environment
+# instead of adding it to this feature's permanent dependency list.
+fetch-checkpoint = { cmd = "pixi exec --spec gdown -- gdown --folder 'https://drive.google.com/drive/folders/1oWh_-ZRdhtoGQ2Fw24HP41FgLoomVo-y' -O scgpt/checkpoints/", outputs = [
+  "scgpt/checkpoints/scGPT_human/args.json",
+  "scgpt/checkpoints/scGPT_human/best_model.pt",
+  "scgpt/checkpoints/scGPT_human/vocab.json",
+] }
+
+# --- PRESAGE (https://github.com/Genentech/PRESAGE) -------------------------
+# PRESAGE has no pyproject.toml/setup.py (unpackaged research code, Genentech
+# Non-Commercial license) — `presage-src` (models/presage/vendor/presage-src) is a
+# tiny local pixi-build package that fetches it from git at a pinned rev and copies
+# its src/*.py verbatim onto site-packages (see its recipe.yaml), so we get the
+# official model/datamodule code without a submodule or a hand-authored reimplementation.
+[feature.presage.system-requirements]
+cuda = "12"
+
+[feature.presage.dependencies]
+# presage-src's own recipe.yaml declares its real runtime deps (torch, pytorch_geometric,
+# pytorch-lightning, scanpy, wandb, ...) as run requirements — not pinned to PRESAGE's own
+# environment.yml (torch 2.2.0 + the `pyg` channel's matching pyg=2.5.2 build), since
+# conda-forge's pytorch_geometric metapackage already works fine against a newer torch in
+# the `gears` feature above (GATConv, the only PyG op PRESAGE's model uses, is stable
+# across that range). They flow into this environment transitively; nothing to redeclare
+# here unless this feature needs something presage-src itself doesn't.
+presage-src = { path = "presage/vendor/presage-src" }
+
+[feature.presage.pypi-dependencies]
+# Not a presage-src dependency — used by our own train_predict.py to replace
+# scPerturbDataModule.compute_degs's per-perturbation scanpy.tl.rank_genes_groups loop with
+# one vectorized illico call (same Wilcoxon test, same output, much faster — see
+# train_predict.py's own compute_degs_fast docstring). scPertEval's own pyproject.toml
+# depends on the same package, unpinned, for the same reason (src/scperteval/blocks/de.py).
+illico = "*"
+
+[feature.presage.tasks]
+smoke-test = "python -c \"import torch, torch_geometric, pytorch_lightning, presage, datamodule, model_harness, train; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('pyg', torch_geometric.__version__); print('pytorch-lightning', pytorch_lightning.__version__)\""
+# Downloads PRESAGE's external gene-embedding cache (Zenodo, ~3.4GB: pathway/other
+# knowledge-source embeddings — STRING, MSigDB, ESM2, GenePT, DepMap, ...) and unpacks it
+# via their own src/prep_dataset_utils/unpack_cache.sh, fetched at the same pinned commit
+# presage-src/recipe.yaml uses, rather than reimplementing its tar/mv/gunzip steps here.
+# `outputs` makes reruns a no-op once the cache is already unpacked.
+fetch-cache = { cmd = "mkdir -p presage/cache && cd presage/cache && curl -fsSL -o cache.tar.gz 'https://zenodo.org/records/15587986/files/cache.tar.gz?download=1' && curl -fsSL -o unpack_cache.sh 'https://raw.githubusercontent.com/Genentech/PRESAGE/2c7b231c60cf110c4aab0acf8ecd2c2b3268fffb/src/prep_dataset_utils/unpack_cache.sh' && bash unpack_cache.sh && rm -f cache.tar.gz unpack_cache.sh temp.txt", outputs = [
+  "presage/cache/data",
+  "presage/cache/splits",
+  "presage/cache/configs",
+  "presage/cache/cache/pathway_embeddings",
+  "presage/cache/cache/other_embeddings",
+] }
+
+# --- scLAMBDA (https://github.com/gefeiwang/scLAMBDA) -----------------------
+# scLAMBDA has no pyproject.toml/setup.py either — `sclambda-src`
+# (models/sclambda/vendor/sclambda-src) vendors it the same way presage-src does: fetch from
+# git at a pinned rev, copy the package verbatim onto site-packages (see its recipe.yaml).
+[feature.sclambda.system-requirements]
+cuda = "12"
+
+[feature.sclambda.dependencies]
+# sclambda-src's own recipe.yaml declares its real runtime deps (torch, scanpy, anndata,
+# scikit-learn, umap-learn, ...) as run requirements — self-describing, same convention as
+# presage-src. Nothing to redeclare here.
+sclambda-src = { path = "sclambda/vendor/sclambda-src" }
+
+[feature.sclambda.tasks]
+smoke-test = "python -c \"import torch, sclambda; from sclambda import model, networks, utils; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+# scLAMBDA's own Model class takes a `gene_embeddings: dict[str, np.array]` as input — it
+# never computes embeddings itself. Its own demo loads a precomputed pickle that traces back
+# to the GenePT project (github.com/yiqunchen/GenePT): OpenAI text-embedding-3-large
+# embeddings of NCBI gene summaries, precomputed once for ~134k gene symbols and deposited on
+# Zenodo — no OpenAI API key needed to reuse them. `outputs` makes reruns a no-op once fetched.
+fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl -fsSL -o GenePT_emebdding_v2.zip 'https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1' && unzip -o GenePT_emebdding_v2.zip && rm -f GenePT_emebdding_v2.zip", outputs = [
+  "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
+] }
+
+# --- STATE (https://github.com/ArcInstitute/state) --------------------------
+# Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
+# project (pyproject.toml, hatchling build) — a plain pypi-dependency, no vendoring needed.
+[feature.state.system-requirements]
+cuda = "12"
+
+[feature.state.dependencies]
+python = "3.11.*"
+# arc-state's own pypi torch>=2.7.0 constraint has no upper bound, so pip/uv resolves the
+# latest torch wheel — which bundles a newer CUDA runtime (cu13) than this system's driver
+# supports (RuntimeError: "The NVIDIA driver on your system is too old"). Pin torch via the
+# conda-forge pytorch-gpu package instead, same as every other feature here — it resolves
+# against system-requirements.cuda below, and pixi's pypi resolution then treats arc-state's
+# torch requirement as already satisfied rather than installing a second copy.
+pytorch-gpu = ">=2.7"
+
+[feature.state.pypi-dependencies]
+arc-state = "*"
+# arc-state declares transformers>=4.52.3 with no upper bound; pip/uv resolves the latest 5.x,
+# whose GPT2Attention no longer has a `.bias` causal-mask buffer that arc-state's own
+# GPT2BidirectionalModel wrapper (state/tx/models/utils.py) pokes directly at construction —
+# AttributeError: 'GPT2Attention' object has no attribute 'bias'. Only hit when using a
+# GPT2-backed model config (model=pertsets, needed to match the State preprint's own
+# Replogle-Nadig architecture — see models/state/train_predict.py); pin below 5 to match what
+# arc-state was actually built against.
+transformers = "<5"
+
+[feature.state.tasks]
+smoke-test = "python -c \"import torch, state; from state.tx.models.state_transition import StateTransitionPerturbationModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\" && state --help"
+
+# --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
+# tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
+# tabular foundation models on perturbation-response prediction. It also ships a separate
+# cross-cell-type "cellmatch" pipeline (NN/OT matching between source/target cell types) that
+# doesn't fit our task — `TabICLMultiviewModel` is the piece that does (see
+# models/tabicl/train_predict.py's docstring): X = a perturbed gene's embedding (reusing the
+# same PRESAGE gene-embedding cache as models/presage/cache), y = that perturbation's
+# PCA-reduced logFC, TabICL doing in-context regression from one to the other.
+# TabPFNMultiviewModel (same file, swaps in TabPFNRegressor) was tried first, but TabPFN's own
+# checkpoint download now requires accepting a license through an interactive browser flow
+# (ux.priorlabs.ai) — a `TabPFNLicenseError` with no non-interactive path here. TabICL's
+# checkpoint (`jingang/TabICL` on Hugging Face) downloads with a plain, ungated
+# `huggingface_hub.hf_hub_download` — same tabular-ICL-foundation-model idea, no gate.
+# tfm-perturbation has no PyPI release, so install straight from GitHub, pinned to a commit.
+[feature.tabicl.system-requirements]
+cuda = "12"
+
+[feature.tabicl.dependencies]
+python = "3.11.*"
+# Same reasoning as every other feature here — pin torch via conda-forge so tabicl's own
+# unpinned torch requirement resolves against a CUDA build this system's driver supports.
+pytorch-gpu = ">=2.0"
+
+[feature.tabicl.pypi-dependencies]
+tfm-perturbation = { git = "https://github.com/royerlab/tfm-perturbation.git", rev = "c7b2786c2aee946db1da442c39ad1d9bdb303d14" }
+
+[feature.tabicl.tasks]
+smoke-test = "python -c \"import torch, tabicl, tfm_perturbation; from tfm_perturbation.models.transcriptomics.tabicl_multiview import TabICLMultiviewModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
+[environments]
+gears = { features = ["gears"], no-default-feature = true }
+scgpt = { features = ["scgpt"], no-default-feature = true }
+presage = { features = ["presage"], no-default-feature = true }
+sclambda = { features = ["sclambda"], no-default-feature = true }
+state = { features = ["state"], no-default-feature = true }
+tabicl = { features = ["tabicl"], no-default-feature = true }

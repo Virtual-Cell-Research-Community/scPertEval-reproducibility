@@ -1,0 +1,57 @@
+context:
+  version: "0.1.0"
+  # Pinned commit on gefeiwang/scLAMBDA's main branch. Unlike PRESAGE this is an actual
+  # installable package (has __init__.py), but it still has no pyproject.toml/setup.py —
+  # a plain directory copy, not a `pip install`.
+  rev: "a5be849797eb26e098c7002b819a5261f51dbead"
+
+package:
+  name: sclambda-src
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/gefeiwang/scLAMBDA.git
+    rev: ${{ rev }}
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    # noarch: generic copies whatever we place under $PREFIX verbatim into every consuming
+    # environment's $PREFIX — no python-version remapping like noarch: python gets. That's
+    # fine here: this package is only ever consumed by models/pixi.toml's own `sclambda`
+    # feature, which pins python = "3.11.*" to match.
+    #
+    # rm -rf first: makes an incremental (non-clean) rebuild idempotent, same reasoning as
+    # presage-src's recipe.
+    - rm -rf "$PREFIX/lib/python3.11/site-packages/sclambda"
+    - mkdir -p "$PREFIX/lib/python3.11/site-packages"
+    - cp -r sclambda "$PREFIX/lib/python3.11/site-packages/"
+
+requirements:
+  # What sclambda/model.py, networks.py, utils.py actually import at module level.
+  # Declared here, not on the consuming `sclambda` feature in models/pixi.toml, so this
+  # package is self-describing — same convention as presage-src's recipe.
+  run:
+    - python 3.11.*
+    - pytorch-gpu
+    - scanpy
+    - anndata
+    - pandas
+    - numpy
+    - scikit-learn
+    - scipy
+    - umap-learn
+    - tqdm
+
+tests:
+  - python:
+      imports:
+        - sclambda
+        - sclambda.model
+        - sclambda.networks
+        - sclambda.utils
+
+about:
+  license: GPL-3.0-only
+  summary: Vendored gefeiwang/scLAMBDA source, fetched via git for models/sclambda's pixi feature.
