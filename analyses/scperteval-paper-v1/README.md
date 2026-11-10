@@ -1,9 +1,9 @@
 # scPertEval publication figures (v1 analysis)
 
-This directory preserves the original `scPertEval-figures` reproduction as an
-operational, pinned analysis module. New end-to-end benchmark work belongs in
-the parent `scPertEval-reproducibility` repository and should consume versioned
-prediction or result artifacts rather than extending this legacy notebook.
+This directory contains the operational, pinned reproduction of the original
+paper figures. New end-to-end benchmark work belongs in the parent repository
+and should consume versioned prediction or result artifacts rather than
+extending this legacy notebook.
 
 Reproduction of the figures from the **scPertEval** preprint:
 

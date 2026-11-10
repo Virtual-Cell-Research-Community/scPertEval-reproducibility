@@ -19,10 +19,10 @@ research artifacts.
 
 ## Layout
 
-- `models/` — imported `scPertEval-models` history, including isolated model
-  environments, training and prediction adapters, baselines, and cluster jobs.
-- `analyses/scperteval-paper-v1/` — imported history of the original
-  `scPertEval-figures` reproduction.
+- `models/` — isolated model environments, data preparation, training and
+  prediction adapters, baselines, and cluster jobs.
+- `analyses/scperteval-paper-v1/` — scripts, notebook, and reference outputs for
+  reproducing the original paper figures.
 - `configs/` — versioned dataset, model, and experiment declarations.
 - `data/` — download and raw-to-analysis workflow documentation; generated data
   are ignored.
@@ -35,12 +35,12 @@ research artifacts.
 
 ## Current status
 
-The two predecessor repositories have been combined locally with their Git
-histories intact. Their working implementations are deliberately imported under
-stable prefixes before any refactoring. The next vertical slice is Replogle K562
-essential: prepare data, freeze one fold definition, generate baseline plus one
-point and one population prediction bundle, validate those bundles, run
-scPertEval, and rebuild a sensitivity figure.
+The existing K562 model benchmark and original paper-figure workflows remain
+operational while shared artifact contracts and end-to-end orchestration are
+added. The next vertical slice is Replogle K562 essential: prepare data, freeze
+one fold definition, generate baseline plus one point and one population
+prediction bundle, validate those bundles, run scPertEval, and rebuild a
+sensitivity figure.
 
 See [the architecture](docs/architecture.md), [the initial study
 design](docs/study-design.md), and [the prediction contract](predictions/README.md).

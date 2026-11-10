@@ -26,7 +26,7 @@ validated prediction bundles out.
 
 **Implementation:** each model's native environment, training command,
 checkpoint selection, prediction conversion, and cluster resources. The model
-adapters under `models/` are real seams because the six imported models have
+adapters under `models/` are real seams because the six model implementations have
 genuinely different environments and execution paths.
 
 ### Prediction artifact module
@@ -76,8 +76,8 @@ outside this runtime graph.
 
 ## Migration rule
 
-The imported `models/` and `analyses/scperteval-paper-v1/` histories remain
-operational before they are refactored. Replace old entry points only after an
+The existing `models/` and `analyses/scperteval-paper-v1/` workflows remain
+operational while they are refactored. Replace old entry points only after an
 end-to-end vertical-slice test exists at the new artifact interfaces. The
 interface is the test surface; tests should validate observable artifacts rather
 than internal model state.
