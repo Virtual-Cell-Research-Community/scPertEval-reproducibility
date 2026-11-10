@@ -42,9 +42,3 @@ research artifacts.
 - Generated datasets, checkpoints, predictions, caches, and cluster logs are not
   committed.
 
-## Relationship to scPertEval
-
-This repository consumes a pinned `scPertEval` release or revision. Metric
-implementations belong in `scPertEval`; experiment-specific orchestration and
-paper outputs belong here.
-
