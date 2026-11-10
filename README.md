@@ -42,3 +42,14 @@ research artifacts.
 - Generated datasets, checkpoints, predictions, caches, and cluster logs are not
   committed.
 
+## Licensing
+
+This repository is not covered by a single repository-wide license. The pinned
+original-paper analysis in `analyses/scperteval-paper-v1/` is available under
+the MIT License included in that directory. Files outside explicitly licensed
+subdirectories do not currently carry a license grant. Third-party model
+implementations, pretrained weights, datasets, and other external artifacts
+remain subject to their own upstream terms. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) before running or
+redistributing model workflows.
+
