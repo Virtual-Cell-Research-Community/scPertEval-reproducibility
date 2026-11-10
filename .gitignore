@@ -1,0 +1,19 @@
+# Generated data and artifacts
+data/raw/
+data/processed/
+data/cache/
+predictions/artifacts/
+results/
+checkpoints/
+logs/
+
+# Local environments and tooling
+.venv/
+.pixi/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+.virtual_documents/
+

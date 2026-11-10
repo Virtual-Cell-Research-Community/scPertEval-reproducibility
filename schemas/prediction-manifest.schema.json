@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Virtual-Cell-Research-Community/scPertEval-reproducibility/schemas/prediction-manifest.schema.json",
+  "title": "scPertEval prediction bundle manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "prediction_id",
+    "capability",
+    "model",
+    "dataset",
+    "split",
+    "expression",
+    "artifact",
+    "provenance"
+  ],
+  "properties": {
+    "schema_version": {"const": 1},
+    "prediction_id": {"type": "string", "minLength": 1},
+    "capability": {"enum": ["point", "population"]},
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "implementation_revision", "adapter_revision"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "implementation_revision": {"type": "string", "minLength": 1},
+        "adapter_revision": {"type": "string", "minLength": 1}
+      }
+    },
+    "dataset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "manifest_sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "split": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "fold", "manifest_sha256"],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "fold": {"type": ["integer", "string"]},
+        "manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["space", "genes_sha256"],
+      "properties": {
+        "space": {
+          "enum": ["raw_counts", "normalized_expression", "log1p_expression", "effect"]
+        },
+        "genes_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "format", "sha256", "n_obs", "n_vars", "perturbation_key"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "format": {"const": "h5ad"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "n_obs": {"type": "integer", "minimum": 1},
+        "n_vars": {"type": "integer", "minimum": 1},
+        "perturbation_key": {"const": "perturbation"}
+      }
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimum_cells_per_condition"],
+      "properties": {
+        "minimum_cells_per_condition": {"type": "integer", "minimum": 2}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["seed", "environment", "command"],
+      "properties": {
+        "seed": {"type": "integer"},
+        "environment": {"type": "string", "minLength": 1},
+        "command": {"type": "string", "minLength": 1}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"capability": {"const": "population"}}},
+      "then": {"required": ["population"]},
+      "else": {"not": {"required": ["population"]}}
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  }
+}

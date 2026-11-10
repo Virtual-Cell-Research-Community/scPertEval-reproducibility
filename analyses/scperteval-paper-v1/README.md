@@ -1,4 +1,9 @@
-# scPertEval publication figures
+# scPertEval publication figures (v1 analysis)
+
+This directory preserves the original `scPertEval-figures` reproduction as an
+operational, pinned analysis module. New end-to-end benchmark work belongs in
+the parent `scPertEval-reproducibility` repository and should consume versioned
+prediction or result artifacts rather than extending this legacy notebook.
 
 Reproduction of the figures from the **scPertEval** preprint:
 
@@ -19,7 +24,7 @@ Reproduction of the figures from the **scPertEval** preprint:
 The scPertEval code lives in a separate repo:
 <https://github.com/Virtual-Cell-Research-Community/scPertEval>.
 
-This private reproducibility copy uses UV and pins scPertEval to release
+This pinned reproduction uses UV and pins scPertEval to release
 `v0.2.0` (`4685f11927e887745737600170da7a655b727553`). Set up or refresh the
 environment with:
 
@@ -31,7 +36,7 @@ uv run jupyter lab
 On Beast, keep the environment outside SDS:
 
 ```bash
-export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/scPertEval-figures"
+export UV_PROJECT_ENVIRONMENT="$HOME/.venvs/scPertEval-reproducibility-v1"
 uv sync --locked
 ```
 
