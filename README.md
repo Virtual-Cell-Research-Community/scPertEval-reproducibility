@@ -33,18 +33,6 @@ research artifacts.
 - `schemas/` — machine-readable artifact manifests.
 - `docs/` — study design and architecture decisions.
 
-## Current status
-
-The existing K562 model benchmark and original paper-figure workflows remain
-operational while shared artifact contracts and end-to-end orchestration are
-added. The next vertical slice is Replogle K562 essential: prepare data, freeze
-one fold definition, generate baseline plus one point and one population
-prediction bundle, validate those bundles, run scPertEval, and rebuild a
-sensitivity figure.
-
-See [the architecture](docs/architecture.md), [the initial study
-design](docs/study-design.md), and [the prediction contract](predictions/README.md).
-
 ## Data policy
 
 - Raw downloads are immutable and checksum-verified.
