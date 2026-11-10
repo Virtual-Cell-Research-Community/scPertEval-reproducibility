@@ -1,7 +1,7 @@
 schema_version = 1
 id = "no-change"
 title = "No-change baseline"
-capability = "point"
+capability = "population"
 modalities = ["genetic", "chemical"]
 tasks = ["unseen-perturbation", "leave-one-context-out"]
 
@@ -14,5 +14,10 @@ path = "models/baselines/baselines.py"
 environment = "root uv.lock"
 
 [prediction]
-description = "Context-matched control centroid for every held-out condition"
+description = "Context-matched control population for every held-out condition"
 seed = 42
+population_size = 120
+
+[capability_by_task]
+unseen-perturbation = "point"
+leave-one-context-out = "population"

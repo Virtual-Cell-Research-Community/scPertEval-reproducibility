@@ -122,3 +122,30 @@ cd models && sbatch --export=ALL,MODELS_DIR="$(pwd)" slurm/baselines.sbatch
 ```
 
 One non-array CPU job (`models/slurm/baselines.sbatch`).
+
+## 6. Context-transfer model views and STATE
+
+Context-transfer experiments use a combined, bounded model view produced by
+`models.data.prepare_context`. Its `obs["model_perturbation"]` is the condition
+STATE sees, while `obs["evaluation_condition"]` includes the context and is the
+identifier stored in prediction bundles.
+
+STATE uses cell-load's few-shot split rather than zero-shot splitting. Every
+treated condition in the held-out context is assigned to the test split, while
+its control cells remain available to the model. The experiment manifest also
+freezes a 10% condition subset used for cross-context validation in the
+training contexts.
+
+```bash
+cd models
+pixi run -e state python state/train_predict.py \
+  --dataset replogle-nadig-four-context-60-cell \
+  --split-manifest ../configs/experiments/replogle-nadig-four-context-60-cell.json \
+  --fold 0 \
+  --perturbation-key model_perturbation
+```
+
+The same command shape applies to `sciplex3-nine-drug-context-transfer`.
+STATE retains its native per-cell predictions. No-change and fold-mean context
+baselines emit fixed 120-cell populations so they participate in both profile
+and distributional sensitivity analyses.

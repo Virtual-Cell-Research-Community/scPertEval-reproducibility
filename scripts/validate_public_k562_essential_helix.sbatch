@@ -38,7 +38,8 @@ cd "${PROJECT_ROOT}"
 mkdir -p "data/raw/${DATASET}" "data/processed/${DATASET}" logs
 ln -sfn "${SCPERTEVAL_SOURCE_FILE}" "data/raw/${DATASET}/${FILENAME}"
 
-export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility"
+export UV_PYTHON="3.11"
+export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-py311"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"

@@ -1,7 +1,7 @@
 schema_version = 1
 id = "fold-mean"
 title = "Training-condition mean baseline"
-capability = "point"
+capability = "population"
 modalities = ["genetic", "chemical"]
 tasks = ["unseen-perturbation", "leave-one-context-out"]
 
@@ -14,5 +14,10 @@ path = "models/baselines/baselines.py"
 environment = "root uv.lock"
 
 [prediction]
-description = "Mean of training-condition centroids without test-fold leakage"
+description = "Held-out controls shifted by the mean training-context perturbation effect"
 seed = 42
+population_size = 120
+
+[capability_by_task]
+unseen-perturbation = "point"
+leave-one-context-out = "population"

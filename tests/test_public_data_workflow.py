@@ -14,6 +14,7 @@ from models.baselines.context_baselines import predict_context_baselines
 from models.data.prepare_context import prepare_context_view
 from models.data.prepare_data import prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
+from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import evaluate_bundle, matched_draw, rank_models, summarize_evaluations
 from workflows.predictions import build_prediction_manifest, expected_test_conditions
@@ -60,6 +61,8 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert genetic["perturbations"] == sorted(set(genetic["perturbations"]))
     assert genetic["n_test_populations"] == len(genetic["contexts"]) * genetic["n_perturbations"]
     assert len(genetic["folds"]) == len(genetic["contexts"]) == 4
+    assert len(genetic["validation_conditions"]) == 32
+    assert set(genetic["validation_conditions"]) <= set(genetic["perturbations"])
     assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 322 for fold in genetic["folds"])
 
     chemical = json.loads(
@@ -70,6 +73,8 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert chemical["n_population_conditions"] == 33
     assert len(chemical["population_exclusions"]) == 3
     assert len(chemical["folds"]) == len(chemical["contexts"]) == 3
+    assert len(chemical["validation_conditions"]) == 4
+    assert set(chemical["validation_conditions"]) <= set(model_conditions(chemical, capability="point"))
     for fold in chemical["folds"]:
         assert len(expected_test_conditions(chemical, fold["id"], "point")) == 36
         assert len(expected_test_conditions(chemical, fold["id"], "population")) == 33
@@ -402,3 +407,57 @@ def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_pat
     assert set(predictions) == {"no-change", "fold-mean"}
     assert predictions["no-change"].obs["perturbation"].tolist() == ["context-b::G1", "context-b::G2"]
     assert predictions["fold-mean"].shape == (2, 201)
+
+    population_predictions = predict_context_baselines(
+        result,
+        split,
+        0,
+        capability="population",
+        population_size=2,
+    )
+    for prediction in population_predictions.values():
+        assert prediction.shape == (4, 201)
+        assert prediction.obs["perturbation"].value_counts().to_dict() == {
+            "context-b::G1": 2,
+            "context-b::G2": 2,
+        }
+    np.testing.assert_allclose(
+        population_predictions["no-change"].X[:2].toarray(),
+        population_predictions["no-change"].X[2:].toarray(),
+    )
+
+
+def test_state_context_toml_retains_heldout_controls_and_relabels_predictions(tmp_path: Path) -> None:
+    split = {
+        "contexts": ["context-a", "context-b"],
+        "perturbations": ["G1", "G2"],
+        "validation_conditions": ["G1"],
+        "folds": [
+            {
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    toml_path = build_context_toml(split, 0, tmp_path / "split.toml", "example", tmp_path / "data")
+    toml = tomllib.loads(toml_path.read_text())
+    assert toml["training"] == {"example": "train"}
+    assert toml["fewshot"]["example.context-a"] == {"val": ["G1"], "test": []}
+    assert toml["fewshot"]["example.context-b"] == {"val": [], "test": ["G1", "G2"]}
+
+    prediction = AnnData(
+        X=np.ones((7, 3), dtype=np.float32),
+        obs=pd.DataFrame(
+            {
+                "cell_type": ["context-a"] * 2 + ["context-b"] * 5,
+                "perturbation": ["G1", "G1", "control", "G1", "G1", "G2", "G2"],
+            },
+            index=[f"prediction-{index}" for index in range(7)],
+        ),
+    )
+    relabeled = relabel_context_predictions(prediction, split, 0)
+    assert relabeled.shape == (4, 3)
+    assert relabeled.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G1": 2,
+        "context-b::G2": 2,
+    }

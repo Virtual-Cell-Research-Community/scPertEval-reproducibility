@@ -15,6 +15,12 @@ verifies every artifact before use, writes one canonical processed H5AD, and
 checks public regeneration against the reference artifact. The checksums are
 validation targets, not redistributed data.
 
+The root `.python-version` pins CPython 3.11, the interpreter series used for
+the validated canonical preparations (CPython 3.11.18 on Helix). This matters for exact regeneration because
+the lock contains distinct scientific-Python builds for Python 3.11 and 3.12;
+their raw counts and filtering agree, but a few derived floating-point QC
+annotations can differ at machine precision.
+
 ## CRISPRi screens
 
 The Replogle and Nadig adapters start from scPerturb v1.4 raw-count H5ADs. They

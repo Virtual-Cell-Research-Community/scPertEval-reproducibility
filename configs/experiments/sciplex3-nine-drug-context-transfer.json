@@ -11,6 +11,13 @@
   "n_drugs": 9,
   "n_point_conditions": 36,
   "n_population_conditions": 33,
+  "validation_seed": 42,
+  "validation_conditions": [
+    "Alvespimycin (17-DMAG) HCl::100nM",
+    "Flavopiridol HCl::10nM",
+    "Hesperadin::100nM",
+    "Quisinostat (JNJ-26481585) 2HCl::100nM"
+  ],
   "folds": [
     {
       "id": "holdout-a549",

@@ -170,6 +170,11 @@ import pandas as pd
 import scanpy as sc
 import torch
 
+try:
+    from .context_config import build_context_toml, relabel_context_predictions
+except ImportError:  # direct ``python state/train_predict.py`` execution from models/
+    from context_config import build_context_toml, relabel_context_predictions
+
 ad.settings.allow_write_nullable_strings = True
 
 HERE = Path(__file__).resolve().parent
@@ -221,6 +226,50 @@ def prepare_dataset(raw: Path, dataset_dir: Path, cell_type: str, num_hvgs: int)
     return out_path
 
 
+def prepare_context_dataset(
+    raw: Path,
+    dataset_dir: Path,
+    contexts: list[str],
+    num_hvgs: int,
+) -> list[Path]:
+    """Write one STATE input file per context with a shared HVG representation."""
+    outputs = [dataset_dir / f"{context}.h5ad" for context in contexts]
+    if all(path.exists() for path in outputs):
+        return outputs
+
+    adata = ad.read_h5ad(raw)
+    if "cell_type" not in adata.obs:
+        raise ValueError("context-transfer model view is missing obs['cell_type']")
+    adata.obs["gem_group"] = (
+        adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
+    )
+    observed = set(adata.obs["cell_type"].astype(str))
+    missing = sorted(set(contexts) - observed)
+    if missing:
+        raise ValueError(f"context-transfer model view is missing contexts: {', '.join(missing)}")
+
+    sc.pp.highly_variable_genes(adata, n_top_genes=num_hvgs)
+    hvg = adata[:, adata.var["highly_variable"]].X
+    hvg = hvg.toarray() if hasattr(hvg, "toarray") else np.asarray(hvg)
+    dataset_dir.mkdir(parents=True, exist_ok=True)
+    labels = adata.obs["cell_type"].astype(str).to_numpy()
+    for context, out_path in zip(contexts, outputs, strict=True):
+        if out_path.exists():
+            continue
+        mask = labels == context
+        subset = adata[mask].copy()
+        subset.obsm["X_hvg"] = hvg[mask]
+        fd, tmp_out_path = tempfile.mkstemp(
+            dir=str(dataset_dir),
+            prefix=out_path.name + ".",
+            suffix=".tmp",
+        )
+        os.close(fd)
+        subset.write_h5ad(tmp_out_path)
+        os.replace(tmp_out_path, out_path)
+    return outputs
+
+
 def build_toml(fold: dict[str, list[str]], out_path: Path, dataset_name: str, dataset_dir: Path, cell_type: str) -> Path:
     """cell-load's few-shot TOML format (see its README) — bare gene symbols, same convention
     our RAW file's obs['perturbation'] already uses, no relabeling needed."""
@@ -252,6 +301,11 @@ def main() -> None:
         help="models/data/<dataset>/{raw.h5ad,kfold_splits.json} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold in *_kfold_splits.json to train/predict on")
+    parser.add_argument(
+        "--split-manifest",
+        type=Path,
+        help="leave-one-context-out experiment JSON; switches from k-fold unseen-perturbation mode",
+    )
     parser.add_argument("--cell-type", default="K562", help="cell_type label for the dataset (default: K562)")
     parser.add_argument(
         "--perturbation-key",
@@ -324,17 +378,37 @@ def main() -> None:
     parser.add_argument("--hidden-dim", type=int, default=328, help="model.kwargs.hidden_dim (default: 328, pertsets.yaml's own default — see module docstring for why Table 3's 128 was tested and rejected)")
     args = parser.parse_args()
 
-    kfold_splits = DATA_DIR / args.dataset / "kfold_splits.json"
     dataset_dir = PERT_DATA_DIR / args.dataset
-    fold = json.loads(kfold_splits.read_text())[args.fold]
     run_name = f"{args.dataset}_fold_{args.fold}"
-
-    prepare_dataset(DATA_DIR / args.dataset / "raw.h5ad", dataset_dir, args.cell_type, args.num_hvgs)
-    # Written into pert_data/ (already gitignored via */pert_data/) rather than directly under
-    # models/state/, alongside the dataset's own h5ad — both are generated, per-fold artifacts.
-    toml_path = build_toml(
-        fold, dataset_dir.parent / f"{args.dataset}_fold_{args.fold}.toml", args.dataset, dataset_dir, args.cell_type
-    )
+    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    if args.split_manifest is None:
+        kfold_splits = DATA_DIR / args.dataset / "kfold_splits.json"
+        fold = json.loads(kfold_splits.read_text())[args.fold]
+        context_split = None
+        prepare_dataset(raw, dataset_dir, args.cell_type, args.num_hvgs)
+        toml_path = build_toml(
+            fold,
+            dataset_dir.parent / f"{args.dataset}_fold_{args.fold}.toml",
+            args.dataset,
+            dataset_dir,
+            args.cell_type,
+        )
+    else:
+        context_split = json.loads(args.split_manifest.read_text())
+        if args.dataset != context_split["id"]:
+            raise ValueError(
+                f"--dataset {args.dataset!r} must match split id {context_split['id']!r}"
+            )
+        if args.fold < 0 or args.fold >= len(context_split["folds"]):
+            raise ValueError(f"fold {args.fold} is outside the context split")
+        prepare_context_dataset(raw, dataset_dir, context_split["contexts"], args.num_hvgs)
+        toml_path = build_context_toml(
+            context_split,
+            args.fold,
+            dataset_dir.parent / f"{args.dataset}_fold_{args.fold}.toml",
+            args.dataset,
+            dataset_dir,
+        )
 
     train_overrides = [
         f"data.kwargs.toml_config_path={toml_path}",
@@ -418,9 +492,12 @@ def main() -> None:
 
     pred_path = run_output_dir / "eval_best.ckpt" / "adata_pred.h5ad"
     pred = ad.read_h5ad(pred_path)
-    # STATE yields control rows alongside the actual held-out perturbations. Keep every
-    # predicted test cell, but remove those controls from the scored prediction bundle.
-    pred = pred[pred.obs["perturbation"] != "control"].copy()
+    if context_split is None:
+        # STATE yields control rows alongside the actual held-out perturbations. Keep every
+        # predicted test cell, but remove those controls from the scored prediction bundle.
+        pred = pred[pred.obs["perturbation"] != "control"].copy()
+    else:
+        pred = relabel_context_predictions(pred, context_split, args.fold)
 
     with open(run_output_dir / "var_dims.pkl", "rb") as f:
         var_dims = pickle.load(f)

@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "id": "replogle-nadig-four-context-60-cell",
+  "dataset": "replogle-nadig-four-context-60-cell",
   "task": "leave-one-context-out",
   "models": ["state", "no-change", "fold-mean"],
   "condition_id_format": "{context}::{perturbation}",
@@ -13,6 +14,13 @@
   "minimum_treated_cells_per_context": 60,
   "n_perturbations": 322,
   "n_test_populations": 1288,
+  "validation_seed": 42,
+  "validation_conditions": [
+    "BTF3L4", "C7orf26", "CD8B", "CPSF3", "CSNK2B", "DDX54", "HIRA", "KRT17",
+    "LIN54", "MCM3", "MCMBP", "METTL3", "MTG2", "MVK", "NAA25", "OLFML3",
+    "POLR1E", "PRODH", "PSTK", "RHOQ", "RNF8", "RPL23", "RPS14", "SDC1",
+    "SETDB1", "SMC5", "SNX15", "SRP72", "TRMT112", "TSR2", "TUBB", "ZNF133"
+  ],
   "folds": [
     {
       "id": "holdout-k562-essential",
