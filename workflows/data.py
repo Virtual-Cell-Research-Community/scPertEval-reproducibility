@@ -131,8 +131,10 @@ def validate_dataset(dataset_id: str, root: Path, *, exact_checksum: bool = True
     path = processed_path(dataset_id, root)
     if not path.is_file():
         raise FileNotFoundError(path)
-    if path.stat().st_size != int(expected["size_bytes"]):
-        raise ValueError(f"unexpected output size for {path}")
+    if exact_checksum and "semantic_sha256" not in expected and path.stat().st_size != int(expected["size_bytes"]):
+        raise ValueError(
+            f"unexpected output size for {path}: got {path.stat().st_size}, expected {expected['size_bytes']}"
+        )
     prepared = ad.read_h5ad(path, backed="r")
     try:
         if prepared.shape != (int(expected["n_obs"]), int(expected["n_vars"])):
@@ -147,9 +149,16 @@ def validate_dataset(dataset_id: str, root: Path, *, exact_checksum: bool = True
     finally:
         prepared.file.close()
     if exact_checksum:
-        actual = file_checksum(path)
-        if actual != expected["sha256"]:
-            raise ValueError(f"unexpected reference-output SHA-256 for {path}: {actual}")
+        if "semantic_sha256" in expected:
+            from workflows.semantic_h5ad import semantic_h5ad_sha256
+
+            actual = semantic_h5ad_sha256(path)
+            if actual != expected["semantic_sha256"]:
+                raise ValueError(f"unexpected semantic output checksum for {path}: {actual}")
+        else:
+            actual = file_checksum(path)
+            if actual != expected["sha256"]:
+                raise ValueError(f"unexpected reference-output SHA-256 for {path}: {actual}")
     return path
 
 

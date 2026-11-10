@@ -24,6 +24,10 @@ if [[ -z "${SCPERTEVAL_SOURCE_FILE:-}" || ! -f "${SCPERTEVAL_SOURCE_FILE}" ]]; t
   echo "Set SCPERTEVAL_SOURCE_FILE to the verified public scPerturb v1.4 source H5AD." >&2
   exit 2
 fi
+if [[ -z "${SCPERTEVAL_REFERENCE_H5AD:-}" || ! -f "${SCPERTEVAL_REFERENCE_H5AD}" ]]; then
+  echo "Set SCPERTEVAL_REFERENCE_H5AD to the internal canonical H5AD used for comparison." >&2
+  exit 2
+fi
 if [[ ! -x "${UV_BIN}" ]]; then
   echo "uv is not executable at ${UV_BIN}" >&2
   exit 127
@@ -49,5 +53,9 @@ trap cleanup EXIT
 echo "[$(date -Is)] Preparing ${DATASET} with the public workflow"
 "${UV_BIN}" run --frozen python -m workflows.data prepare "${DATASET}" --force
 echo "[$(date -Is)] Comparing the regenerated file with the frozen reference checksum"
-"${UV_BIN}" run --frozen python -m workflows.data validate "${DATASET}"
-echo "[$(date -Is)] Public regeneration matched the canonical reference artifact"
+if ! "${UV_BIN}" run --frozen python -m workflows.data validate "${DATASET}"; then
+  echo "[$(date -Is)] File-level checksum differs; comparing logical AnnData content"
+fi
+"${UV_BIN}" run --frozen python -m workflows.semantic_h5ad \
+  "${OUTPUT}" "${SCPERTEVAL_REFERENCE_H5AD}"
+echo "[$(date -Is)] Public regeneration matched the canonical logical AnnData content"

@@ -14,6 +14,7 @@ from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
+from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
 DATASET_IDS = {
@@ -143,3 +144,19 @@ def test_unseen_perturbation_split_manifest_is_explicit_and_full_coverage(tmp_pa
     assert manifest["n_perturbations"] == 5
     assert manifest["model_view"]["expression_space"] == "log1p_expression"
     assert sorted(gene for fold in manifest["folds"] for gene in fold["test"]) == genes
+
+
+def test_semantic_h5ad_checksum_ignores_hdf5_compression(tmp_path: Path) -> None:
+    adata = AnnData(
+        X=sp.csr_matrix(np.array([[1, 0], [0, 2]], dtype=np.float32)),
+        obs=pd.DataFrame({"perturbation": pd.Categorical(["control", "G1"])}, index=["c1", "c2"]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    plain = tmp_path / "plain.h5ad"
+    compressed = tmp_path / "compressed.h5ad"
+    adata.write_h5ad(plain)
+    adata.write_h5ad(compressed, compression="gzip")
+
+    assert plain.read_bytes() != compressed.read_bytes()
+    assert semantic_h5ad_sha256(plain) == semantic_h5ad_sha256(compressed)
+    compare_semantic_h5ad(plain, compressed)
