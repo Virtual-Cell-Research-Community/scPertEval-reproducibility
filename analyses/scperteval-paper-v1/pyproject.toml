@@ -1,0 +1,18 @@
+[project]
+name = "scperteval-figures"
+version = "0.1.0"
+description = "Reproducible environment for the scPertEval publication figures"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "h5py>=3.11",
+  "ipykernel",
+  "jupyter-server",
+  "matplotlib",
+  "numpy>=2",
+  "pandas>=2.2.2",
+  "scipy>=1.13",
+  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@4685f11927e887745737600170da7a655b727553",
+]
+
+[tool.uv]
+package = false

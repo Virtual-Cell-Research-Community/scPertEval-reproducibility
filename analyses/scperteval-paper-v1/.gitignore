@@ -1,0 +1,12 @@
+data/
+drf_outputs/
+de_outputs/
+de_cache/
+de_cache_overestim/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+.idea/
+.virtual_documents/
+.venv/
