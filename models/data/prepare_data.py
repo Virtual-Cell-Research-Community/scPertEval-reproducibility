@@ -1,7 +1,14 @@
-"""Prepare a Miller et al. 2025-consistent raw dataset for models/, optionally reduced to a
-smoke-test scale.
+"""Prepare a Miller et al. 2025-consistent model view, optionally reduced to smoke-test scale.
 
-Loads the canonical, scPertEval-processed dataset from ``models/data/source/<source>_processed_complete.h5ad``
+The preferred public interface is ``--input /path/to/canonical/adata.h5ad``. Canonical
+PerturbationData objects keep raw counts in ``X`` and identify controls with
+``obs['is_control']``. This script creates a separate, generated model view: it applies the
+historical scPertEval cell/gene filters, normalizes each cell to 10,000 counts, applies
+``log1p``, and maps the canonical control cells to the model adapters' ``"control"`` label.
+The canonical input is never modified.
+
+For backwards compatibility, omitting ``--input`` loads the older pre-normalized object from
+``models/data/source/<source>_processed_complete.h5ad``
 — downloaded via ``docs/user-guide/datasets.md``'s ``gsutil cp gs://scperteval/processed/...``
 step directly into ``models/data/source/`` rather than the project's own top-level ``data/``
 dir, so this reproduction scaffold's data dependency is self-contained under ``models/``. It's
@@ -48,7 +55,10 @@ so a future dataset where they'd actually matter doesn't fall through unnoticed.
 
 Usage::
 
-    python models/data/prepare_data.py
+    python models/data/prepare_data.py \
+      --input data/derived/replogle-weissman-2022-k562-essential/adata.h5ad \
+      --dataset-name replogle-weissman-2022-k562-essential \
+      --compatible-models gears state
     python models/data/prepare_data.py --smoke --dataset-name smoke_k562 --n-perts 12 --cells-per-pert 100
 """
 
@@ -66,6 +76,8 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import scanpy as sc
+
+from workflows.preparation_utils import assert_raw_counts
 
 ad.settings.allow_write_nullable_strings = True
 
@@ -173,10 +185,54 @@ def sclambda_uncovered_genes(genes: set[str]) -> set[str]:
     return genes - set(genept.keys())
 
 
-def apply_miller_fixes(adata: ad.AnnData, seed: int = SEED) -> ad.AnnData:
+def prepare_canonical_raw(
+    adata: ad.AnnData,
+    *,
+    min_genes: int = 200,
+    min_cells: int = 3,
+    target_sum: float = 1e4,
+) -> ad.AnnData:
+    """Create the normalized model-input view from a canonical raw-count object.
+
+    The filtering and normalization deliberately reproduce the generic scPertEval processing
+    previously applied to the hosted ``*_processed_complete.h5ad`` files. Keeping this step
+    here, rather than in the dataset preparation workflow, preserves the registry contract
+    that canonical ``X`` always contains raw counts.
+    """
+    required_obs = {"perturbation", "is_control"}
+    missing = sorted(required_obs - set(adata.obs.columns))
+    if missing:
+        raise ValueError(f"canonical input is missing obs fields: {', '.join(missing)}")
+    assert_raw_counts(adata.X)
+
+    result = adata.copy()
+    control_mask = result.obs["is_control"].astype(bool).to_numpy()
+    if not control_mask.any():
+        raise ValueError("canonical input has no control cells")
+    if control_mask.all():
+        raise ValueError("canonical input has no perturbed cells")
+
+    perturbation = result.obs["perturbation"].astype(str).to_numpy()
+    result.obs["perturbation"] = np.where(control_mask, "control", perturbation)
+    sc.pp.filter_cells(result, min_genes=min_genes)
+    sc.pp.filter_genes(result, min_cells=min_cells)
+    sc.pp.normalize_total(result, target_sum=target_sum)
+    sc.pp.log1p(result)
+    return result
+
+
+def apply_miller_fixes(
+    adata: ad.AnnData,
+    seed: int = SEED,
+    compatible_models: set[str] | None = None,
+) -> ad.AnnData:
     """The parts of Miller et al. 2025's B.2 protocol scPertEval's own prep doesn't already
     apply — see the module docstring for what each step does and why."""
     rng = np.random.default_rng(seed)
+    if compatible_models is None:
+        # Preserve the historical six-model scaffold when callers do not opt into a selected
+        # model set. The public ranking study passes ``{"gears", "state"}`` explicitly.
+        compatible_models = {"gears", "sclambda"}
 
     pert = adata.obs["perturbation"].to_numpy()
     var_set = set(adata.var_names)
@@ -184,23 +240,28 @@ def apply_miller_fixes(adata: ad.AnnData, seed: int = SEED) -> ad.AnnData:
     adata = adata[measured].copy()
     pert = adata.obs["perturbation"].to_numpy()
 
-    # See gears_uncovered_genes() above.
-    perturbed_genes = {g for c in pert for g in _target_genes(c)}
-    uncovered = gears_uncovered_genes(perturbed_genes)
-    if uncovered:
-        print(f"dropping {len(uncovered)} perturbations GEARS' own GO reference doesn't cover: {sorted(uncovered)}")
-    covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
-    adata = adata[covered].copy()
-    pert = adata.obs["perturbation"].to_numpy()
+    if "gears" in compatible_models:
+        # See gears_uncovered_genes() above.
+        perturbed_genes = {g for c in pert for g in _target_genes(c)}
+        uncovered = gears_uncovered_genes(perturbed_genes)
+        if uncovered:
+            print(f"dropping {len(uncovered)} perturbations GEARS' own GO reference doesn't cover: {sorted(uncovered)}")
+        covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
+        adata = adata[covered].copy()
+        pert = adata.obs["perturbation"].to_numpy()
 
-    # See sclambda_uncovered_genes() above.
-    perturbed_genes = {g for c in pert for g in _target_genes(c)}
-    uncovered = sclambda_uncovered_genes(perturbed_genes)
-    if uncovered:
-        print(f"dropping {len(uncovered)} perturbations scLAMBDA's own GenePT reference doesn't cover: {sorted(uncovered)}")
-    covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
-    adata = adata[covered].copy()
-    pert = adata.obs["perturbation"].to_numpy()
+    if "sclambda" in compatible_models:
+        # See sclambda_uncovered_genes() above.
+        perturbed_genes = {g for c in pert for g in _target_genes(c)}
+        uncovered = sclambda_uncovered_genes(perturbed_genes)
+        if uncovered:
+            print(
+                f"dropping {len(uncovered)} perturbations scLAMBDA's own GenePT reference doesn't cover: "
+                f"{sorted(uncovered)}"
+            )
+        covered = np.array([not (set(_target_genes(c)) & uncovered) for c in pert])
+        adata = adata[covered].copy()
+        pert = adata.obs["perturbation"].to_numpy()
 
     counts = pd.Series(pert).value_counts()
     eligible = counts[(counts >= MIN_CELLS_PER_PERT) | (counts.index == "control")].index
@@ -210,7 +271,7 @@ def apply_miller_fixes(adata: ad.AnnData, seed: int = SEED) -> ad.AnnData:
     counts = pd.Series(pert).value_counts()
     max_cells = round(counts.drop("control", errors="ignore").mean())
     keep_idx = []
-    for cond, n in counts.items():
+    for cond in counts.index:
         idx = np.where(pert == cond)[0]
         cap = MAX_CELLS_CONTROL if cond == "control" else max_cells
         if len(idx) > cap:
@@ -266,6 +327,11 @@ def main() -> None:
         "--source", default="replogle22k562", help="data/<source>_processed_complete.h5ad to prepare (default: replogle22k562)"
     )
     parser.add_argument(
+        "--input",
+        type=Path,
+        help="canonical raw-count H5AD to prepare (preferred; overrides --source)",
+    )
+    parser.add_argument(
         "--dataset-name", default=None, help="output name under models/data/<name>/ (default: --source's value)"
     )
     parser.add_argument(
@@ -275,20 +341,31 @@ def main() -> None:
     parser.add_argument("--cells-per-pert", type=int, default=100, help="[--smoke] per-perturbation cell cap (default: 100)")
     parser.add_argument("--control-cells", type=int, default=500, help="[--smoke] control cell cap (default: 500)")
     parser.add_argument("--cell-type", default="K562", help="cell_type label to assign (default: K562)")
+    parser.add_argument(
+        "--compatible-models",
+        nargs="+",
+        choices=["gears", "state", "sclambda"],
+        default=["gears", "sclambda"],
+        help="models whose external gene references the view must satisfy (default: gears sclambda)",
+    )
     parser.add_argument("--seed", type=int, default=SEED, help=f"random seed (default: {SEED})")
     args = parser.parse_args()
 
-    source_path = SOURCE_DIR / f"{args.source}_processed_complete.h5ad"
+    source_path = args.input or SOURCE_DIR / f"{args.source}_processed_complete.h5ad"
     if not source_path.exists():
-        raise FileNotFoundError(
-            f"{source_path} missing — run `gsutil cp gs://scperteval/processed/{source_path.name} {SOURCE_DIR}/` "
-            "first (see docs/user-guide/datasets.md)"
-        )
+        raise FileNotFoundError(f"input dataset does not exist: {source_path}")
     dataset_name = args.dataset_name or args.source
     out_path = HERE / dataset_name / "raw.h5ad"
 
     adata = ad.read_h5ad(source_path)
-    adata = apply_miller_fixes(adata, seed=args.seed)
+    if args.input is not None:
+        adata = prepare_canonical_raw(adata)
+        print(f"canonical raw-count input normalized for models: {adata.shape}")
+    adata = apply_miller_fixes(
+        adata,
+        seed=args.seed,
+        compatible_models=set(args.compatible_models),
+    )
     print(f"after Miller fixes: {adata.shape}, {adata.obs['perturbation'].nunique()} perturbations")
 
     if args.smoke:

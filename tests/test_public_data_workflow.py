@@ -9,6 +9,8 @@ import pandas as pd
 import scipy.sparse as sp
 from anndata import AnnData
 
+from models.data.prepare_data import prepare_canonical_raw
+from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
@@ -99,3 +101,45 @@ def test_merge_disambiguated_gene_names_sums_duplicate_symbol_columns() -> None:
 def test_all_toml_files_parse() -> None:
     for path in MANIFEST_ROOT.glob("*.toml"):
         assert tomllib.loads(path.read_text())["id"] == path.stem
+
+
+def test_canonical_raw_model_view_maps_controls_and_normalizes_without_mutating_source() -> None:
+    source = AnnData(
+        X=sp.csr_matrix(np.array([[1, 1], [2, 0], [0, 4]], dtype=np.float32)),
+        obs=pd.DataFrame(
+            {
+                "perturbation": ["non-targeting", "G1", "G2"],
+                "is_control": [True, False, False],
+            },
+            index=["control", "g1", "g2"],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+
+    result = prepare_canonical_raw(source, min_genes=1, min_cells=1, target_sum=10)
+
+    assert source.obs["perturbation"].tolist() == ["non-targeting", "G1", "G2"]
+    assert source.X.toarray().tolist() == [[1.0, 1.0], [2.0, 0.0], [0.0, 4.0]]
+    assert result.obs["perturbation"].tolist() == ["control", "G1", "G2"]
+    expected = np.log1p(np.array([[5.0, 5.0], [10.0, 0.0], [0.0, 10.0]], dtype=np.float32))
+    np.testing.assert_allclose(result.X.toarray(), expected, rtol=1e-6)
+
+
+def test_unseen_perturbation_split_manifest_is_explicit_and_full_coverage(tmp_path: Path) -> None:
+    genes = ["G1", "G2", "G3", "G4", "G5"]
+    folds = kfold_gene_splits(genes, n_folds=5, seed=42)
+    manifest = build_split_manifest(
+        split_id="example-unseen-perturbation-5-fold",
+        dataset_id="example",
+        raw_path=tmp_path / "raw.h5ad",
+        raw_sha256="a" * 64,
+        n_obs=100,
+        n_vars=20,
+        genes=genes,
+        folds=folds,
+        seed=42,
+    )
+
+    assert manifest["n_perturbations"] == 5
+    assert manifest["model_view"]["expression_space"] == "log1p_expression"
+    assert sorted(gene for fold in manifest["folds"] for gene in fold["test"]) == genes

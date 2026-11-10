@@ -18,6 +18,8 @@ labels), so it does not need the `gears` pixi environment.
 
 Outputs, alongside the input raw.h5ad in its own models/data/<dataset>/ folder:
 - ``kfold_splits.json`` — human-readable train/val/test gene lists per fold.
+- ``split_manifest.json`` — archival declaration pinning the model-view checksum, complete
+  perturbation cohort, split parameters, and the same fold assignments.
 - ``folds/fold_<i>.pkl`` — the same split, one pickle per fold, in the
   ``{"train": [...], "val": [...], "test": [...]}`` format GEARS' own
   ``pert_data.prepare_split(split="custom", split_dict_path=...)`` expects (condition strings,
@@ -43,6 +45,8 @@ from pathlib import Path
 
 import anndata as ad
 import numpy as np
+
+from workflows.preparation_utils import file_checksum
 
 N_FOLDS = 5
 SEED = 42
@@ -78,7 +82,7 @@ def kfold_gene_splits(genes: list[str], n_folds: int = N_FOLDS, seed: int = SEED
     for test_idx in fold_bounds:
         test = shuffled[test_idx]
         remainder = np.delete(shuffled, test_idx)
-        n_val = int(round(len(remainder) * VAL_FRAC_OF_REMAINDER))
+        n_val = round(len(remainder) * VAL_FRAC_OF_REMAINDER)
         val, train = remainder[:n_val], remainder[n_val:]
         folds.append(
             {"train": sorted(train.tolist()), "val": sorted(val.tolist()), "test": sorted(test.tolist())}
@@ -111,15 +115,64 @@ def to_presage_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
     }
 
 
+def _ordered_strings_sha256(values: list[str]) -> str:
+    """Hash an ordered string sequence without depending on JSON formatting."""
+    import hashlib
+
+    digest = hashlib.sha256()
+    for value in values:
+        digest.update(value.encode())
+        digest.update(b"\n")
+    return digest.hexdigest()
+
+
+def build_split_manifest(
+    *,
+    split_id: str,
+    dataset_id: str,
+    raw_path: Path,
+    raw_sha256: str,
+    n_obs: int,
+    n_vars: int,
+    genes: list[str],
+    folds: list[dict[str, list[str]]],
+    seed: int,
+) -> dict:
+    """Build the portable, fully explicit unseen-perturbation split declaration."""
+    return {
+        "schema_version": 1,
+        "id": split_id,
+        "task": "unseen-perturbation",
+        "dataset": dataset_id,
+        "model_view": {
+            "filename": raw_path.name,
+            "sha256": raw_sha256,
+            "n_obs": n_obs,
+            "n_vars": n_vars,
+            "expression_space": "log1p_expression",
+        },
+        "seed": seed,
+        "n_folds": len(folds),
+        "validation_fraction_of_remainder": VAL_FRAC_OF_REMAINDER,
+        "n_perturbations": len(genes),
+        "perturbations_sha256": _ordered_strings_sha256(genes),
+        "perturbations": genes,
+        "folds": folds,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("raw_path", help="path to a prepared raw.h5ad (models/data/<dataset>/raw.h5ad)")
     parser.add_argument("--n-folds", type=int, default=N_FOLDS, help=f"number of CV folds (default: {N_FOLDS}, Miller's own value)")
     parser.add_argument("--seed", type=int, default=SEED, help=f"random seed (default: {SEED})")
+    parser.add_argument("--dataset-id", help="canonical dataset id (default: parent directory name)")
+    parser.add_argument("--split-id", help="split id (default: <dataset-id>-unseen-perturbation-<n>-fold)")
     args = parser.parse_args()
 
     raw_path = Path(args.raw_path)
     out_json = raw_path.parent / "kfold_splits.json"
+    out_manifest = raw_path.parent / "split_manifest.json"
     fold_dir = raw_path.parent / "folds"
 
     adata = ad.read_h5ad(raw_path)
@@ -128,6 +181,22 @@ def main() -> None:
 
     out_json.write_text(json.dumps(folds, indent=2) + "\n")
     print(f"wrote {len(folds)}-fold split over {len(genes)} genes to {out_json}")
+
+    dataset_id = args.dataset_id or raw_path.parent.name
+    split_id = args.split_id or f"{dataset_id}-unseen-perturbation-{args.n_folds}-fold"
+    manifest = build_split_manifest(
+        split_id=split_id,
+        dataset_id=dataset_id,
+        raw_path=raw_path,
+        raw_sha256=file_checksum(raw_path),
+        n_obs=adata.n_obs,
+        n_vars=adata.n_vars,
+        genes=genes,
+        folds=folds,
+        seed=args.seed,
+    )
+    out_manifest.write_text(json.dumps(manifest, indent=2) + "\n")
+    print(f"wrote frozen split manifest to {out_manifest}")
 
     fold_dir.mkdir(parents=True, exist_ok=True)
     for i, fold in enumerate(folds):

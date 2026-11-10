@@ -41,20 +41,31 @@ pixi run -e <model> smoke-test
 
 ## 2. Prepare a dataset (one-time per dataset)
 
+The ranking-sensitivity study starts from the public canonical raw-count objects produced by
+`workflows.data`. Model preparation writes a separate normalized/log1p view under
+`models/data/`; it never changes the canonical file.
+
 ```bash
-# fetch the source h5ad (see docs/user-guide/datasets.md for the full dataset list)
-gsutil cp gs://scperteval/processed/replogle22k562_processed_complete.h5ad data/source/
+# Apply the model-only normalization and Miller-consistent preparation. The selected public
+# study models are GEARS and STATE, so only GEARS' external gene reference constrains the
+# shared perturbation cohort.
+uv run python models/data/prepare_data.py \
+  --input data/processed/replogle-weissman-2022-k562-essential/adata.h5ad \
+  --dataset-name replogle-weissman-2022-k562-essential \
+  --cell-type K562 \
+  --compatible-models gears state
 
-# apply the Miller-consistent prep (drop uncovered perturbations, downsample, HVG panel)
-pixi run -e gears python data/prepare_data.py --source replogle22k562
-
-# 5-fold split
-pixi run -e gears python data/prepare_split.py data/replogle22k562/raw.h5ad
+# Freeze the five-fold split and its checksum-bearing archival manifest.
+uv run python models/data/prepare_split.py \
+  models/data/replogle-weissman-2022-k562-essential/raw.h5ad \
+  --dataset-id replogle-weissman-2022-k562-essential
 ```
 
-Add `--smoke` to `prepare_data.py` for a small, fast smoke-scale subsample instead (writes to
-`data/smoke_k562/` by default) — useful for checking a change end-to-end before committing to
-a full-scale run.
+The older `--source replogle22k562` interface remains available only for reproducing the
+legacy hosted, already-normalized object.
+
+Add `--smoke` to `prepare_data.py` for a small, fast smoke-scale subsample instead — useful for
+checking a change end-to-end before committing to a full-scale run.
 
 Either script can be run from any model's environment — they only need the standard
 scientific-Python stack, nothing model-specific.

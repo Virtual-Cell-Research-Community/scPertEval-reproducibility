@@ -26,11 +26,11 @@ Replogle-Nadig") with a few deliberate deviations:
   gears/scgpt/presage/sclambda's predictions.h5ad (all four score across the full panel);
   "all" is an equally official, first-class mode of the same CLI, just not the one the Colab
   happens to demo.
-- `state tx predict` is run with `--predict-only --pseudobulk` rather than the Colab's bare
-  invocation (which also runs STATE's own internal cell-eval metrics suite). scPertEval scores
-  raw predictions itself downstream — same reasoning as PRESAGE's `training.eval_test=False` —
-  and `--pseudobulk` aggregates to one row per (cell_type, perturbation), matching every other
-  model's predictions.h5ad convention (STATE predicts per-cell by default).
+- `state tx predict` is run with `--predict-only` rather than the Colab's bare invocation
+  (which also runs STATE's own internal cell-eval metrics suite). STATE's native per-cell
+  predictions are retained. The evaluation workflow can average those rows for point metrics,
+  while the same fixed artifact remains eligible for population metrics; pseudobulking here
+  would irreversibly discard that information.
 - `model=pertsets` (the repo's current GPT2-backed preset) is used as the architecture base
   rather than the Colab's `model=state` (LLaMA-backed). The preprint's own Table 3 gives a
   "Replogle-Nadig" calibration matching `pertsets.yaml` on every field except `hidden_dim`
@@ -405,16 +405,14 @@ def main() -> None:
             "--checkpoint",
             "best.ckpt",
             "--predict-only",
-            "--pseudobulk",
         ],
         check=True,
     )
 
     pred_path = run_output_dir / "eval_best.ckpt" / "adata_pred.h5ad"
     pred = ad.read_h5ad(pred_path)
-    # --pseudobulk aggregates by (context, perturbation) and, with should_yield_control_cells
-    # defaulting to true, includes a "control" group alongside the actual test genes — drop
-    # it, matching gears/scgpt/presage/sclambda's convention of one row per test perturbation.
+    # STATE yields control rows alongside the actual held-out perturbations. Keep every
+    # predicted test cell, but remove those controls from the scored prediction bundle.
     pred = pred[pred.obs["perturbation"] != "control"].copy()
 
     with open(run_output_dir / "var_dims.pkl", "rb") as f:
@@ -422,7 +420,7 @@ def main() -> None:
 
     out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
     pred_adata = ad.AnnData(
-        X=np.asarray(pred.X, dtype=np.float32),
+        X=pred.X.astype(np.float32),
         obs={"perturbation": pred.obs["perturbation"].to_numpy()},
     )
     pred_adata.var_names = pd.Index(np.asarray(var_dims["gene_names"]))
