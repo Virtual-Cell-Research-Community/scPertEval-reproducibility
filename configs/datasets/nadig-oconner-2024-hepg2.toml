@@ -1,0 +1,30 @@
+schema_version = 1
+id = "nadig-oconner-2024-hepg2"
+title = "Nadig 2025 HepG2 CRISPRi screen"
+citation = "Nadig et al. Nature Genetics (2025). DOI: 10.1038/s41588-025-02169-3"
+license = "CC-BY-4.0"
+
+[source]
+filename = "NadigOConner2024_hepg2.h5ad"
+url = "https://zenodo.org/api/records/13350497/files/NadigOConner2024_hepg2.h5ad/content"
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+size_bytes = 850590740
+checksum_type = "md5"
+checksum = "af2be47f7477cf32fa6e4bec1c6a4868"
+
+[preparation]
+adapter = "scperturb-crispri"
+merge_disambiguated = true
+filter_residual_expression = true
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "guide_target", "n_guides"]
+
+[reference_output]
+n_obs = 133156
+n_vars = 9623
+size_bytes = 4409081489
+sha256 = "94528b99e3a9e13b8fd9977ff56de27396cb6f1e051fa5ff2c3e5522ab944066"
+

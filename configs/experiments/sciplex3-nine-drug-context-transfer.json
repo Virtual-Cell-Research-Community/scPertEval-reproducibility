@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "sciplex3-nine-drug-context-transfer",
+  "task": "leave-one-context-out",
+  "dataset": "srivatsan-trapnell-2020-sciplex3",
+  "contexts": ["A549", "K562", "MCF7"],
+  "dose_unit": "nM",
+  "doses": [10.0, 100.0, 1000.0, 10000.0],
+  "n_drugs": 9,
+  "n_point_conditions": 36,
+  "n_population_conditions": 33,
+  "population_minimum_cells_per_context": 60,
+  "drugs": [
+    {"label": "Alvespimycin", "canonical_label": "Alvespimycin (17-DMAG) HCl"},
+    {"label": "Belinostat", "canonical_label": "Belinostat (PXD101)"},
+    {"label": "Dacinostat", "canonical_label": "Dacinostat (LAQ824)"},
+    {"label": "Flavopiridol", "canonical_label": "Flavopiridol HCl"},
+    {"label": "Givinostat", "canonical_label": "Givinostat (ITF2357)"},
+    {"label": "Hesperadin", "canonical_label": "Hesperadin"},
+    {"label": "Quisinostat", "canonical_label": "Quisinostat (JNJ-26481585) 2HCl"},
+    {"label": "TAK901", "canonical_label": "TAK-901"},
+    {"label": "Tanespimycin", "canonical_label": "Tanespimycin (17-AAG)"}
+  ],
+  "population_exclusions": [
+    {"drug": "Alvespimycin", "dose": 10000.0, "reason": "MCF7 has 26 cells"},
+    {"drug": "Flavopiridol", "dose": 1000.0, "reason": "K562 has 35 cells and MCF7 has 43 cells"},
+    {"drug": "Flavopiridol", "dose": 10000.0, "reason": "K562 has 29 cells and MCF7 has 27 cells"}
+  ],
+  "upstream_task_reference": "https://bm2-lab.github.io/scPerturBench-reproducibility/Task_Cellular_ood_Dataset_Sciplex3_Accuracy.html"
+}

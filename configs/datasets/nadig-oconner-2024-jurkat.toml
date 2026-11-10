@@ -1,0 +1,30 @@
+schema_version = 1
+id = "nadig-oconner-2024-jurkat"
+title = "Nadig 2025 Jurkat CRISPRi screen"
+citation = "Nadig et al. Nature Genetics (2025). DOI: 10.1038/s41588-025-02169-3"
+license = "CC-BY-4.0"
+
+[source]
+filename = "NadigOConner2024_jurkat.h5ad"
+url = "https://zenodo.org/api/records/13350497/files/NadigOConner2024_jurkat.h5ad/content"
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+size_bytes = 1293665804
+checksum_type = "md5"
+checksum = "d8b05d00bfbd686d37ffdd4293bc6c8c"
+
+[preparation]
+adapter = "scperturb-crispri"
+merge_disambiguated = true
+filter_residual_expression = true
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "guide_target", "n_guides"]
+
+[reference_output]
+n_obs = 238882
+n_vars = 8881
+size_bytes = 6692027201
+sha256 = "0d514a4c5f7fcff6872fa170b5dc877f55bf33531e3cc8ea95c1889548e2f2fa"
+

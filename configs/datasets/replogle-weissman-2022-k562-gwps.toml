@@ -1,0 +1,30 @@
+schema_version = 1
+id = "replogle-weissman-2022-k562-gwps"
+title = "Replogle 2022 K562 genome-wide CRISPRi screen"
+citation = "Replogle et al. Cell 185, 2559–2575.e28 (2022). DOI: 10.1016/j.cell.2022.05.013"
+license = "CC-BY-4.0"
+
+[source]
+filename = "ReplogleWeissman2022_K562_gwps.h5ad"
+url = "https://zenodo.org/api/records/13350497/files/ReplogleWeissman2022_K562_gwps.h5ad/content"
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+size_bytes = 8805466154
+checksum_type = "md5"
+checksum = "13db594f8f1d2ccb88fec44a13e414dc"
+
+[preparation]
+adapter = "scperturb-crispri"
+merge_disambiguated = false
+filter_residual_expression = true
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "guide_target", "n_guides"]
+
+[reference_output]
+n_obs = 1814089
+n_vars = 8248
+size_bytes = 69092368990
+sha256 = "b3456b45fe2226902151a9d075c48b97d9d7f93b156c4fad7d5b2adbbe70397d"
+

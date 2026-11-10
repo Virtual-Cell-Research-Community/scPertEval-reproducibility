@@ -1,0 +1,30 @@
+schema_version = 1
+id = "replogle-weissman-2022-rpe1"
+title = "Replogle 2022 RPE1 essential-gene CRISPRi screen"
+citation = "Replogle et al. Cell 185, 2559–2575.e28 (2022). DOI: 10.1016/j.cell.2022.05.013"
+license = "CC-BY-4.0"
+
+[source]
+filename = "ReplogleWeissman2022_rpe1.h5ad"
+url = "https://zenodo.org/api/records/13350497/files/ReplogleWeissman2022_rpe1.h5ad/content"
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+size_bytes = 1236886900
+checksum_type = "md5"
+checksum = "cc7f1ec50aeb3a3e1b4a6cfa713d80fa"
+
+[preparation]
+adapter = "scperturb-crispri"
+merge_disambiguated = false
+filter_residual_expression = false
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "guide_target", "n_guides"]
+
+[reference_output]
+n_obs = 247432
+n_vars = 8749
+size_bytes = 6967837567
+sha256 = "1535b8a5068700855850bc6d7a325356779458a3800baf232eaccfa3b21a6313"
+

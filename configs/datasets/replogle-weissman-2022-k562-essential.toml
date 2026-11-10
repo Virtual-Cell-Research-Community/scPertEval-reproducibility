@@ -1,0 +1,30 @@
+schema_version = 1
+id = "replogle-weissman-2022-k562-essential"
+title = "Replogle 2022 K562 essential-gene CRISPRi screen"
+citation = "Replogle et al. Cell 185, 2559–2575.e28 (2022). DOI: 10.1016/j.cell.2022.05.013"
+license = "CC-BY-4.0"
+
+[source]
+filename = "ReplogleWeissman2022_K562_essential.h5ad"
+url = "https://zenodo.org/api/records/13350497/files/ReplogleWeissman2022_K562_essential.h5ad/content"
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+size_bytes = 1546729675
+checksum_type = "md5"
+checksum = "d8cba17576d1a8afc0f7d71b79cad0f7"
+
+[preparation]
+adapter = "scperturb-crispri"
+merge_disambiguated = false
+filter_residual_expression = true
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "guide_target", "n_guides"]
+
+[reference_output]
+n_obs = 267974
+n_vars = 8563
+size_bytes = 7724749915
+sha256 = "7e9a4ab48f60de0b7cacb88224dad0145347f95a86a68db9cddfbb8a9c50c216"
+

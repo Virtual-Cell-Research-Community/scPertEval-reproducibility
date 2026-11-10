@@ -1,0 +1,28 @@
+schema_version = 1
+id = "srivatsan-trapnell-2020-sciplex3"
+title = "Srivatsan and Trapnell 2020 sci-Plex3 chemical screen"
+citation = "Srivatsan et al. Science 367, 45–51 (2020). DOI: 10.1126/science.aax6234"
+license = "not-specified"
+
+[source]
+record = "10.5281/zenodo.13350497"
+version = "1.4"
+artifacts = [
+  { name = "SrivatsanTrapnell2020_sciplex3.h5ad", url = "https://zenodo.org/api/records/13350497/files/SrivatsanTrapnell2020_sciplex3.h5ad/content", size_bytes = 2526631614, checksum_type = "md5", checksum = "c9e70629505d98c7ca1a837f62b14e89" },
+  { name = "Supplementary_Table_3.txt", url = "https://raw.githubusercontent.com/cole-trapnell-lab/sci-plex/6bab132d9f7efe677d4b02cdc1c56890ec946812/large_screen/bin/Supplementary_Table_3.txt", size_bytes = 966644, checksum_type = "md5", checksum = "7b0f4d68a40283f904f3557b773f15de" },
+  { name = "l1000_sciChem.tsv", url = "https://raw.githubusercontent.com/cole-trapnell-lab/sci-plex/6bab132d9f7efe677d4b02cdc1c56890ec946812/large_screen/bin/l1000_sciChem.tsv", size_bytes = 2433, checksum_type = "md5", checksum = "6b64e0b1603cbf1f6a37e0678512ee4e" },
+]
+
+[preparation]
+adapter = "sciplex3"
+compression = "gzip"
+
+[contract]
+x = "raw_counts"
+required_obs = ["perturbation", "is_control", "cell_line", "dose", "inchikey"]
+
+[reference_output]
+n_obs = 762795
+n_vars = 110983
+size_bytes = 2360776870
+sha256 = "309ff9921b3522407ad0916922646c02fe0b496fa67984fab1b3b0289025a3bd"
