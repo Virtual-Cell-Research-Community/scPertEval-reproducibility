@@ -16,8 +16,6 @@ research artifacts.
 |---|---|
 | `scPertEval` | Public evaluation package and metric implementations |
 | `scPertEval-reproducibility` | Data preparation, splits, model execution, prediction artifacts, paper analyses and figures |
-| `internal evidence workflow` | Internal evidence and design work; never a runtime dependency |
-| `internal data workflow` | Internal reusable data registry; never a public runtime dependency |
 
 ## Layout
 
@@ -51,7 +49,7 @@ design](docs/study-design.md), and [the prediction contract](predictions/README.
 
 - Raw downloads are immutable and checksum-verified.
 - Processed datasets and splits have versioned manifests and checksums.
-- Public processing code must run without importing `internal data workflow`.
+- Public processing code must be self-contained and must not require private repositories.
 - Files copied or reimplemented from internal workflows record their provenance.
 - Generated datasets, checkpoints, predictions, caches, and cluster logs are not
   committed.

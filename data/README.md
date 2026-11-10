@@ -12,8 +12,8 @@ Each supported dataset will have:
 5. explicit split files containing condition identifiers; and
 6. a small smoke fixture or metadata-only test where licensing permits.
 
-`internal data workflow` may be the development source for an adapter, but published
-workflows must not import it or assume its filesystem layout.
+Internal workflows may inform an adapter, but published workflows must be
+self-contained and must not assume a private filesystem layout.
 
 The existing K562-essential preparation and split implementation currently
 lives under `models/data/`; it will be migrated behind this interface only after

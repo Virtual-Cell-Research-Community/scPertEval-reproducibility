@@ -66,8 +66,8 @@ uncertainty.
 
 - Raw datasets are downloaded from authoritative sources and are not
   redistributed.
-- Public scripts reproduce raw-to-analysis processing without requiring the
-  private internal data workflow repository.
+- Public scripts reproduce raw-to-analysis processing without requiring private
+  repositories.
 - Exact model and baseline predictions are archived in a versioned Zenodo
   record, partitioned by dataset and model if needed.
 - Figures consume versioned predictions or tidy result tables, never private

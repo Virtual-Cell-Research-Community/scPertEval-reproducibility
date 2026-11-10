@@ -71,8 +71,8 @@ model adapters ─────────────→ prediction bundles
                        paper analyses/figures
 ```
 
-`internal evidence workflow` and `internal data workflow` inform development but sit outside this
-runtime graph.
+Internal evidence and data-management systems may inform development but sit
+outside this runtime graph.
 
 ## Migration rule
 
