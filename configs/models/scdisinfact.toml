@@ -20,6 +20,7 @@ lockfile = "models/pixi.lock"
 space = "raw_counts"
 perturbation_conditioning = "one joint categorical condition factor"
 context_conditioning = "batch factor with held-out controls available"
+joint_mmd_reference_policy = "use the requested reference when represented; otherwise use the first represented context; zero when fewer than two contexts are represented"
 
 [training]
 seeds = [42, 43, 44]

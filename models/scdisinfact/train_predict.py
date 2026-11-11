@@ -22,6 +22,7 @@ from models.scdisinfact.context_config import (
     select_heldout_controls,
     select_scdisinfact_training_data,
 )
+from models.scdisinfact.joint_patch import apply_joint_condition_mmd_patch
 from models.state.context_config import model_conditions
 from workflows.predictions import build_prediction_manifest
 from workflows.run_contract import begin_run, complete_run, repository_revision
@@ -206,6 +207,8 @@ def main() -> None:
         return
 
     import scDisInFact
+
+    apply_joint_condition_mmd_patch()
 
     full_counts = ad.read_h5ad(counts_path)
     training = select_scdisinfact_training_data(
