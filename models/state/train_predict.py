@@ -175,7 +175,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from workflows.predictions import build_prediction_manifest
-from workflows.run_contract import begin_run, complete_run, repository_revision
+from workflows.run_contract import begin_run, complete_run, repository_revision, resume_incomplete_run
 
 try:
     from .context_config import build_context_toml, relabel_context_predictions
@@ -389,6 +389,14 @@ def main() -> None:
         type=Path,
         help="prepared model-view manifest (default: raw.manifest.json when present)",
     )
+    parser.add_argument(
+        "--postprocess-existing",
+        action="store_true",
+        help=(
+            "reuse an incomplete run's existing STATE predictions and preserve its original "
+            "training provenance; never trains or predicts"
+        ),
+    )
     parser.add_argument("--force", action="store_true", help="rerun even if a verified completion record exists")
     args = parser.parse_args()
 
@@ -430,28 +438,37 @@ def main() -> None:
     data_manifest = args.data_manifest or raw.with_suffix(".manifest.json")
     if not data_manifest.is_file():
         data_manifest = split_manifest_path
-    handle = begin_run(
-        args.runs_root,
-        experiment=args.dataset,
-        model="state",
-        fold=fold_id,
-        seed=args.seed,
-        configuration={
-            "num_hvgs": args.num_hvgs,
-            "max_steps": args.max_steps,
-            "val_freq": args.val_freq,
-            "early_stop_patience": args.early_stop_patience,
-            "batch_size": args.batch_size,
-            "lr": args.lr,
-            "cell_set_len": args.cell_set_len,
-            "hidden_dim": args.hidden_dim,
-            "perturbation_key": args.perturbation_key,
-        },
-        inputs={"model_view_manifest": data_manifest, "split_manifest": split_manifest_path},
-        command=[sys.executable, *sys.argv],
-        repo_root=ROOT,
-        force=args.force,
-    )
+    if args.postprocess_existing:
+        handle = resume_incomplete_run(
+            args.runs_root,
+            experiment=args.dataset,
+            model="state",
+            fold=fold_id,
+            seed=args.seed,
+        )
+    else:
+        handle = begin_run(
+            args.runs_root,
+            experiment=args.dataset,
+            model="state",
+            fold=fold_id,
+            seed=args.seed,
+            configuration={
+                "num_hvgs": args.num_hvgs,
+                "max_steps": args.max_steps,
+                "val_freq": args.val_freq,
+                "early_stop_patience": args.early_stop_patience,
+                "batch_size": args.batch_size,
+                "lr": args.lr,
+                "cell_set_len": args.cell_set_len,
+                "hidden_dim": args.hidden_dim,
+                "perturbation_key": args.perturbation_key,
+            },
+            inputs={"model_view_manifest": data_manifest, "split_manifest": split_manifest_path},
+            command=[sys.executable, *sys.argv],
+            repo_root=ROOT,
+            force=args.force,
+        )
     if handle.skipped:
         print(f"skipping verified completed run: {handle.directory}")
         return
@@ -493,7 +510,48 @@ def main() -> None:
     train_env = os.environ.copy()
     train_env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(PATCH_DIR), train_env.get("PYTHONPATH")]))
     train_env["STATE_EARLY_STOP_PATIENCE"] = str(args.early_stop_patience)
-    subprocess.run(["state", "tx", "train", *train_overrides], check=True, env=train_env)
+    pred_path = run_output_dir / "eval_best.ckpt" / "adata_pred.h5ad"
+    if args.postprocess_existing and not pred_path.is_file():
+        raise FileNotFoundError(f"incomplete run has no STATE predictions to post-process: {pred_path}")
+    if not pred_path.is_file():
+        subprocess.run(["state", "tx", "train", *train_overrides], check=True, env=train_env)
+
+        # state tx predict deserializes this saved PerturbationDataModule config (a plain dict —
+        # cell_load's own PerturbationDataModule.save_state()/load_state()) rather than
+        # rebuilding the data module from config.yaml, so whatever num_workers training used
+        # is inherited unchanged (see the --num-workers override above). Confirmed empirically
+        # on the real full-scale data: num_workers=4 (this script's own default) deadlocks state
+        # tx predict indefinitely (0% GPU utilization, no CPU progress) — a full-scale instance
+        # of the same dataloader-worker deadlock already documented at smoke scale for
+        # num_workers=12. Training itself is unaffected by this (runs fine at num_workers=4), so
+        # rather than dropping num_workers to 0 for training too (and losing real throughput
+        # there), patch just the saved dict's num_workers to 0 before predict loads it.
+        data_module_path = run_output_dir / "data_module.torch"
+        data_module_state = torch.load(data_module_path, map_location="cpu")
+        data_module_state["num_workers"] = 0
+        torch.save(data_module_state, data_module_path)
+
+        subprocess.run(
+            [
+                "state",
+                "tx",
+                "predict",
+                "--output-dir",
+                str(run_output_dir),
+                # best.ckpt (the val_loss-monitored ModelCheckpoint callback, see
+                # get_checkpoint_callbacks in state's own tx/utils/__init__.py) rather than
+                # final.ckpt (an unconditional snapshot taken right after training ends,
+                # whatever step that happened to be) — matches gears/scLAMBDA/PRESAGE's own
+                # convention of predicting with the best validation checkpoint, not the last
+                # one.
+                "--checkpoint",
+                "best.ckpt",
+                "--predict-only",
+            ],
+            check=True,
+        )
+    else:
+        print(f"reusing existing STATE predictions: {pred_path}")
 
     # Lightning's CSVLogger already writes everything needed (val_loss/train_loss/step/epoch)
     # to run_output_dir/version_0/metrics.csv — just relocate it to match predictions/ and
@@ -507,48 +565,20 @@ def main() -> None:
     metrics_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(metrics_src, metrics_dst)
 
-    # state tx predict deserializes this saved PerturbationDataModule config (a plain dict —
-    # cell_load's own PerturbationDataModule.save_state()/load_state()) rather than rebuilding
-    # the data module from config.yaml, so whatever num_workers training used is inherited
-    # unchanged (see the --num-workers override above). Confirmed empirically on the real
-    # full-scale data: num_workers=4 (this script's own default) deadlocks state tx predict
-    # indefinitely (0% GPU utilization, no CPU progress) — a full-scale instance of the same
-    # dataloader-worker deadlock already documented at smoke scale for num_workers=12. Training
-    # itself is unaffected by this (runs fine at num_workers=4), so rather than dropping
-    # num_workers to 0 for training too (and losing real throughput there), patch just the
-    # saved dict's num_workers to 0 before predict loads it.
-    data_module_path = run_output_dir / "data_module.torch"
-    data_module_state = torch.load(data_module_path, map_location="cpu")
-    data_module_state["num_workers"] = 0
-    torch.save(data_module_state, data_module_path)
-
-    subprocess.run(
-        [
-            "state",
-            "tx",
-            "predict",
-            "--output-dir",
-            str(run_output_dir),
-            # best.ckpt (the val_loss-monitored ModelCheckpoint callback, see
-            # get_checkpoint_callbacks in state's own tx/utils/__init__.py) rather than
-            # final.ckpt (an unconditional snapshot taken right after training ends,
-            # whatever step that happened to be) — matches gears/scLAMBDA/PRESAGE's own
-            # convention of predicting with the best validation checkpoint, not the last one.
-            "--checkpoint",
-            "best.ckpt",
-            "--predict-only",
-        ],
-        check=True,
-    )
-
-    pred_path = run_output_dir / "eval_best.ckpt" / "adata_pred.h5ad"
     pred = ad.read_h5ad(pred_path)
     if context_split is None:
         # STATE yields control rows alongside the actual held-out perturbations. Keep every
         # predicted test cell, but remove those controls from the scored prediction bundle.
-        pred = pred[pred.obs["perturbation"] != "control"].copy()
+        labels = pred.obs[args.perturbation_key].astype(str)
+        pred = pred[labels != "control"].copy()
+        pred.obs["perturbation"] = pred.obs[args.perturbation_key].astype(str)
     else:
-        pred = relabel_context_predictions(pred, context_split, args.fold)
+        pred = relabel_context_predictions(
+            pred,
+            context_split,
+            args.fold,
+            perturbation_key=args.perturbation_key,
+        )
 
     with open(run_output_dir / "var_dims.pkl", "rb") as f:
         var_dims = pickle.load(f)

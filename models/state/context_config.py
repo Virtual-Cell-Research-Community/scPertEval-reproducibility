@@ -88,17 +88,20 @@ def relabel_context_predictions(
     fold: int,
     *,
     capability: str = "population",
+    perturbation_key: str = "perturbation",
 ) -> ad.AnnData:
     """Keep held-out-context predictions and assign archival evaluation identifiers."""
     fold_spec = _fold(split, fold)
     test_context = str(fold_spec["test_context"])
     if "cell_type" not in prediction.obs:
         raise ValueError("STATE context predictions are missing obs['cell_type']")
-    labels = prediction.obs["perturbation"].astype(str)
+    if perturbation_key not in prediction.obs:
+        raise ValueError(f"STATE context predictions are missing obs[{perturbation_key!r}]")
+    labels = prediction.obs[perturbation_key].astype(str)
     allowed = set(model_conditions(split, capability=capability))
     mask = (prediction.obs["cell_type"].astype(str) == test_context) & labels.isin(allowed)
     result = prediction[mask].copy()
-    result.obs["perturbation"] = test_context + "::" + result.obs["perturbation"].astype(str)
+    result.obs["perturbation"] = test_context + "::" + result.obs[perturbation_key].astype(str)
     observed = set(result.obs["perturbation"].astype(str))
     expected = {f"{test_context}::{condition}" for condition in allowed}
     if observed != expected:

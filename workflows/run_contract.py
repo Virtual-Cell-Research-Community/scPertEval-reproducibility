@@ -157,6 +157,34 @@ def begin_run(
     return RunHandle(directory=directory, resolved_sha256=resolved_sha256, skipped=False)
 
 
+def resume_incomplete_run(
+    root: Path,
+    *,
+    experiment: str,
+    model: str,
+    fold: str | int,
+    seed: int,
+) -> RunHandle:
+    """Resume post-processing against an existing run without rewriting its provenance."""
+    directory = run_directory(
+        root,
+        experiment=experiment,
+        model=model,
+        fold=fold,
+        seed=seed,
+    )
+    resolved = directory / "resolved-run.json"
+    if not resolved.is_file():
+        raise FileNotFoundError(f"run has no resolved provenance to resume: {resolved}")
+    if completed_run_is_valid(directory):
+        raise ValueError(f"run is already complete: {directory}")
+    return RunHandle(
+        directory=directory,
+        resolved_sha256=file_checksum(resolved),
+        skipped=False,
+    )
+
+
 def complete_run(handle: RunHandle, artifacts: dict[str, Path]) -> Path:
     """Write the completion marker last, after checksumming every required artifact."""
     if handle.skipped:

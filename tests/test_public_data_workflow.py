@@ -29,7 +29,13 @@ from workflows.evaluate import (
 from workflows.predictions import build_prediction_manifest, expected_test_conditions, validate_prediction_h5ad
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
-from workflows.run_contract import begin_run, complete_run, completed_run_is_valid, run_directory
+from workflows.run_contract import (
+    begin_run,
+    complete_run,
+    completed_run_is_valid,
+    resume_incomplete_run,
+    run_directory,
+)
 from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -354,6 +360,36 @@ def test_run_contract_skips_only_checksum_valid_completed_runs(tmp_path: Path) -
     prediction.write_bytes(b"tampered")
     third = begin_run(root, **kwargs)
     assert not third.skipped
+
+
+def test_run_contract_resumes_incomplete_run_without_rewriting_provenance(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.json"
+    input_path.write_text('{"frozen": true}\n')
+    root = tmp_path / "runs"
+    first = begin_run(
+        root,
+        experiment="experiment",
+        model="model",
+        fold="holdout-a",
+        seed=42,
+        configuration={"epochs": 1},
+        inputs={"input": input_path},
+        command=["python", "runner.py"],
+        repo_root=ROOT,
+    )
+    provenance = (first.directory / "resolved-run.json").read_bytes()
+
+    resumed = resume_incomplete_run(
+        root,
+        experiment="experiment",
+        model="model",
+        fold="holdout-a",
+        seed=42,
+    )
+
+    assert resumed.directory == first.directory
+    assert resumed.resolved_sha256 == first.resolved_sha256
+    assert (first.directory / "resolved-run.json").read_bytes() == provenance
 
 
 def test_population_prediction_archive_rejects_more_than_100_cells(tmp_path: Path) -> None:
@@ -769,6 +805,19 @@ def test_state_context_toml_retains_heldout_controls_and_relabels_predictions(tm
     relabeled = relabel_context_predictions(prediction, split, 0)
     assert relabeled.shape == (4, 3)
     assert relabeled.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G1": 2,
+        "context-b::G2": 2,
+    }
+
+    model_key_prediction = prediction.copy()
+    model_key_prediction.obs["model_perturbation"] = model_key_prediction.obs.pop("perturbation")
+    relabeled_model_key = relabel_context_predictions(
+        model_key_prediction,
+        split,
+        0,
+        perturbation_key="model_perturbation",
+    )
+    assert relabeled_model_key.obs["perturbation"].value_counts().to_dict() == {
         "context-b::G1": 2,
         "context-b::G2": 2,
     }
