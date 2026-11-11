@@ -47,8 +47,9 @@ def run_directory(
 
 
 def repository_revision(cwd: Path | None = None) -> str:
+    safe_directory = str((cwd or Path.cwd()).resolve())
     result = subprocess.run(
-        ["git", "rev-parse", "HEAD"],
+        ["git", "-c", f"safe.directory={safe_directory}", "rev-parse", "HEAD"],
         cwd=cwd,
         check=True,
         capture_output=True,
