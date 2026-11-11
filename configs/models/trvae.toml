@@ -1,0 +1,40 @@
+schema_version = 1
+id = "trvae"
+title = "trVAE"
+capability = "population"
+modalities = ["genetic", "chemical"]
+tasks = ["leave-one-context-out"]
+
+[implementation]
+repository = "https://github.com/theislab/trvaep"
+revision = "8bfe2dc1553dc1a536113cffbe428d3eb9c96579"
+reference = "official PyTorch implementation with scArchon architecture and training configuration"
+
+[adapter]
+path = "models/trvae/train_predict.py"
+environment = "models/pixi.toml#trvae"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "one joint categorical condition across all perturbations"
+context_conditioning = "implicit in source-cell expression with held-out controls available"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 200
+batch_size = 512
+latent_dim = 10
+encoder_layers = [128, 32]
+decoder_layers = [32, 128]
+alpha = 0.0001
+beta = 10.0
+use_mmd = true
+early_stopping = false
+hyperparameter_policy = "scArchon configuration; no dataset-specific tuning"
+
+[resources]
+gpus = 1
+cpus = 16
+memory_gb = 96
+time = "24:00:00"

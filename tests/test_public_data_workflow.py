@@ -28,6 +28,9 @@ from models.scdisinfact.context_config import (
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
+from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
+from models.trvae.context_config import select_heldout_controls as select_trvae_controls
+from models.trvae.context_config import select_trvae_training_data
 from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
@@ -1048,3 +1051,56 @@ def test_scdisinfact_context_helpers_keep_native_counts_and_package_predictions(
         counts_to_evaluation_view(native["G1"]),
         prediction[prediction.obs["model_perturbation"] == "G1"].X,
     )
+
+
+def test_trvae_context_helpers_build_one_joint_leak_free_fold() -> None:
+    split = {
+        "perturbations": ["G1", "G2"],
+        "folds": [
+            {
+                "id": "holdout-b",
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    rows = []
+    for context in ["context-a", "context-b"]:
+        for perturbation in ["control", "G1", "G2"]:
+            for index in range(4):
+                rows.append(
+                    {
+                        "context": context,
+                        "model_perturbation": perturbation,
+                        "cell": f"{context}-{perturbation}-{index}",
+                    }
+                )
+    obs = pd.DataFrame(rows).set_index("cell")
+    data = AnnData(
+        X=np.arange(1, len(obs) * 3 + 1, dtype=np.float32).reshape(len(obs), 3),
+        obs=obs,
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+
+    training = select_trvae_training_data(data, split, 0)
+    assert training.shape == (16, 3)
+    assert set(training.obs.loc[training.obs["context"] == "context-b", "model_perturbation"]) == {
+        "control"
+    }
+    controls = select_trvae_controls(data, split, 0, population_size=3, seed=7)
+    assert controls.shape == (3, 3)
+
+    prediction = build_trvae_prediction_adata(
+        {
+            "G1": np.ones((3, 3), dtype=np.float32),
+            "G2": np.full((3, 3), 2, dtype=np.float32),
+        },
+        data.var,
+        test_context="context-b",
+        population_size=3,
+    )
+    assert prediction.shape == (6, 3)
+    assert prediction.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G1": 3,
+        "context-b::G2": 3,
+    }

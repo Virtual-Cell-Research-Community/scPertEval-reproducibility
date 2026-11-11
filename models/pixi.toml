@@ -237,6 +237,28 @@ scdisinfact = { git = "https://github.com/ZhangLabGT/scDisInFact.git", rev = "94
 [feature.scdisinfact.tasks]
 smoke-test = "python -c \"import scDisInFact, torch; from importlib.metadata import version; print('scDisInFact', version('scDisInFact')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
 
+# --- trVAE (https://github.com/theislab/trvaep) ----------------------------
+# Use the official PyTorch implementation pinned to the revision vendored by scArchon. The
+# adapter generalizes its categorical condition interface from scArchon's binary wrapper to
+# one joint perturbation vocabulary, subject to a scaling smoke test before study inclusion.
+[feature.trvae.system-requirements]
+cuda = "12"
+
+[feature.trvae.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.1.*"
+torchvision = "0.16.*"
+numpy = "1.26.*"
+anndata = ">=0.10,<0.11"
+scanpy = ">=1.10,<1.11"
+scikit-learn = ">=1.3,<1.6"
+
+[feature.trvae.pypi-dependencies]
+trvaep = { git = "https://github.com/theislab/trvaep.git", rev = "8bfe2dc1553dc1a536113cffbe428d3eb9c96579" }
+
+[feature.trvae.tasks]
+smoke-test = "python -c \"import torch, trvaep; from importlib.metadata import version; print('trvaep', version('trvaep')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
 # --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
 # tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
 # tabular foundation models on perturbation-response prediction. It also ships a separate
@@ -275,4 +297,5 @@ state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }
 scdisinfact = { features = ["scdisinfact"], no-default-feature = true }
+trvae = { features = ["trvae"], no-default-feature = true }
 tabicl = { features = ["tabicl"], no-default-feature = true }
