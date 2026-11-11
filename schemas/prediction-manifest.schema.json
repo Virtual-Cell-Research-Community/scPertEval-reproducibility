@@ -51,12 +51,23 @@
     "expression": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["space", "genes_sha256"],
+      "required": ["space", "genes_sha256", "evaluation_space", "evaluation_transform"],
       "properties": {
         "space": {
           "enum": ["raw_counts", "normalized_expression", "log1p_expression", "effect"]
         },
-        "genes_sha256": {"$ref": "#/$defs/sha256"}
+        "genes_sha256": {"$ref": "#/$defs/sha256"},
+        "evaluation_space": {"const": "log1p_expression"},
+        "evaluation_transform": {
+          "enum": [
+            "identity",
+            "log1p",
+            "normalize-total-10000-log1p",
+            "add-held-out-context-control",
+            "add-held-out-context-control-then-log1p",
+            "add-held-out-context-control-then-normalize-total-10000-log1p"
+          ]
+        }
       }
     },
     "artifact": {
@@ -75,17 +86,18 @@
     "population": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["minimum_cells_per_condition"],
+      "required": ["minimum_cells_per_condition", "maximum_cells_per_condition"],
       "properties": {
-        "minimum_cells_per_condition": {"type": "integer", "minimum": 2}
+        "minimum_cells_per_condition": {"type": "integer", "minimum": 2},
+        "maximum_cells_per_condition": {"type": "integer", "minimum": 2, "maximum": 100}
       }
     },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["seed", "environment", "command"],
+      "required": ["training_seed", "environment", "command"],
       "properties": {
-        "seed": {"type": "integer"},
+        "training_seed": {"type": "integer"},
         "environment": {"type": "string", "minLength": 1},
         "command": {"type": "string", "minLength": 1}
       }

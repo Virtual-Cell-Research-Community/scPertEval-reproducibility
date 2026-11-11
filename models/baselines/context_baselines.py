@@ -26,7 +26,7 @@ def predict_context_baselines(
     fold: int | str,
     *,
     capability: str = "point",
-    population_size: int = 120,
+    population_size: int = 100,
     seed: int = 42,
 ) -> dict[str, ad.AnnData]:
     """Predict held-out profiles or populations without using held-out treated cells."""
@@ -106,7 +106,7 @@ def main() -> int:
     parser.add_argument("--fold", required=True)
     parser.add_argument("--output-root", type=Path, default=HERE)
     parser.add_argument("--capability", choices=["point", "population"], default="population")
-    parser.add_argument("--population-size", type=int, default=120)
+    parser.add_argument("--population-size", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 

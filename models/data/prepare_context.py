@@ -152,7 +152,7 @@ def _prepare_chemical_contexts(
             for dose in config["doses"]
         ]
         # The point stratum includes all 36 conditions; the three population exclusions are
-        # allowed below 60 but still must be present. Enforce the configured population floor
+        # allowed below 50 but still must be present. Enforce the configured population floor
         # only for the 33 retained conditions.
         population_excluded = {
             _chemical_model_label(
@@ -251,8 +251,8 @@ def main() -> int:
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--input", action="append", required=True, help="CONTEXT=/path/to/canonical.h5ad")
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--minimum-cells", type=int, default=60)
-    parser.add_argument("--max-cells", type=int, default=120)
+    parser.add_argument("--minimum-cells", type=int, default=50)
+    parser.add_argument("--max-cells", type=int, default=100)
     parser.add_argument("--max-controls", type=int, default=8192)
     parser.add_argument("--seed", type=int, default=SEED)
     args = parser.parse_args()

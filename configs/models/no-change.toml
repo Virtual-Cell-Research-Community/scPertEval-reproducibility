@@ -16,7 +16,7 @@ environment = "root uv.lock"
 [prediction]
 description = "Context-matched control population for every held-out condition"
 seed = 42
-population_size = 120
+population_size = 100
 
 [capability_by_task]
 unseen-perturbation = "point"

@@ -43,12 +43,12 @@ license, so users must evaluate their intended reuse independently.
 ## Frozen context-transfer cohorts
 
 The genetic cohort is the strict intersection of perturbations with at least
-60 treated cells in each of K562, RPE1, HepG2, and Jurkat. It contains 322
-targets and 1,288 held-out context–target populations.
+50 treated cells in each of K562, RPE1, HepG2, and Jurkat. It contains 480
+targets and 1,920 held-out context–target evaluation populations.
 
 The chemical cohort follows the scPerturBench sci-Plex3 task definition: nine
 drugs, four doses, and three cell lines. All 36 drug–dose conditions are valid
-for point evaluations. Three conditions have fewer than 60 observations in at
+for point evaluations. Three conditions have fewer than 50 observations in at
 least one cell line and are excluded from the population-evaluation stratum,
 leaving 33 fixed drug–dose conditions. This keeps the competitor and condition
 sets fixed within each evaluation stratum.

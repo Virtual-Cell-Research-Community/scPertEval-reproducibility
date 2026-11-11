@@ -78,6 +78,7 @@ def validate_prediction_h5ad(
     fold: int | str,
     capability: str,
     minimum_cells_per_condition: int | None = None,
+    maximum_cells_per_condition: int = 100,
 ) -> tuple[int, int, list[str]]:
     """Validate genes, conditions, row multiplicity, and numeric values."""
     expected = expected_test_conditions(split, fold, capability)
@@ -105,9 +106,14 @@ def validate_prediction_h5ad(
         elif capability == "population":
             if minimum_cells_per_condition is None:
                 raise ValueError("population prediction bundle requires minimum_cells_per_condition")
+            if minimum_cells_per_condition > maximum_cells_per_condition:
+                raise ValueError("population prediction minimum exceeds the archival maximum")
             below = counts[counts < minimum_cells_per_condition]
             if len(below):
                 raise ValueError(f"population prediction bundle has undersized conditions: {below.to_dict()}")
+            above = counts[counts > maximum_cells_per_condition]
+            if len(above):
+                raise ValueError(f"population prediction bundle exceeds archival cap: {above.to_dict()}")
         else:
             raise ValueError(f"unknown prediction capability: {capability}")
         if not _finite_matrix(prediction.X):
@@ -133,6 +139,9 @@ def build_prediction_manifest(
     environment: str,
     command: str,
     minimum_cells_per_condition: int | None = None,
+    maximum_cells_per_condition: int = 100,
+    expression_space: str = "log1p_expression",
+    evaluation_transform: str = "identity",
 ) -> dict:
     """Validate an artifact and return its schema-v1 archival manifest."""
     split = json.loads(split_manifest_path.read_text())
@@ -143,9 +152,10 @@ def build_prediction_manifest(
         fold,
         capability,
         minimum_cells_per_condition,
+        maximum_cells_per_condition,
     )
     dataset_id = dataset_manifest_path.stem
-    prediction_id = f"{model_id}-{dataset_id}-{split['id']}-fold-{fold}"
+    prediction_id = f"{model_id}-{dataset_id}-{split['id']}-fold-{fold}-seed-{seed}"
     manifest = {
         "schema_version": 1,
         "prediction_id": prediction_id,
@@ -165,8 +175,10 @@ def build_prediction_manifest(
             "manifest_sha256": file_checksum(split_manifest_path),
         },
         "expression": {
-            "space": "log1p_expression",
+            "space": expression_space,
             "genes_sha256": ordered_strings_sha256(genes),
+            "evaluation_space": "log1p_expression",
+            "evaluation_transform": evaluation_transform,
         },
         "artifact": {
             "path": prediction_path.name,
@@ -177,13 +189,16 @@ def build_prediction_manifest(
             "perturbation_key": "perturbation",
         },
         "provenance": {
-            "seed": seed,
+            "training_seed": seed,
             "environment": environment,
             "command": command,
         },
     }
     if capability == "population":
-        manifest["population"] = {"minimum_cells_per_condition": minimum_cells_per_condition}
+        manifest["population"] = {
+            "minimum_cells_per_condition": minimum_cells_per_condition,
+            "maximum_cells_per_condition": maximum_cells_per_condition,
+        }
     return manifest
 
 
@@ -202,6 +217,24 @@ def main() -> int:
     parser.add_argument("--environment", required=True)
     parser.add_argument("--command", required=True)
     parser.add_argument("--minimum-cells-per-condition", type=int)
+    parser.add_argument("--maximum-cells-per-condition", type=int, default=100)
+    parser.add_argument(
+        "--expression-space",
+        choices=["raw_counts", "normalized_expression", "log1p_expression", "effect"],
+        default="log1p_expression",
+    )
+    parser.add_argument(
+        "--evaluation-transform",
+        choices=[
+            "identity",
+            "log1p",
+            "normalize-total-10000-log1p",
+            "add-held-out-context-control",
+            "add-held-out-context-control-then-log1p",
+            "add-held-out-context-control-then-normalize-total-10000-log1p",
+        ],
+        default="identity",
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
 
@@ -220,6 +253,9 @@ def main() -> int:
         environment=args.environment,
         command=args.command,
         minimum_cells_per_condition=args.minimum_cells_per_condition,
+        maximum_cells_per_condition=args.maximum_cells_per_condition,
+        expression_space=args.expression_space,
+        evaluation_transform=args.evaluation_transform,
     )
     output = args.output or args.prediction.with_suffix(".manifest.json")
     output.write_text(json.dumps(manifest, indent=2) + "\n")

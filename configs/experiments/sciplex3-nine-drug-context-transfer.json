@@ -2,7 +2,11 @@
   "schema_version": 1,
   "id": "sciplex3-nine-drug-context-transfer",
   "task": "leave-one-context-out",
-  "models": ["state", "no-change", "fold-mean"],
+  "models": ["state", "cpa", "biolord", "scdisinfact", "trvae", "no-change", "fold-mean", "linear"],
+  "training_seeds": [42, 43, 44],
+  "prediction_population_size": 100,
+  "model_fit_scope": "one-joint-model-across-all-perturbations-per-fold",
+  "hyperparameter_policy": "published-or-established-config-no-hpo",
   "condition_id_format": "{context}::{perturbation}::{dose:g}nM",
   "dataset": "srivatsan-trapnell-2020-sciplex3",
   "contexts": ["A549", "K562", "MCF7"],
@@ -42,6 +46,13 @@
     }
   ],
   "population_minimum_cells_per_context": 50,
+  "gene_panel": {
+    "scope": "global-across-all-contexts",
+    "components": ["top-8192-hvgs", "top-100-de-genes-per-retained-drug-dose"],
+    "compound_target_genes": false,
+    "outcome_informed": true,
+    "target_size_approximate": 9000
+  },
   "drugs": [
     {"label": "Alvespimycin", "canonical_label": "Alvespimycin (17-DMAG) HCl"},
     {"label": "Belinostat", "canonical_label": "Belinostat (PXD101)"},

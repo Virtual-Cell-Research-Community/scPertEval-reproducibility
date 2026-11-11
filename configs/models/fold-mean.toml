@@ -16,7 +16,7 @@ environment = "root uv.lock"
 [prediction]
 description = "Held-out controls shifted by the mean training-context perturbation effect"
 seed = 42
-population_size = 120
+population_size = 100
 
 [capability_by_task]
 unseen-perturbation = "point"

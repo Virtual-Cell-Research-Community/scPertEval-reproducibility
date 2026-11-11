@@ -139,13 +139,13 @@ training contexts.
 ```bash
 cd models
 pixi run -e state python state/train_predict.py \
-  --dataset replogle-nadig-four-context-60-cell \
-  --split-manifest ../configs/experiments/replogle-nadig-four-context-60-cell.json \
+  --dataset replogle-nadig-four-context-50-cell \
+  --split-manifest ../configs/experiments/replogle-nadig-four-context-50-cell.json \
   --fold 0 \
   --perturbation-key model_perturbation
 ```
 
 The same command shape applies to `sciplex3-nine-drug-context-transfer`.
 STATE retains its native per-cell predictions. No-change and fold-mean context
-baselines emit fixed 120-cell populations so they participate in both profile
+baselines emit fixed 100-cell populations so they participate in both profile
 and distributional sensitivity analyses.

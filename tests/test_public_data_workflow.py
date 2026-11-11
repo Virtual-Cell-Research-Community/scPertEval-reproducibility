@@ -26,7 +26,7 @@ from workflows.evaluate import (
     rank_models,
     summarize_evaluations,
 )
-from workflows.predictions import build_prediction_manifest, expected_test_conditions
+from workflows.predictions import build_prediction_manifest, expected_test_conditions, validate_prediction_h5ad
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
 from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
@@ -64,15 +64,18 @@ def test_cell_cycle_reference_is_pinned() -> None:
 
 def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None:
     genetic = json.loads(
-        (ROOT / "configs" / "experiments" / "replogle-nadig-four-context-60-cell.json").read_text()
+        (ROOT / "configs" / "experiments" / "replogle-nadig-four-context-50-cell.json").read_text()
     )
-    assert genetic["n_perturbations"] == len(genetic["perturbations"]) == 322
+    assert genetic["n_perturbations"] == len(genetic["perturbations"]) == 480
     assert genetic["perturbations"] == sorted(set(genetic["perturbations"]))
     assert genetic["n_test_populations"] == len(genetic["contexts"]) * genetic["n_perturbations"]
     assert len(genetic["folds"]) == len(genetic["contexts"]) == 4
-    assert len(genetic["validation_conditions"]) == 32
+    assert genetic["minimum_treated_cells_per_context"] == 50
+    assert genetic["training_seeds"] == [42, 43, 44]
+    assert genetic["prediction_population_size"] == 100
+    assert len(genetic["validation_conditions"]) == 48
     assert set(genetic["validation_conditions"]) <= set(genetic["perturbations"])
-    assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 322 for fold in genetic["folds"])
+    assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 480 for fold in genetic["folds"])
 
     chemical = json.loads(
         (ROOT / "configs" / "experiments" / "sciplex3-nine-drug-context-transfer.json").read_text()
@@ -80,6 +83,9 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert chemical["n_drugs"] == len(chemical["drugs"]) == 9
     assert chemical["n_point_conditions"] == len(chemical["drugs"]) * len(chemical["doses"]) == 36
     assert chemical["n_population_conditions"] == 33
+    assert chemical["population_minimum_cells_per_context"] == 50
+    assert chemical["training_seeds"] == [42, 43, 44]
+    assert chemical["prediction_population_size"] == 100
     assert len(chemical["population_exclusions"]) == 3
     assert len(chemical["folds"]) == len(chemical["contexts"]) == 3
     assert len(chemical["validation_conditions"]) == 4
@@ -304,8 +310,41 @@ def test_prediction_manifest_validates_fold_conditions_and_gene_set(tmp_path: Pa
     )
 
     assert manifest["capability"] == "point"
+    assert manifest["prediction_id"].endswith("-seed-42")
+    assert manifest["expression"]["space"] == "log1p_expression"
+    assert manifest["expression"]["evaluation_space"] == "log1p_expression"
+    assert manifest["expression"]["evaluation_transform"] == "identity"
+    assert manifest["provenance"]["training_seed"] == 42
     assert manifest["artifact"]["n_obs"] == 1
     assert len(manifest["artifact"]["sha256"]) == 64
+
+
+def test_population_prediction_archive_rejects_more_than_100_cells(tmp_path: Path) -> None:
+    truth = AnnData(
+        X=sp.csr_matrix(np.ones((2, 2), dtype=np.float32)),
+        obs=pd.DataFrame({"perturbation": ["control", "G1"]}, index=["c1", "c2"]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    prediction = AnnData(
+        X=np.ones((101, 2), dtype=np.float32),
+        obs=pd.DataFrame({"perturbation": ["G1"] * 101}, index=[f"prediction-{i}" for i in range(101)]),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    split = {"folds": [{"test": ["G1"]}]}
+
+    with pytest.raises(ValueError, match="exceeds archival cap"):
+        validate_prediction_h5ad(
+            prediction_path,
+            truth_path,
+            split,
+            0,
+            "population",
+            minimum_cells_per_condition=50,
+        )
 
 
 def test_matched_population_draw_and_rank_aggregation_are_deterministic() -> None:
