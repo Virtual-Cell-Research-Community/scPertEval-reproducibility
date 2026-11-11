@@ -215,6 +215,28 @@ biolord = { git = "https://github.com/nitzanlab/biolord.git", rev = "b7688790e49
 [feature.biolord.tasks]
 smoke-test = "python -c \"import biolord, torch; from importlib.metadata import version; print('biolord', version('biolord')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
 
+# --- scDisInFact (https://github.com/ZhangLabGT/scDisInFact) ---------------
+# scDisInFact trains from raw counts with an NB reconstruction loss. The joint adapter uses
+# its documented multi-category condition interface and the hyperparameters declared by the
+# scArchon wrapper, but fits all perturbations together as required by this study.
+[feature.scdisinfact.system-requirements]
+cuda = "12"
+
+[feature.scdisinfact.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.1.*"
+numpy = "1.26.*"
+scipy = ">=1.11,<1.13"
+pandas = ">=2.1,<2.3"
+scikit-learn = ">=1.3,<1.6"
+anndata = ">=0.10,<0.11"
+
+[feature.scdisinfact.pypi-dependencies]
+scdisinfact = { git = "https://github.com/ZhangLabGT/scDisInFact.git", rev = "9466ecf257d923f879cb39712c530d24826d88bc" }
+
+[feature.scdisinfact.tasks]
+smoke-test = "python -c \"import scDisInFact, torch; from importlib.metadata import version; print('scDisInFact', version('scDisInFact')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
 # --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
 # tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
 # tabular foundation models on perturbation-response prediction. It also ships a separate
@@ -252,4 +274,5 @@ sclambda = { features = ["sclambda"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }
+scdisinfact = { features = ["scdisinfact"], no-default-feature = true }
 tabicl = { features = ["tabicl"], no-default-feature = true }

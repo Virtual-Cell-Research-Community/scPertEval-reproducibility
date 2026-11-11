@@ -1,0 +1,36 @@
+schema_version = 1
+id = "scdisinfact"
+title = "scDisInFact"
+capability = "population"
+modalities = ["genetic", "chemical"]
+tasks = ["leave-one-context-out"]
+
+[implementation]
+repository = "https://github.com/ZhangLabGT/scDisInFact"
+revision = "9466ecf257d923f879cb39712c530d24826d88bc"
+version = "0.1.0"
+reference = "official upstream API with scArchon's declared hyperparameters"
+
+[adapter]
+path = "models/scdisinfact/train_predict.py"
+environment = "models/pixi.toml#scdisinfact"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "raw_counts"
+perturbation_conditioning = "one joint categorical condition factor"
+context_conditioning = "batch factor with held-out controls available"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 200
+batch_size = 64
+latent_dimensions = [8, 2]
+reconstruction_loss = "negative-binomial"
+hyperparameter_policy = "scArchon-declared configuration; no dataset-specific tuning"
+
+[resources]
+gpus = 1
+cpus = 16
+memory_gb = 192
+time = "24:00:00"
