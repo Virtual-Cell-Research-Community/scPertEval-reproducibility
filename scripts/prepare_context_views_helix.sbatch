@@ -16,7 +16,7 @@ PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 UV_BIN="${UV_BIN:-${HOME}/.local/bin/uv}"
 : "${SCPERTEVAL_CANONICAL_ROOT:?set to a root containing derived/<id>/adata.h5ad or processed/<id>/adata.h5ad}"
 
-if [[ ! -f "${PROJECT_ROOT}/configs/experiments/replogle-nadig-four-context-60-cell.json" ]]; then
+if [[ ! -f "${PROJECT_ROOT}/configs/experiments/replogle-nadig-four-context-50-cell.json" ]]; then
   echo "Submit this job from the scPertEval-reproducibility repository root." >&2
   exit 2
 fi
@@ -40,6 +40,16 @@ canonical_path() {
   return 1
 }
 
+registry_path() {
+  local dataset="$1"
+  local candidate="${SCPERTEVAL_CANONICAL_ROOT}/registry/${dataset}.toml"
+  if [[ ! -f "${candidate}" ]]; then
+    echo "No PerturbationData registry found for ${dataset}: ${candidate}" >&2
+    return 1
+  fi
+  printf '%s\n' "${candidate}"
+}
+
 module load compiler/gnu/12.1
 cd "${PROJECT_ROOT}"
 mkdir -p logs
@@ -51,7 +61,7 @@ export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 
 if [[ "${SLURM_ARRAY_TASK_ID}" -eq 0 ]]; then
-  EXPERIMENT="replogle-nadig-four-context-60-cell"
+  EXPERIMENT="replogle-nadig-four-context-50-cell"
   INPUTS=(
     "replogle-weissman-2022-k562-essential=$(canonical_path replogle-weissman-2022-k562-essential)"
     "replogle-weissman-2022-rpe1=$(canonical_path replogle-weissman-2022-rpe1)"
@@ -68,6 +78,8 @@ fi
 ARGS=()
 for input in "${INPUTS[@]}"; do
   ARGS+=(--input "${input}")
+  dataset="${input%%=*}"
+  ARGS+=(--input-registry "${dataset}=$(registry_path "${dataset}")")
 done
 
 echo "[$(date -Is)] Preparing ${EXPERIMENT}"

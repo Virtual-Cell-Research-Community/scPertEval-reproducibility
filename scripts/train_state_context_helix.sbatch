@@ -20,7 +20,7 @@ if [[ ! -f "${PROJECT_ROOT}/models/pixi.toml" ]]; then
 fi
 
 if [[ "${SLURM_ARRAY_TASK_ID}" -lt 4 ]]; then
-  EXPERIMENT="replogle-nadig-four-context-60-cell"
+  EXPERIMENT="replogle-nadig-four-context-50-cell"
   FOLD="${SLURM_ARRAY_TASK_ID}"
 else
   EXPERIMENT="sciplex3-nine-drug-context-transfer"

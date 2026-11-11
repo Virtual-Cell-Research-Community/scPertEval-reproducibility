@@ -189,6 +189,12 @@ def main() -> int:
     parser.add_argument("--population-size", type=int, default=100)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--linear-ridge", type=float, default=1.0)
+    parser.add_argument(
+        "--models",
+        nargs="+",
+        choices=["no-change", "fold-mean", "linear"],
+        help="subset to materialize (default: both population baselines, or all point baselines)",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -201,7 +207,10 @@ def main() -> int:
     data_manifest = args.data_manifest or args.data.with_suffix(".manifest.json")
     if not data_manifest.is_file():
         raise FileNotFoundError(data_manifest)
-    models = ["no-change", "fold-mean", *(["linear"] if args.capability == "point" else [])]
+    default_models = ["no-change", "fold-mean", *(["linear"] if args.capability == "point" else [])]
+    models = args.models or default_models
+    if args.capability == "population" and "linear" in models:
+        raise ValueError("the context linear baseline is point-capable, not population-capable")
     revision = repository_revision(ROOT)
     handles = {
         model: begin_run(
@@ -236,6 +245,8 @@ def main() -> int:
         linear_ridge=args.linear_ridge,
     )
     for model, prediction in predictions.items():
+        if model not in models:
+            continue
         handle = handles[model]
         if handle.skipped:
             print(f"skipping verified completed run: {handle.directory}")

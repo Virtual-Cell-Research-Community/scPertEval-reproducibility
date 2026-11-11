@@ -14,13 +14,13 @@ set -euo pipefail
 
 PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 UV_BIN="${UV_BIN:-${HOME}/.local/bin/uv}"
-if [[ ! -f "${PROJECT_ROOT}/configs/experiments/replogle-nadig-four-context-60-cell.json" ]]; then
+if [[ ! -f "${PROJECT_ROOT}/configs/experiments/replogle-nadig-four-context-50-cell.json" ]]; then
   echo "Submit this job from the scPertEval-reproducibility repository root." >&2
   exit 2
 fi
 
 if [[ "${SLURM_ARRAY_TASK_ID}" -lt 4 ]]; then
-  EXPERIMENT="replogle-nadig-four-context-60-cell"
+  EXPERIMENT="replogle-nadig-four-context-50-cell"
   FOLD="${SLURM_ARRAY_TASK_ID}"
 else
   EXPERIMENT="sciplex3-nine-drug-context-transfer"
@@ -43,5 +43,14 @@ echo "[$(date -Is)] experiment=${EXPERIMENT} fold=${FOLD}"
   --split "configs/experiments/${EXPERIMENT}.json" \
   --fold "${FOLD}" \
   --capability population \
-  --population-size 120 \
-  --output-root models/baselines
+  --population-size 100 \
+  --models no-change fold-mean \
+  --runs-root runs
+
+"${UV_BIN}" run --frozen python -m models.baselines.context_baselines \
+  --data "models/data/${EXPERIMENT}/raw.h5ad" \
+  --split "configs/experiments/${EXPERIMENT}.json" \
+  --fold "${FOLD}" \
+  --capability point \
+  --models linear \
+  --runs-root runs
