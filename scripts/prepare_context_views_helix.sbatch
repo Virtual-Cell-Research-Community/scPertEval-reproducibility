@@ -74,5 +74,6 @@ echo "[$(date -Is)] Preparing ${EXPERIMENT}"
 "${UV_BIN}" run --frozen python -m models.data.prepare_context \
   --config "configs/experiments/${EXPERIMENT}.json" \
   "${ARGS[@]}" \
-  --output "models/data/${EXPERIMENT}/raw.h5ad"
+  --output "models/data/${EXPERIMENT}/raw.h5ad" \
+  --counts-output "models/data/${EXPERIMENT}/counts.h5ad"
 echo "[$(date -Is)] Context model view complete"

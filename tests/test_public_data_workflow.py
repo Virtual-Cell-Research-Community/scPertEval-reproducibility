@@ -637,6 +637,7 @@ def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_pat
     )
 
     assert result.shape == (12, 201)
+    assert "counts" not in result.layers
     assert set(result.obs["model_perturbation"].astype(str)) == {"control", "G1", "G2"}
     assert set(result.obs.loc[~result.obs["is_control"], "evaluation_condition"].astype(str)) == {
         "context-a::G1",
@@ -746,6 +747,47 @@ def test_sciplex_context_view_applies_frozen_global_gene_panel(tmp_path: Path) -
     assert result.var["gene_panel_hvg"].sum() == 8
     assert result.uns["gene_panel"]["differential_expression"]["n_conditions"] == 2
     assert file_checksum(source) == source_sha256
+
+
+def test_context_view_can_preserve_aligned_native_counts(tmp_path: Path) -> None:
+    inputs = {}
+    for context in ["context-a", "context-b"]:
+        labels = ["non-targeting"] * 2 + ["G1"] * 2
+        matrix = np.arange(4 * 201, dtype=np.int32).reshape(4, 201) % 7 + 1
+        canonical = AnnData(
+            X=sp.csr_matrix(matrix),
+            obs=pd.DataFrame(
+                {
+                    "perturbation": labels,
+                    "is_control": [True, True, False, False],
+                },
+                index=[f"{context}-cell-{index}" for index in range(4)],
+            ),
+            var=pd.DataFrame(index=[f"gene-{index}" for index in range(201)]),
+        )
+        path = tmp_path / f"{context}.h5ad"
+        canonical.write_h5ad(path)
+        inputs[context] = path
+
+    result = prepare_context_view(
+        {
+            "id": "counts-test",
+            "contexts": ["context-a", "context-b"],
+            "perturbations": ["G1"],
+        },
+        inputs,
+        minimum_cells=2,
+        max_cells=2,
+        max_controls=2,
+        seed=42,
+        retain_counts_layer=True,
+    )
+
+    assert result.shape == (8, 201)
+    assert "counts" in result.layers
+    assert_raw_counts(result.layers["counts"])
+    assert np.issubdtype(result.layers["counts"].dtype, np.integer)
+    assert np.max(result.X) < np.max(result.layers["counts"])
 
 
 def test_context_preparation_reuses_validated_perturbationdata_checksum(tmp_path: Path) -> None:

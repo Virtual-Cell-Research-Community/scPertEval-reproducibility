@@ -155,6 +155,7 @@ def _prepare_genetic_context(
     max_cells: int,
     max_controls: int,
     seed: int,
+    retain_counts_layer: bool,
 ) -> ad.AnnData:
     source = ad.read_h5ad(path, backed="r")
     try:
@@ -179,7 +180,11 @@ def _prepare_genetic_context(
         seed=seed,
     )
     data = data[indices].copy()
-    data = prepare_canonical_raw(data, min_cells=1)
+    data = prepare_canonical_raw(
+        data,
+        min_cells=1,
+        retain_counts_layer=retain_counts_layer,
+    )
     data.obs["model_perturbation"] = data.obs["perturbation"].astype(str)
     data.obs["context"] = context
     data.obs["cell_type"] = context
@@ -204,6 +209,7 @@ def _prepare_chemical_contexts(
     max_cells: int,
     max_controls: int,
     seed: int,
+    retain_counts_layer: bool,
 ) -> list[ad.AnnData]:
     drug_labels = {item["canonical_label"] for item in config["drugs"]}
     source = ad.read_h5ad(path, backed="r")
@@ -264,7 +270,11 @@ def _prepare_chemical_contexts(
         data = data[indices].copy()
         original_model_labels = data.obs["model_perturbation"].astype(str).to_numpy()
         data.obs["perturbation"] = original_model_labels
-        data = prepare_canonical_raw(data, min_cells=1)
+        data = prepare_canonical_raw(
+            data,
+            min_cells=1,
+            retain_counts_layer=retain_counts_layer,
+        )
         data.obs["model_perturbation"] = data.obs["perturbation"].astype(str)
         data.obs["context"] = context
         data.obs["cell_type"] = context
@@ -286,6 +296,7 @@ def prepare_context_view(
     max_cells: int,
     max_controls: int,
     seed: int,
+    retain_counts_layer: bool = False,
 ) -> ad.AnnData:
     """Build the combined normalized view while keeping model and evaluation IDs separate."""
     if "perturbations" in config:
@@ -301,6 +312,7 @@ def prepare_context_view(
                 max_cells=max_cells,
                 max_controls=max_controls,
                 seed=seed,
+                retain_counts_layer=retain_counts_layer,
             )
             for context in config["contexts"]
         ]
@@ -314,6 +326,7 @@ def prepare_context_view(
             max_cells=max_cells,
             max_controls=max_controls,
             seed=seed,
+            retain_counts_layer=retain_counts_layer,
         )
     combined = ad.concat(datasets, join="inner", merge="same", index_unique=None)
     sc.pp.filter_genes(combined, min_cells=3)
@@ -471,6 +484,11 @@ def main() -> int:
         help="CONTEXT=/path/to/PerturbationData/registry.toml; reuses its validated derived SHA-256",
     )
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--counts-output",
+        type=Path,
+        help="optional aligned raw-count view for models whose native likelihood requires counts",
+    )
     parser.add_argument("--minimum-cells", type=int, default=50)
     parser.add_argument("--max-cells", type=int, default=100)
     parser.add_argument("--max-controls", type=int, default=8192)
@@ -486,6 +504,10 @@ def main() -> int:
     input_records, input_states = _input_provenance(inputs, registries)
     if args.output.resolve() in {path.resolve() for path in inputs.values()}:
         raise ValueError("--output must not overwrite a canonical input")
+    if args.counts_output is not None:
+        forbidden = {args.output.resolve(), *(path.resolve() for path in inputs.values())}
+        if args.counts_output.resolve() in forbidden:
+            raise ValueError("--counts-output must not overwrite the normalized output or a canonical input")
     result = prepare_context_view(
         config,
         inputs,
@@ -493,8 +515,19 @@ def main() -> int:
         max_cells=args.max_cells,
         max_controls=args.max_controls,
         seed=args.seed,
+        retain_counts_layer=args.counts_output is not None,
     )
+    counts_result = None
+    if args.counts_output is not None:
+        if "counts" not in result.layers:
+            raise RuntimeError("context preparation did not preserve the requested counts layer")
+        counts_result = result.copy()
+        counts_result.X = counts_result.layers["counts"].copy()
+        del counts_result.layers["counts"]
+        del result.layers["counts"]
     _atomic_write_h5ad(result, args.output)
+    if counts_result is not None:
+        _atomic_write_h5ad(counts_result, args.counts_output)
     _verify_inputs_unchanged(inputs, input_records, input_states)
     counts = _write_context_metadata(args.output, result)
     gene_panel = _write_gene_panel_metadata(args.output, result, config)
@@ -520,6 +553,28 @@ def main() -> int:
     }
     if gene_panel is not None:
         manifest["gene_panel"] = gene_panel
+    if counts_result is not None:
+        counts_record = {
+            "path": args.counts_output.name,
+            "sha256": file_checksum(args.counts_output),
+            "n_obs": counts_result.n_obs,
+            "n_vars": counts_result.n_vars,
+            "expression_space": "raw_counts",
+        }
+        manifest["counts_output"] = counts_record
+        counts_manifest = {
+            "schema_version": 1,
+            "experiment": config["id"],
+            "config_sha256": file_checksum(args.config),
+            "command": shlex.join([sys.executable, *sys.argv]),
+            "inputs": input_records,
+            "output": counts_record,
+            "sampling": manifest["sampling"],
+            "normalized_view": manifest["output"],
+        }
+        args.counts_output.with_suffix(".manifest.json").write_text(
+            json.dumps(counts_manifest, indent=2) + "\n"
+        )
     args.output.with_suffix(".manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {result.shape} context-transfer model view to {args.output}")
     return 0

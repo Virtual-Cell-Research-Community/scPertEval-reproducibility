@@ -191,6 +191,7 @@ def prepare_canonical_raw(
     min_genes: int = 200,
     min_cells: int = 3,
     target_sum: float = 1e4,
+    retain_counts_layer: bool = False,
 ) -> ad.AnnData:
     """Create the normalized model-input view from a canonical raw-count object.
 
@@ -216,6 +217,8 @@ def prepare_canonical_raw(
     result.obs["perturbation"] = np.where(control_mask, "control", perturbation)
     sc.pp.filter_cells(result, min_genes=min_genes)
     sc.pp.filter_genes(result, min_cells=min_cells)
+    if retain_counts_layer:
+        result.layers["counts"] = result.X.copy()
     sc.pp.normalize_total(result, target_sum=target_sum)
     sc.pp.log1p(result)
     return result
