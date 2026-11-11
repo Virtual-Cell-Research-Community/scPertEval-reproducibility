@@ -8,8 +8,15 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
+
+try:
+    from datetime import UTC
+except ImportError:  # Python 3.10 model environments
+    from datetime import timedelta, timezone
+
+    UTC = timezone(timedelta(0))
 
 from workflows.preparation_utils import file_checksum
 
