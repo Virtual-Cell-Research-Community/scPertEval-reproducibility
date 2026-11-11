@@ -5,6 +5,15 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 
+def coerce_reference_id(value) -> int | None:
+    """Normalize upstream's Python- or tensor-valued reference identifier."""
+    if value is None:
+        return None
+    if hasattr(value, "item"):
+        value = value.item()
+    return int(value)
+
+
 def choose_present_reference(observed: Iterable[int], *, requested: int | None) -> int | None:
     """Choose an MMD reference represented in the current mini-batch.
 
@@ -33,7 +42,7 @@ def apply_joint_condition_mmd_patch() -> None:
     def safe_maximum_mean_discrepancy(xs, batch_ids, device, ref_batch=None):
         observed_tensors = torch.unique(batch_ids, sorted=True)
         observed = [int(value.item()) for value in observed_tensors]
-        requested = None if ref_batch is None else int(ref_batch.item())
+        requested = coerce_reference_id(ref_batch)
         effective = choose_present_reference(observed, requested=requested)
         if effective is None:
             return xs.sum() * 0.0

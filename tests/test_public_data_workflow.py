@@ -26,7 +26,7 @@ from models.scdisinfact.context_config import (
     select_scdisinfact_training_data,
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
-from models.scdisinfact.joint_patch import choose_present_reference
+from models.scdisinfact.joint_patch import choose_present_reference, coerce_reference_id
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
 from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
@@ -1059,6 +1059,9 @@ def test_scdisinfact_context_helpers_keep_native_counts_and_package_predictions(
 
 
 def test_scdisinfact_joint_mmd_uses_a_reference_present_in_the_minibatch() -> None:
+    assert coerce_reference_id(0) == 0
+    assert coerce_reference_id(np.asarray(2)) == 2
+    assert coerce_reference_id(None) is None
     assert choose_present_reference([1, 2], requested=0) == 1
     assert choose_present_reference([0, 2], requested=0) == 0
     assert choose_present_reference([2], requested=0) is None
