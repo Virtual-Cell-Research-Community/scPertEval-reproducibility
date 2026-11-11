@@ -170,6 +170,13 @@ import pandas as pd
 import scanpy as sc
 import torch
 
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.predictions import build_prediction_manifest
+from workflows.run_contract import begin_run, complete_run, repository_revision
+
 try:
     from .context_config import build_context_toml, relabel_context_predictions
 except ImportError:  # direct ``python state/train_predict.py`` execution from models/
@@ -178,11 +185,10 @@ except ImportError:  # direct ``python state/train_predict.py`` execution from m
 ad.settings.allow_write_nullable_strings = True
 
 HERE = Path(__file__).resolve().parent
+ROOT = REPOSITORY_ROOT
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
-RUN_DIR = HERE / "runs"
-OUT_DIR = HERE / "predictions"
-METRICS_DIR = HERE / "metrics"
+RUN_DIR = ROOT / "runs"
 PATCH_DIR = HERE / "patch"  # contains sitecustomize.py — see its own docstring
 
 
@@ -376,15 +382,24 @@ def main() -> None:
     # both land on 328, not 128) — so the default here stays at pertsets.yaml's own value rather
     # than overriding to Table 3's.
     parser.add_argument("--hidden-dim", type=int, default=328, help="model.kwargs.hidden_dim (default: 328, pertsets.yaml's own default — see module docstring for why Table 3's 128 was tested and rejected)")
+    parser.add_argument("--seed", type=int, default=42, help="training.train_seed and archival run seed")
+    parser.add_argument("--runs-root", type=Path, default=RUN_DIR)
+    parser.add_argument(
+        "--data-manifest",
+        type=Path,
+        help="prepared model-view manifest (default: raw.manifest.json when present)",
+    )
+    parser.add_argument("--force", action="store_true", help="rerun even if a verified completion record exists")
     args = parser.parse_args()
 
     dataset_dir = PERT_DATA_DIR / args.dataset
-    run_name = f"{args.dataset}_fold_{args.fold}"
     raw = DATA_DIR / args.dataset / "raw.h5ad"
     if args.split_manifest is None:
         kfold_splits = DATA_DIR / args.dataset / "kfold_splits.json"
         fold = json.loads(kfold_splits.read_text())[args.fold]
         context_split = None
+        split_manifest_path = DATA_DIR / args.dataset / "split_manifest.json"
+        fold_id = f"fold-{args.fold}"
         prepare_dataset(raw, dataset_dir, args.cell_type, args.num_hvgs)
         toml_path = build_toml(
             fold,
@@ -401,6 +416,8 @@ def main() -> None:
             )
         if args.fold < 0 or args.fold >= len(context_split["folds"]):
             raise ValueError(f"fold {args.fold} is outside the context split")
+        split_manifest_path = args.split_manifest
+        fold_id = str(context_split["folds"][args.fold]["id"])
         prepare_context_dataset(raw, dataset_dir, context_split["contexts"], args.num_hvgs)
         toml_path = build_context_toml(
             context_split,
@@ -409,6 +426,37 @@ def main() -> None:
             args.dataset,
             dataset_dir,
         )
+
+    data_manifest = args.data_manifest or raw.with_suffix(".manifest.json")
+    if not data_manifest.is_file():
+        data_manifest = split_manifest_path
+    handle = begin_run(
+        args.runs_root,
+        experiment=args.dataset,
+        model="state",
+        fold=fold_id,
+        seed=args.seed,
+        configuration={
+            "num_hvgs": args.num_hvgs,
+            "max_steps": args.max_steps,
+            "val_freq": args.val_freq,
+            "early_stop_patience": args.early_stop_patience,
+            "batch_size": args.batch_size,
+            "lr": args.lr,
+            "cell_set_len": args.cell_set_len,
+            "hidden_dim": args.hidden_dim,
+            "perturbation_key": args.perturbation_key,
+        },
+        inputs={"model_view_manifest": data_manifest, "split_manifest": split_manifest_path},
+        command=[sys.executable, *sys.argv],
+        repo_root=ROOT,
+        force=args.force,
+    )
+    if handle.skipped:
+        print(f"skipping verified completed run: {handle.directory}")
+        return
+    run_output_dir = handle.directory
+    run_name = run_output_dir.name
 
     train_overrides = [
         f"data.kwargs.toml_config_path={toml_path}",
@@ -422,6 +470,7 @@ def main() -> None:
         f"training.val_freq={args.val_freq}",
         f"training.batch_size={args.batch_size}",
         f"training.lr={args.lr}",
+        f"training.train_seed={args.seed}",
         f"model.kwargs.cell_set_len={args.cell_set_len}",
         f"model.kwargs.hidden_dim={args.hidden_dim}",
         # batch_encoder stays at pertsets.yaml's own default (False), unlike the Colab's
@@ -431,8 +480,8 @@ def main() -> None:
         # real batch structure its True was meant to capture.
         "model=pertsets",
         "use_wandb=false",
-        "overwrite=true",
-        f"output_dir={RUN_DIR}",
+        "overwrite=false",
+        f"output_dir={run_output_dir.parent}",
         f"name={run_name}",
     ]
     if args.ckpt_every_n_steps is not None:
@@ -450,12 +499,14 @@ def main() -> None:
     # to run_output_dir/version_0/metrics.csv — just relocate it to match predictions/ and
     # saved_models/'s <dataset>/fold_<i> convention, no capture/parsing needed (unlike
     # gears/sclambda/scgpt, which don't produce a structured metrics file on their own).
-    metrics_src = RUN_DIR / run_name / "version_0" / "metrics.csv"
-    metrics_dst = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metric_candidates = list(run_output_dir.glob("version_*/metrics.csv"))
+    if not metric_candidates:
+        raise FileNotFoundError(f"STATE produced no metrics.csv under {run_output_dir}")
+    metrics_src = max(metric_candidates, key=lambda path: path.stat().st_mtime_ns)
+    metrics_dst = run_output_dir / "logs" / "metrics.csv"
     metrics_dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy(metrics_src, metrics_dst)
 
-    run_output_dir = RUN_DIR / run_name
     # state tx predict deserializes this saved PerturbationDataModule config (a plain dict —
     # cell_load's own PerturbationDataModule.save_state()/load_state()) rather than rebuilding
     # the data module from config.yaml, so whatever num_workers training used is inherited
@@ -502,14 +553,42 @@ def main() -> None:
     with open(run_output_dir / "var_dims.pkl", "rb") as f:
         var_dims = pickle.load(f)
 
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run_output_dir / "predictions" / "predictions.h5ad"
     pred_adata = ad.AnnData(
         X=pred.X.astype(np.float32),
         obs={"perturbation": pred.obs["perturbation"].to_numpy()},
     )
     pred_adata.var_names = pd.Index(np.asarray(var_dims["gene_names"]))
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    revision = repository_revision(ROOT)
+    prediction_manifest = build_prediction_manifest(
+        prediction_path=out_path,
+        truth_path=raw,
+        dataset_manifest_path=data_manifest,
+        split_manifest_path=split_manifest_path,
+        capability="population",
+        model_id="state",
+        implementation_revision="arc-state==0.11.1",
+        adapter_revision=revision,
+        fold=args.fold,
+        seed=args.seed,
+        environment="models/pixi.lock#state",
+        command=" ".join([sys.executable, *sys.argv]),
+        minimum_cells_per_condition=50 if context_split is not None else 1,
+    )
+    prediction_manifest_path = out_path.with_suffix(".manifest.json")
+    prediction_manifest_path.write_text(json.dumps(prediction_manifest, indent=2) + "\n")
+    best_checkpoint = run_output_dir / "checkpoints" / "best.ckpt"
+    complete_run(
+        handle,
+        {
+            "checkpoint": best_checkpoint,
+            "metrics": metrics_dst,
+            "prediction": out_path,
+            "prediction_manifest": prediction_manifest_path,
+        },
+    )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

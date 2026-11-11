@@ -1,9 +1,9 @@
 schema_version = 1
 id = "linear"
-title = "Bilinear PCA baseline"
+title = "Linear baseline"
 capability = "point"
-modalities = ["genetic"]
-tasks = ["unseen-perturbation"]
+modalities = ["genetic", "chemical"]
+tasks = ["unseen-perturbation", "leave-one-context-out"]
 
 [implementation]
 package = "repository-native"
@@ -11,10 +11,15 @@ version = "1"
 reference = "Ahlmann-Eltze et al. linear perturbation prediction baseline"
 
 [adapter]
-path = "models/baselines/baselines.py"
+path = "models/baselines/baselines.py; models/baselines/context_baselines.py"
 environment = "root uv.lock"
 
 [prediction]
 pca_dimensions = 10
 ridge = 0.1
 seed = 42
+
+[context_prediction]
+description = "Joint ridge model over perturbation identities and training-context control-state PCs"
+ridge = 1.0
+held_out_information = "control cells only"

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
+import sys
+import tempfile
 from pathlib import Path
 
 import anndata as ad
@@ -15,6 +19,86 @@ from models.data.prepare_data import prepare_canonical_raw
 from workflows.preparation_utils import file_checksum
 
 SEED = 42
+
+
+def _sciplex_gene_panel(data: ad.AnnData, config: dict) -> tuple[ad.AnnData, dict]:
+    """Apply the frozen global HVG + per-condition DE panel to a sci-Plex view."""
+    panel = config.get("gene_panel")
+    if panel is None:
+        return data, {}
+
+    n_hvgs = int(panel["n_hvgs"])
+    n_de_genes = int(panel["n_de_genes_per_condition"])
+    hvg_flavor = str(panel["hvg_flavor"])
+    de_method = str(panel["de_method"])
+    conditions = sorted(set(data.obs["model_perturbation"].astype(str)) - {"control"})
+    expected_conditions = int(config["n_point_conditions"])
+    if len(conditions) != expected_conditions:
+        raise ValueError(
+            f"sci-Plex gene selection found {len(conditions)} treated conditions; "
+            f"expected {expected_conditions}"
+        )
+
+    sc.pp.highly_variable_genes(
+        data,
+        n_top_genes=min(n_hvgs, data.n_vars),
+        flavor=hvg_flavor,
+        inplace=True,
+    )
+    hvg_genes = set(data.var_names[data.var["highly_variable"].astype(bool)])
+
+    # Pool the three contexts for each drug-dose comparison, exactly as declared in the
+    # experiment config. The data are already normalized/log1p at this point; controls from
+    # every context form the common reference group.
+    data.obs["_gene_panel_group"] = pd.Categorical(
+        data.obs["model_perturbation"].astype(str),
+        categories=["control", *conditions],
+    )
+    key = "_gene_panel_de"
+    sc.tl.rank_genes_groups(
+        data,
+        groupby="_gene_panel_group",
+        groups=conditions,
+        reference="control",
+        method=de_method,
+        n_genes=min(n_de_genes, data.n_vars),
+        key_added=key,
+        use_raw=False,
+    )
+    de_by_condition = {
+        condition: list(map(str, data.uns[key]["names"][condition][:n_de_genes]))
+        for condition in conditions
+    }
+    de_genes = {gene for genes in de_by_condition.values() for gene in genes}
+    selected = hvg_genes | de_genes
+    if not selected:
+        raise ValueError("sci-Plex gene panel selection produced an empty panel")
+
+    data.var["gene_panel_hvg"] = data.var_names.isin(hvg_genes)
+    data.var["gene_panel_de"] = data.var_names.isin(de_genes)
+    data.var["gene_panel_selected"] = data.var_names.isin(selected)
+    del data.obs["_gene_panel_group"]
+    del data.uns[key]
+    result = data[:, data.var["gene_panel_selected"].to_numpy()].copy()
+    metadata = {
+        "scope": "global-across-all-contexts",
+        "hvg": {
+            "flavor": hvg_flavor,
+            "requested": n_hvgs,
+            "selected": len(hvg_genes),
+        },
+        "differential_expression": {
+            "method": de_method,
+            "reference": "pooled-controls-across-all-contexts",
+            "genes_per_condition": n_de_genes,
+            "n_conditions": len(conditions),
+            "unique_genes": len(de_genes),
+        },
+        "union_genes": result.n_vars,
+    }
+    result.uns["gene_panel"] = metadata
+    result.uns["gene_panel_de_by_condition"] = de_by_condition
+    return result, metadata
 
 
 def _condition_rng(seed: int, context: str, condition: str) -> np.random.Generator:
@@ -233,7 +317,75 @@ def prepare_context_view(
     combined = ad.concat(datasets, join="inner", merge="same", index_unique=None)
     sc.pp.filter_genes(combined, min_cells=3)
     combined.var["gene_name"] = combined.var_names
+    if "drugs" in config:
+        combined, _ = _sciplex_gene_panel(combined, config)
     return combined
+
+
+def _write_context_metadata(output: Path, result: ad.AnnData) -> dict:
+    counts = (
+        result.obs.assign(_n_cells=1)
+        .groupby(["context", "model_perturbation"], observed=True)["_n_cells"]
+        .sum()
+        .rename("n_cells")
+        .reset_index()
+        .sort_values(["context", "model_perturbation"])
+    )
+    counts_path = output.with_name(f"{output.stem}.cell-counts.tsv")
+    counts.to_csv(counts_path, sep="\t", index=False)
+    return {
+        "path": counts_path.name,
+        "sha256": file_checksum(counts_path),
+        "n_rows": len(counts),
+        "minimum_treated_cells": int(
+            counts.loc[counts["model_perturbation"] != "control", "n_cells"].min()
+        ),
+        "maximum_treated_cells": int(
+            counts.loc[counts["model_perturbation"] != "control", "n_cells"].max()
+        ),
+    }
+
+
+def _write_gene_panel_metadata(output: Path, result: ad.AnnData, config: dict) -> dict | None:
+    if "drugs" not in config:
+        return None
+    panel_path = output.with_name(f"{output.stem}.gene-panel.tsv")
+    columns = ["gene_panel_hvg", "gene_panel_de", "gene_panel_selected"]
+    panel = result.var[columns].copy()
+    panel.index.name = "gene"
+    panel.to_csv(panel_path, sep="\t")
+    metadata = dict(result.uns["gene_panel"])
+    assignments_path = output.with_name(f"{output.stem}.gene-panel-de.tsv")
+    assignments = pd.DataFrame(
+        [
+            {"condition": condition, "rank": rank, "gene": gene}
+            for condition, genes in sorted(result.uns["gene_panel_de_by_condition"].items())
+            for rank, gene in enumerate(genes, start=1)
+        ]
+    )
+    assignments.to_csv(assignments_path, sep="\t", index=False)
+    metadata["differential_expression"]["assignments"] = {
+        "path": assignments_path.name,
+        "sha256": file_checksum(assignments_path),
+        "n_rows": len(assignments),
+    }
+    return {
+        **metadata,
+        "path": panel_path.name,
+        "sha256": file_checksum(panel_path),
+    }
+
+
+def _atomic_write_h5ad(data: ad.AnnData, output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(dir=output.parent, prefix=f".{output.name}.", suffix=".tmp")
+    os.close(fd)
+    try:
+        data.write_h5ad(temporary, compression="gzip")
+        os.replace(temporary, output)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _parse_inputs(values: list[str]) -> dict[str, Path]:
@@ -262,6 +414,9 @@ def main() -> int:
     for path in inputs.values():
         if not path.is_file():
             raise FileNotFoundError(path)
+    input_checksums = {name: file_checksum(path) for name, path in inputs.items()}
+    if args.output.resolve() in {path.resolve() for path in inputs.values()}:
+        raise ValueError("--output must not overwrite a canonical input")
     result = prepare_context_view(
         config,
         inputs,
@@ -270,13 +425,21 @@ def main() -> int:
         max_controls=args.max_controls,
         seed=args.seed,
     )
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    result.write_h5ad(args.output)
+    _atomic_write_h5ad(result, args.output)
+    for name, path in inputs.items():
+        if file_checksum(path) != input_checksums[name]:
+            raise RuntimeError(f"canonical input changed during preparation: {path}")
+    counts = _write_context_metadata(args.output, result)
+    gene_panel = _write_gene_panel_metadata(args.output, result, config)
     manifest = {
         "schema_version": 1,
         "experiment": config["id"],
         "config_sha256": file_checksum(args.config),
-        "inputs": {name: {"path": str(path), "sha256": file_checksum(path)} for name, path in inputs.items()},
+        "command": shlex.join([sys.executable, *sys.argv]),
+        "inputs": {
+            name: {"path": str(path), "sha256": input_checksums[name], "verified_unchanged": True}
+            for name, path in inputs.items()
+        },
         "output": {
             "path": args.output.name,
             "sha256": file_checksum(args.output),
@@ -289,7 +452,10 @@ def main() -> int:
             "max_controls": args.max_controls,
             "seed": args.seed,
         },
+        "cell_counts": counts,
     }
+    if gene_panel is not None:
+        manifest["gene_panel"] = gene_panel
     args.output.with_suffix(".manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {result.shape} context-transfer model view to {args.output}")
     return 0

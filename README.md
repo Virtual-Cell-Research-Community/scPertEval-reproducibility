@@ -28,6 +28,8 @@ research artifacts.
   are ignored.
 - `predictions/` — the public prediction-bundle contract and local artifact
   layout; generated predictions are ignored.
+- `runs/` — generated model × fold × seed directories containing resolved
+  configurations, checkpoints, predictions, checksums, and completion records.
 - `workflows/` — orchestration entry points that connect preparation, model
   execution, validation, evaluation, and figures.
 - `schemas/` — machine-readable artifact manifests.

@@ -142,6 +142,7 @@ def build_prediction_manifest(
     maximum_cells_per_condition: int = 100,
     expression_space: str = "log1p_expression",
     evaluation_transform: str = "identity",
+    dataset_id: str | None = None,
 ) -> dict:
     """Validate an artifact and return its schema-v1 archival manifest."""
     split = json.loads(split_manifest_path.read_text())
@@ -154,7 +155,7 @@ def build_prediction_manifest(
         minimum_cells_per_condition,
         maximum_cells_per_condition,
     )
-    dataset_id = dataset_manifest_path.stem
+    dataset_id = dataset_id or split.get("dataset") or dataset_manifest_path.stem
     prediction_id = f"{model_id}-{dataset_id}-{split['id']}-fold-{fold}-seed-{seed}"
     manifest = {
         "schema_version": 1,

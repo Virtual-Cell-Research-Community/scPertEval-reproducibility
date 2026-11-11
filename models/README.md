@@ -46,9 +46,8 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 `models/data/`; it never changes the canonical file.
 
 ```bash
-# Apply the model-only normalization and Miller-consistent preparation. The selected public
-# study models are GEARS and STATE, so only GEARS' external gene reference constrains the
-# shared perturbation cohort.
+# Apply the model-only normalization and Miller-consistent preparation. The final common
+# perturbation cohort is compatible with GEARS, PRESAGE, scGPT, scLAMBDA, STATE, and TabICLv2.
 uv run python -m models.data.prepare_data \
   --input data/processed/replogle-weissman-2022-k562-essential/adata.h5ad \
   --dataset-name replogle-weissman-2022-k562-essential \
@@ -130,6 +129,34 @@ Context-transfer experiments use a combined, bounded model view produced by
 STATE sees, while `obs["evaluation_condition"]` includes the context and is the
 identifier stored in prediction bundles.
 
+Materialize the frozen 50-cell genetic view from canonical raw-count objects:
+
+```bash
+uv run python -m models.data.prepare_context \
+  --config configs/experiments/replogle-nadig-four-context-50-cell.json \
+  --input replogle-weissman-2022-k562-essential=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/replogle-weissman-2022-k562-essential/adata.h5ad \
+  --input replogle-weissman-2022-rpe1=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/replogle-weissman-2022-rpe1/adata.h5ad \
+  --input nadig-oconner-2024-hepg2=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/nadig-oconner-2024-hepg2/adata.h5ad \
+  --input nadig-oconner-2024-jurkat=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/nadig-oconner-2024-jurkat/adata.h5ad \
+  --output models/data/replogle-nadig-four-context-50-cell/raw.h5ad
+```
+
+Materialize sci-Plex3. This command applies the declared global union of 8,192
+HVGs and the top 100 DE genes per drug-dose comparison; it does not alter the
+canonical raw-count object:
+
+```bash
+uv run python -m models.data.prepare_context \
+  --config configs/experiments/sciplex3-nine-drug-context-transfer.json \
+  --input srivatsan-trapnell-2020-sciplex3=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/srivatsan-trapnell-2020-sciplex3/adata.h5ad \
+  --output models/data/sciplex3-nine-drug-context-transfer/raw.h5ad
+```
+
+Each command writes `raw.manifest.json`, exact `raw.cell-counts.tsv`, and—where
+applicable—`raw.gene-panel.tsv` plus the per-condition ranked
+`raw.gene-panel-de.tsv`. Input checksums are taken before preparation and verified
+again after the atomic output write.
+
 STATE uses cell-load's few-shot split rather than zero-shot splitting. Every
 treated condition in the held-out context is assigned to the test split, while
 its control cells remain available to the model. The experiment manifest also
@@ -148,4 +175,22 @@ pixi run -e state python state/train_predict.py \
 The same command shape applies to `sciplex3-nine-drug-context-transfer`.
 STATE retains its native per-cell predictions. No-change and fold-mean context
 baselines emit fixed 100-cell populations so they participate in both profile
-and distributional sensitivity analyses.
+and distributional sensitivity analyses. The context linear baseline is a
+single joint ridge model over condition identities and control-state PCs and
+uses only held-out-context control cells.
+
+All current context runners use the shared generated layout:
+
+```text
+runs/<experiment>/<model>/<fold-id>/seed-<seed>/
+  resolved-run.json
+  checkpoints/
+  logs/
+  predictions/predictions.h5ad
+  predictions/predictions.manifest.json
+  completion.json
+```
+
+`completion.json` is written last and checksums every required artifact. A
+matching rerun is skipped only when its resolved configuration and all artifact
+checksums still validate; an interrupted run remains resumable.

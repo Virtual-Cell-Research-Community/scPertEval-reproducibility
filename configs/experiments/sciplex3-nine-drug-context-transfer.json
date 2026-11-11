@@ -49,6 +49,11 @@
   "gene_panel": {
     "scope": "global-across-all-contexts",
     "components": ["top-8192-hvgs", "top-100-de-genes-per-retained-drug-dose"],
+    "n_hvgs": 8192,
+    "hvg_flavor": "seurat",
+    "n_de_genes_per_condition": 100,
+    "de_method": "t-test",
+    "de_reference": "pooled-controls-across-all-contexts",
     "compound_target_genes": false,
     "outcome_informed": true,
     "target_size_approximate": 9000

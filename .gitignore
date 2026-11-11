@@ -6,6 +6,7 @@ predictions/artifacts/
 results/
 checkpoints/
 logs/
+runs/
 
 # Local environments and tooling
 .venv/

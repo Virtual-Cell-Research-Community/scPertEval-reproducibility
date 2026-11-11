@@ -29,6 +29,7 @@ from workflows.evaluate import (
 from workflows.predictions import build_prediction_manifest, expected_test_conditions, validate_prediction_h5ad
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
+from workflows.run_contract import begin_run, complete_run, completed_run_is_valid, run_directory
 from workflows.semantic_h5ad import compare_semantic_h5ad, semantic_h5ad_sha256
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -319,6 +320,42 @@ def test_prediction_manifest_validates_fold_conditions_and_gene_set(tmp_path: Pa
     assert len(manifest["artifact"]["sha256"]) == 64
 
 
+def test_run_contract_skips_only_checksum_valid_completed_runs(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.json"
+    input_path.write_text('{"frozen": true}\n')
+    root = tmp_path / "runs"
+    kwargs = {
+        "experiment": "experiment",
+        "model": "model",
+        "fold": "holdout-a",
+        "seed": 42,
+        "configuration": {"epochs": 1},
+        "inputs": {"input": input_path},
+        "command": ["python", "runner.py"],
+        "repo_root": ROOT,
+    }
+
+    first = begin_run(root, **kwargs)
+    assert not first.skipped
+    assert first.directory == run_directory(
+        root,
+        experiment="experiment",
+        model="model",
+        fold="holdout-a",
+        seed=42,
+    )
+    prediction = first.directory / "predictions" / "predictions.h5ad"
+    prediction.write_bytes(b"prediction")
+    complete_run(first, {"prediction": prediction})
+    assert completed_run_is_valid(first.directory, resolved_sha256=first.resolved_sha256)
+
+    second = begin_run(root, **kwargs)
+    assert second.skipped
+    prediction.write_bytes(b"tampered")
+    third = begin_run(root, **kwargs)
+    assert not third.skipped
+
+
 def test_population_prediction_archive_rejects_more_than_100_cells(tmp_path: Path) -> None:
     truth = AnnData(
         X=sp.csr_matrix(np.ones((2, 2), dtype=np.float32)),
@@ -577,7 +614,7 @@ def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_pat
         ],
     }
     predictions = predict_context_baselines(result, split, 0)
-    assert set(predictions) == {"no-change", "fold-mean"}
+    assert set(predictions) == {"no-change", "fold-mean", "linear"}
     assert predictions["no-change"].obs["perturbation"].tolist() == ["context-b::G1", "context-b::G2"]
     assert predictions["fold-mean"].shape == (2, 201)
 
@@ -598,6 +635,75 @@ def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_pat
         population_predictions["no-change"].X[:2].toarray(),
         population_predictions["no-change"].X[2:].toarray(),
     )
+
+
+def test_sciplex_context_view_applies_frozen_global_gene_panel(tmp_path: Path) -> None:
+    rng = np.random.default_rng(12)
+    genes = [f"gene-{index}" for index in range(220)]
+    rows = []
+    matrices = []
+    for context in ["A", "B"]:
+        for perturbation, dose, is_control in [
+            ("DMSO", 0.0, True),
+            ("drug-a", 10.0, False),
+            ("drug-b", 10.0, False),
+        ]:
+            matrix = rng.poisson(5, size=(6, len(genes))).astype(np.float32)
+            if perturbation == "drug-a":
+                matrix[:, :4] += 15
+            elif perturbation == "drug-b":
+                matrix[:, 4:8] += 15
+            matrices.append(matrix)
+            rows.extend(
+                {
+                    "cell_line": context,
+                    "perturbation": perturbation,
+                    "dose": dose,
+                    "is_control": is_control,
+                }
+                for _ in range(len(matrix))
+            )
+    canonical = AnnData(
+        X=sp.csr_matrix(np.vstack(matrices)),
+        obs=pd.DataFrame(rows, index=[f"cell-{index}" for index in range(len(rows))]),
+        var=pd.DataFrame(index=genes),
+    )
+    source = tmp_path / "sciplex.h5ad"
+    canonical.write_h5ad(source)
+    source_sha256 = file_checksum(source)
+    config = {
+        "id": "chemical-test",
+        "dataset": "chemical-test",
+        "contexts": ["A", "B"],
+        "drugs": [
+            {"label": "drug-a", "canonical_label": "drug-a"},
+            {"label": "drug-b", "canonical_label": "drug-b"},
+        ],
+        "doses": [10.0],
+        "n_point_conditions": 2,
+        "population_exclusions": [],
+        "gene_panel": {
+            "n_hvgs": 8,
+            "hvg_flavor": "seurat",
+            "n_de_genes_per_condition": 4,
+            "de_method": "t-test",
+        },
+    }
+
+    result = prepare_context_view(
+        config,
+        {"chemical-test": source},
+        minimum_cells=2,
+        max_cells=6,
+        max_controls=6,
+        seed=42,
+    )
+
+    assert 8 <= result.n_vars <= 16
+    assert result.var["gene_panel_selected"].all()
+    assert result.var["gene_panel_hvg"].sum() == 8
+    assert result.uns["gene_panel"]["differential_expression"]["n_conditions"] == 2
+    assert file_checksum(source) == source_sha256
 
 
 def test_state_context_toml_retains_heldout_controls_and_relabels_predictions(tmp_path: Path) -> None:
