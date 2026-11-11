@@ -78,20 +78,6 @@ def select_heldout_controls(
     return data[selected].copy()
 
 
-def counts_to_evaluation_view(counts: np.ndarray, target_sum: float = 10_000.0) -> np.ndarray:
-    """Map positive predicted counts to the shared normalize-total/log1p view."""
-    values = np.asarray(counts, dtype=np.float32)
-    if values.ndim != 2:
-        raise ValueError("predicted counts must be a two-dimensional matrix")
-    if not np.isfinite(values).all() or np.any(values < 0):
-        raise ValueError("predicted counts must be finite and non-negative")
-    totals = values.sum(axis=1, keepdims=True, dtype=np.float64)
-    if np.any(totals <= 0):
-        raise ValueError("predicted count rows must have positive totals")
-    normalized = values * (target_sum / totals)
-    return np.log1p(normalized).astype(np.float32)
-
-
 def build_prediction_adata(
     predictions: dict[str, np.ndarray],
     var: pd.DataFrame,
@@ -99,7 +85,7 @@ def build_prediction_adata(
     test_context: str,
     population_size: int,
 ) -> ad.AnnData:
-    """Package per-condition native-count predictions in the common evaluation space."""
+    """Package per-condition predictions without altering native predicted counts."""
     if not predictions:
         raise ValueError("no scDisInFact predictions were supplied")
     matrices = []
@@ -112,7 +98,11 @@ def build_prediction_adata(
                 f"condition {condition!r} has shape {matrix.shape}; "
                 f"expected {(population_size, len(var))}"
             )
-        matrices.append(counts_to_evaluation_view(matrix))
+        if not np.isfinite(matrix).all() or np.any(matrix < 0):
+            raise ValueError("scDisInFact predictions must be finite and non-negative")
+        if np.any(matrix.sum(axis=1) <= 0):
+            raise ValueError("scDisInFact predicted count rows must have positive totals")
+        matrices.append(matrix.astype(np.float32))
         archival = f"{test_context}::{condition}"
         for index in range(population_size):
             names.append(f"{archival}::prediction-{index}")

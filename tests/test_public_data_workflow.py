@@ -23,7 +23,6 @@ from models.data.prepare_data import finalize_model_annotations, prepare_canonic
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from models.scdisinfact.context_config import (
     build_prediction_adata,
-    counts_to_evaluation_view,
     select_scdisinfact_training_data,
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
@@ -34,6 +33,7 @@ from models.trvae.context_config import select_trvae_training_data
 from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
+    apply_prediction_evaluation_transform,
     compare_to_reference,
     evaluate_bundle,
     matched_draw,
@@ -1046,11 +1046,15 @@ def test_scdisinfact_context_helpers_keep_native_counts_and_package_predictions(
         "context-b::G1": 3,
         "context-b::G2": 3,
     }
-    np.testing.assert_allclose(np.expm1(prediction.X).sum(axis=1), 10_000, rtol=1e-5)
-    np.testing.assert_allclose(
-        counts_to_evaluation_view(native["G1"]),
+    np.testing.assert_array_equal(
         prediction[prediction.obs["model_perturbation"] == "G1"].X,
+        native["G1"],
     )
+    evaluated = apply_prediction_evaluation_transform(
+        prediction,
+        "normalize-total-10000-log1p",
+    )
+    np.testing.assert_allclose(np.expm1(evaluated.X).sum(axis=1), 10_000, rtol=1e-5)
 
 
 def test_trvae_context_helpers_build_one_joint_leak_free_fold() -> None:

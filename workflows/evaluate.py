@@ -10,6 +10,7 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 from scipy.stats import kendalltau, spearmanr
 
 from workflows.predictions import expected_test_conditions
@@ -17,6 +18,39 @@ from workflows.predictions import expected_test_conditions
 
 def _dense_mean(matrix) -> np.ndarray:
     return np.asarray(matrix.mean(axis=0)).ravel()
+
+
+def apply_prediction_evaluation_transform(prediction: ad.AnnData, transform: str) -> ad.AnnData:
+    """Map a declared native prediction space into the shared evaluation view."""
+    if transform == "identity":
+        return prediction
+    if transform != "normalize-total-10000-log1p":
+        raise ValueError(f"evaluation transform {transform!r} is not implemented")
+
+    result = prediction.copy()
+    if sp.issparse(result.X):
+        totals = np.asarray(result.X.sum(axis=1)).ravel()
+        if np.any(totals <= 0):
+            raise ValueError("prediction rows must have positive totals before normalization")
+        result.X = sp.diags(10_000.0 / totals) @ result.X
+        result.X.data = np.log1p(result.X.data).astype(np.float32)
+    else:
+        values = np.asarray(result.X, dtype=np.float32)
+        totals = values.sum(axis=1, keepdims=True, dtype=np.float64)
+        if np.any(totals <= 0):
+            raise ValueError("prediction rows must have positive totals before normalization")
+        result.X = np.log1p(values * (10_000.0 / totals)).astype(np.float32)
+    return result
+
+
+def _load_prediction_for_evaluation(prediction_path: Path) -> ad.AnnData:
+    prediction = ad.read_h5ad(prediction_path)
+    manifest_path = prediction_path.with_suffix(".manifest.json")
+    if not manifest_path.is_file():
+        return prediction
+    manifest = json.loads(manifest_path.read_text())
+    transform = str(manifest.get("expression", {}).get("evaluation_transform", "identity"))
+    return apply_prediction_evaluation_transform(prediction, transform)
 
 
 def observed_effect_strengths(truth: ad.AnnData, control_label: str = "control") -> dict[str, float]:
@@ -84,7 +118,7 @@ def _load_fold(
         source.file.close()
     if "test_context" in fold_spec:
         truth.obs["perturbation"] = truth.obs["evaluation_condition"].astype(str).to_numpy()
-    prediction = ad.read_h5ad(prediction_path)
+    prediction = _load_prediction_for_evaluation(prediction_path)
     observed = sorted(prediction.obs["perturbation"].astype(str).unique().tolist())
     if observed != expected:
         raise ValueError("prediction conditions do not match the selected split fold")

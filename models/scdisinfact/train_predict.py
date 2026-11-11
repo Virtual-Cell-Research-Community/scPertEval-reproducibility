@@ -296,6 +296,8 @@ def main() -> None:
         environment="models/pixi.lock#scdisinfact",
         command=" ".join([sys.executable, *sys.argv]),
         minimum_cells_per_condition=50,
+        expression_space="raw_counts",
+        evaluation_transform="normalize-total-10000-log1p",
     )
     prediction_manifest_path = prediction_path.with_suffix(".manifest.json")
     prediction_manifest_path.write_text(json.dumps(prediction_manifest, indent=2) + "\n")
