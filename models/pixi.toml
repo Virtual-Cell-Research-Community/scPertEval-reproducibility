@@ -186,6 +186,7 @@ scanpy = ">=1.9,<1.10"
 numba = "0.58.*"
 llvmlite = "0.41.*"
 setuptools = "==70.0.0"
+packaging = "==24.2"
 
 [feature.cpa.pypi-dependencies]
 cpa-tools = "==0.8.8"
