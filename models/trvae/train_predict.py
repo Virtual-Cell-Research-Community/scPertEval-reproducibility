@@ -23,6 +23,7 @@ from models.trvae.context_config import (
     select_heldout_controls,
     select_trvae_training_data,
 )
+from models.trvae.scarchon_patch import apply_scarchon_patches
 from workflows.predictions import build_prediction_manifest
 from workflows.run_contract import begin_run, complete_run, repository_revision
 
@@ -30,7 +31,7 @@ ROOT = REPOSITORY_ROOT
 DATA_ROOT = ROOT / "models" / "data"
 RUN_ROOT = ROOT / "runs"
 
-IMPLEMENTATION_REVISION = "theislab/trvaep@8bfe2dc1553dc1a536113cffbe428d3eb9c96579"
+IMPLEMENTATION_REVISION = "theislab/trvaep==0.1.0+scArchon@42f6c2c202936966ae10c522f784881128b7efbb"
 MODEL_PARAMS = {
     "encoder_layer_sizes": [128, 32],
     "decoder_layer_sizes": [32, 128],
@@ -135,6 +136,7 @@ def main() -> None:
         print(f"skipping verified completed run: {handle.directory}")
         return
 
+    apply_scarchon_patches()
     from trvaep.model import CVAE, Trainer
 
     data = ad.read_h5ad(raw)

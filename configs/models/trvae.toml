@@ -7,11 +7,14 @@ tasks = ["leave-one-context-out"]
 
 [implementation]
 repository = "https://github.com/theislab/trvaep"
-revision = "8bfe2dc1553dc1a536113cffbe428d3eb9c96579"
+revision = "pypi:trvaep==0.1.0"
+scarchon_repository = "https://github.com/hdsu-bioquant/scArchon"
+scarchon_revision = "42f6c2c202936966ae10c522f784881128b7efbb"
 reference = "official PyTorch implementation with scArchon architecture and training configuration"
 
 [adapter]
 path = "models/trvae/train_predict.py"
+compatibility_patch = "models/trvae/scarchon_patch.py"
 environment = "models/pixi.toml#trvae"
 lockfile = "models/pixi.lock"
 
