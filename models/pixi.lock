@@ -478,7 +478,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/56/3d/c7dc9f35bc9e22cdb53679f844bee40fd5cff871862f60595869a433400d/debugpy-1.8.22-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/56/43/4ca9e49d27a1fcf6bece6f6aec0ea46bb9112489b93d4b688fb415457bdb/iniconfig-2.3.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/56/e2/480bcdb153feecde4d736b18c908c7eee4846f11d7547d2e0c71499af630/pycodestyle-2.15.0-py2.py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/57/5c/f8fc0eb2de03464a557d5a4d0c15e972d73362414696618833b771f7eddd/pyarrow-25.0.1-cp310-cp310-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/58/9d/40b6267367182187139a4000b82a3b287d84d745bccd808e75d916920e9d/bleach-6.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/5a/9c/598d765e98aa02ff7204b6f11cf790e5840f5e8252d7b1d955ed0043bb94/multidict-7.1.0-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
@@ -601,6 +600,7 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/f0/51/5adee15e12a7e314cece4543fbf295b0fe1b504dc78b32dff4c8eb1e29b0/propcache-0.5.4-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f1/1d/0a6be99b69bb448448403a45a241aff0dca751832ae54f027ed940d2eb52/jinxed-2.1.0-py2.py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f1/7b/ce1eafaf1a76852e2ec9b22edecf1daa58175c090266e9f6c64afcd81d91/stack_data-0.6.3-py3-none-any.whl
+      - pypi: https://files.pythonhosted.org/packages/f1/ca/ae10fba419a6e94329707487835ec721f5a95f3ac9168500bcf7aa3813c7/pyarrow-20.0.0-cp310-cp310-manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f1/d9/7fb5aa316bc299258e68c73ba3bddbc499654a07f151cba08f6153988714/pathspec-1.1.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/f3/18/a17e2f0cde02dc10154c808deed7e1d8528afff93612f70d3f0a5b19b011/websockets-16.1.1-cp310-cp310-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/f4/ba/223e00b885e960edd5d4b4d178c88acce019bd5b83786093681b8c393492/platformdirs-4.12.4-py3-none-any.whl
@@ -14193,11 +14193,6 @@ packages:
   version: 2.15.0
   sha256: 12fd2f73c7b8ee8845a0431111df8faf4c1a07d6e64e2ee7f0c74014dab14181
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/57/5c/f8fc0eb2de03464a557d5a4d0c15e972d73362414696618833b771f7eddd/pyarrow-25.0.1-cp310-cp310-manylinux_2_28_x86_64.whl
-  name: pyarrow
-  version: 25.0.1
-  sha256: a4d6d5e9a3d1879a97c08ded0c797579b7965eafd0f0c26c30b45ccc06db939b
-  requires_python: '>=3.10'
 - pypi: https://files.pythonhosted.org/packages/58/0a/a10b45aab35b175aded078a462dc8d0c698f5b13946e7cb0869097b78bb6/absl_py-2.5.0-py3-none-any.whl
   name: absl-py
   version: 2.5.0
@@ -18706,6 +18701,17 @@ packages:
   - pygments ; extra == 'tests'
   - littleutils ; extra == 'tests'
   - cython ; extra == 'tests'
+- pypi: https://files.pythonhosted.org/packages/f1/ca/ae10fba419a6e94329707487835ec721f5a95f3ac9168500bcf7aa3813c7/pyarrow-20.0.0-cp310-cp310-manylinux_2_28_x86_64.whl
+  name: pyarrow
+  version: 20.0.0
+  sha256: a5704f29a74b81673d266e5ec1fe376f060627c2e42c5c7651288ed4b0db29e9
+  requires_dist:
+  - pytest ; extra == 'test'
+  - hypothesis ; extra == 'test'
+  - cffi ; extra == 'test'
+  - pytz ; extra == 'test'
+  - pandas ; extra == 'test'
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/f1/ce/13b2ba57838b8db1e6bd033c1b21ce0b9f6153b87d4e4939f77074e41eb0/huggingface_hub-1.23.0-py3-none-any.whl
   name: huggingface-hub
   version: 1.23.0
