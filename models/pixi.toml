@@ -195,6 +195,26 @@ jaxlib = "==0.4.23"
 [feature.cpa.tasks]
 smoke-test = "python -c \"import cpa, torch; from importlib.metadata import version; print('cpa-tools', version('cpa-tools')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
 
+# --- bioLORD (https://github.com/nitzanlab/biolord) -------------------------
+# Pin the latest upstream release and the scvi-tools generation its 2024 API targets.
+[feature.biolord.system-requirements]
+cuda = "12"
+
+[feature.biolord.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.2.*"
+numpy = "1.26.*"
+anndata = ">=0.10,<0.11"
+scanpy = ">=1.10,<1.11"
+scvi-tools = "1.1.*"
+setuptools = "<81"
+
+[feature.biolord.pypi-dependencies]
+biolord = { git = "https://github.com/nitzanlab/biolord.git", rev = "b7688790e49728d7f8d0906b980a629de484b19b" }
+
+[feature.biolord.tasks]
+smoke-test = "python -c \"import biolord, torch; from importlib.metadata import version; print('biolord', version('biolord')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
 # --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
 # tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
 # tabular foundation models on perturbation-response prediction. It also ships a separate
@@ -231,4 +251,5 @@ presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
+biolord = { features = ["biolord"], no-default-feature = true }
 tabicl = { features = ["tabicl"], no-default-feature = true }

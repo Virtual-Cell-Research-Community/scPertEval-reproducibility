@@ -12,6 +12,11 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from models.baselines.context_baselines import predict_context_baselines
+from models.biolord.context_config import (
+    assign_biolord_splits,
+    relabel_biolord_predictions,
+    select_heldout_controls,
+)
 from models.cpa.context_config import assign_cpa_splits, build_counterfactual_queries
 from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
 from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
@@ -868,3 +873,70 @@ def test_cpa_context_helpers_assign_joint_fold_and_build_bounded_queries() -> No
         "context-b::G2": 3,
     }
     assert set(queries.obs["context"].astype(str)) == {"context-b"}
+
+
+def test_biolord_context_helpers_build_and_relabel_bounded_populations() -> None:
+    split = {
+        "perturbations": ["G1", "G2"],
+        "validation_conditions": ["G2"],
+        "folds": [
+            {
+                "id": "holdout-b",
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    rows = []
+    for context in ["context-a", "context-b"]:
+        for perturbation in ["control", "G1", "G2"]:
+            for index in range(4):
+                rows.append(
+                    {
+                        "context": context,
+                        "model_perturbation": perturbation,
+                        "cell": f"{context}-{perturbation}-{index}",
+                    }
+                )
+    obs = pd.DataFrame(rows).set_index("cell")
+    data = AnnData(
+        X=np.ones((len(obs), 3), dtype=np.float32),
+        obs=obs,
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+
+    prepared = assign_biolord_splits(data, split, 0)
+    assert prepared.obs["biolord_split"].value_counts().to_dict() == {
+        "train": 12,
+        "test": 8,
+        "valid": 4,
+    }
+    controls = select_heldout_controls(prepared, split, 0, population_size=3, seed=7)
+    assert controls.shape == (3, 3)
+    assert set(controls.obs["model_perturbation"].astype(str)) == {"control"}
+    assert set(controls.obs["context"].astype(str)) == {"context-b"}
+
+    prediction = ad.concat(
+        [
+            AnnData(
+                X=np.ones((3, 3), dtype=np.float32),
+                obs=pd.DataFrame(
+                    {"model_perturbation": [condition] * 3},
+                    index=[f"{condition}-{index}" for index in range(3)],
+                ),
+                var=data.var.copy(),
+            )
+            for condition in ["control", "G1", "G2"]
+        ]
+    )
+    relabeled = relabel_biolord_predictions(
+        prediction,
+        split,
+        0,
+        population_size=3,
+    )
+    assert relabeled.shape == (6, 3)
+    assert relabeled.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G1": 3,
+        "context-b::G2": 3,
+    }

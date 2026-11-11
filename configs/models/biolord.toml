@@ -1,0 +1,36 @@
+schema_version = 1
+id = "biolord"
+title = "bioLORD"
+capability = "population"
+modalities = ["genetic", "chemical"]
+tasks = ["leave-one-context-out"]
+
+[implementation]
+repository = "https://github.com/nitzanlab/biolord"
+revision = "b7688790e49728d7f8d0906b980a629de484b19b"
+version = "0.0.3"
+reference = "official bioLORD pipeline configuration"
+
+[adapter]
+path = "models/biolord/train_predict.py"
+environment = "models/pixi.toml#biolord"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "joint categorical attribute"
+context_conditioning = "joint categorical attribute with held-out controls available"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 500
+early_stop_patience = 20
+check_val_every_n_epoch = 10
+batch_size = 512
+hyperparameter_policy = "published official tutorial configuration; no dataset-specific tuning"
+
+[resources]
+gpus = 1
+cpus = 16
+memory_gb = 96
+time = "24:00:00"
