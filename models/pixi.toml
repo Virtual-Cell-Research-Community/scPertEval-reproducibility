@@ -178,7 +178,7 @@ cuda = "11.8"
 
 [feature.cpa.dependencies]
 python = "3.10.*"
-pytorch-gpu = "2.0.1.*"
+pytorch-gpu = "2.0.0.*"
 numpy = ">=1.22.4,<1.24"
 anndata = ">=0.9,<0.10"
 
