@@ -12,6 +12,7 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from models.baselines.context_baselines import predict_context_baselines
+from models.cpa.context_config import assign_cpa_splits, build_counterfactual_queries
 from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
 from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
@@ -821,3 +822,49 @@ def test_state_context_toml_retains_heldout_controls_and_relabels_predictions(tm
         "context-b::G1": 2,
         "context-b::G2": 2,
     }
+
+
+def test_cpa_context_helpers_assign_joint_fold_and_build_bounded_queries() -> None:
+    split = {
+        "perturbations": ["G1", "G2"],
+        "validation_conditions": ["G2"],
+        "folds": [
+            {
+                "id": "holdout-b",
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    rows = []
+    for context in ["context-a", "context-b"]:
+        for perturbation in ["control", "G1", "G2"]:
+            for index in range(4):
+                rows.append(
+                    {
+                        "context": context,
+                        "model_perturbation": perturbation,
+                        "cell": f"{context}-{perturbation}-{index}",
+                    }
+                )
+    obs = pd.DataFrame(rows).set_index("cell")
+    data = AnnData(
+        X=np.ones((len(obs), 3), dtype=np.float32),
+        obs=obs,
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+
+    prepared = assign_cpa_splits(data, split, 0)
+    assert prepared.obs["cpa_split"].value_counts().to_dict() == {
+        "train": 12,
+        "test": 8,
+        "valid": 4,
+    }
+
+    queries = build_counterfactual_queries(prepared, split, 0, population_size=3, seed=7)
+    assert queries.shape == (6, 3)
+    assert queries.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G1": 3,
+        "context-b::G2": 3,
+    }
+    assert set(queries.obs["context"].astype(str)) == {"context-b"}

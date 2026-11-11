@@ -1,0 +1,37 @@
+schema_version = 1
+id = "cpa"
+title = "Compositional Perturbation Autoencoder"
+capability = "population"
+modalities = ["genetic", "chemical"]
+tasks = ["leave-one-context-out"]
+
+[implementation]
+repository = "https://github.com/theislab/cpa"
+revision = "7cda37e9cca2078af1b2373dc6f9422a5bc6f87d"
+version = "0.8.5"
+reference = "scArchon CPA hyperparameters; joint CPA API replaces its per-target wrapper"
+
+[adapter]
+path = "models/cpa/train_predict.py"
+environment = "models/pixi.toml#cpa"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+is_count_data = false
+perturbation_conditioning = "one joint categorical embedding across every condition in a fold"
+context_conditioning = "categorical covariate"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 100
+early_stop_patience = 5
+check_val_every_n_epoch = 5
+batch_size = 64
+hyperparameter_policy = "scArchon-established configuration; Gaussian reconstruction for documented log1p input"
+
+[resources]
+gpus = 1
+cpus = 16
+memory_gb = 64
+time = "12:00:00"
