@@ -8,10 +8,17 @@ cluster resource defaults.
 Capability is explicit: a point model is not silently converted into a
 population model solely to make it eligible for distributional metrics.
 
-The initial ranking-sensitivity study freezes two substantive models: GEARS for
-point prediction on unseen genetic perturbations, and STATE for native
-population prediction across genetic and chemical tracks. No-change,
-training-condition mean, and—where gene embeddings make sense—the bilinear PCA
-baseline anchor the rankings. The interpolated technical duplicate remains a
-positive control, not a ranked model.
+The perturbation-generalization panel freezes six substantive models: GEARS,
+PRESAGE, scGPT, scLAMBDA, STATE, and TabICLv2. No-change, training-condition
+mean, and the bilinear PCA baseline anchor the rankings. The interpolated
+technical duplicate remains an oracle control, not a ranked model.
+
+The context-generalization panel is not yet frozen. STATE is confirmed; trVAE,
+scGen, scPRAM, and scVIDR are under feasibility review using scArchon's published
+implementations. See `docs/study-design.md` for the decision record and the
+adapter-scaling constraint.
+
+Hugo's six existing model environments remain in Pixi. PerturbationData and the
+evaluation/orchestration layer use `uv`; model declarations must record the
+environment or container revision used for each run.
 

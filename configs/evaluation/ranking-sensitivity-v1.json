@@ -2,9 +2,9 @@
   "schema_version": 1,
   "id": "ranking-sensitivity-v1",
   "scperteval_revision": "4685f11927e887745737600170da7a655b727553",
-  "minimum_observed_cells": 12,
+  "minimum_observed_cells": 50,
   "population": {
-    "draw_size": 60,
+    "draw_size": 50,
     "draw_seeds": [42, 314, 2718, 5772, 8119, 104729, 130363, 155921, 196613, 262147]
   },
   "bootstrap": {
