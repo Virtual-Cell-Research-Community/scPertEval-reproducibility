@@ -29,6 +29,7 @@ from models.scdisinfact.context_config import select_heldout_controls as select_
 from models.scdisinfact.joint_patch import choose_present_reference, coerce_reference_id
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
 from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
+from models.trvae.context_config import densify_expression as densify_trvae_expression
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
 from models.trvae.context_config import select_trvae_training_data
 from workflows import data as data_workflow
@@ -1103,6 +1104,12 @@ def test_trvae_context_helpers_build_one_joint_leak_free_fold() -> None:
     }
     controls = select_trvae_controls(data, split, 0, population_size=3, seed=7)
     assert controls.shape == (3, 3)
+
+    sparse_training = training.copy()
+    sparse_training.X = sp.csr_matrix(sparse_training.X)
+    dense_training = densify_trvae_expression(sparse_training)
+    assert isinstance(dense_training.X, np.ndarray)
+    np.testing.assert_array_equal(dense_training.X, training.X)
 
     prediction = build_trvae_prediction_adata(
         {

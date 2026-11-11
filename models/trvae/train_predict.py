@@ -20,6 +20,7 @@ if str(REPOSITORY_ROOT) not in sys.path:
 from models.state.context_config import model_conditions
 from models.trvae.context_config import (
     build_prediction_adata,
+    densify_expression,
     select_heldout_controls,
     select_trvae_training_data,
 )
@@ -140,14 +141,14 @@ def main() -> None:
     from trvaep.model import CVAE, Trainer
 
     data = ad.read_h5ad(raw)
-    training = select_trvae_training_data(
+    training = densify_expression(select_trvae_training_data(
         data,
         split,
         args.fold,
         perturbation_key=args.perturbation_key,
         context_key=args.context_key,
-    )
-    controls = select_heldout_controls(
+    ))
+    controls = densify_expression(select_heldout_controls(
         data,
         split,
         args.fold,
@@ -155,7 +156,7 @@ def main() -> None:
         context_key=args.context_key,
         population_size=args.prediction_population_size,
         seed=args.seed,
-    )
+    ))
     n_conditions = training.obs[args.perturbation_key].astype(str).nunique()
     model = CVAE(
         training.n_vars,

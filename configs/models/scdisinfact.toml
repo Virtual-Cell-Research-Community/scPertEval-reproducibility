@@ -10,6 +10,8 @@ repository = "https://github.com/ZhangLabGT/scDisInFact"
 revision = "9466ecf257d923f879cb39712c530d24826d88bc"
 version = "0.1.0"
 reference = "official upstream API with scArchon's declared hyperparameters"
+scarchon_container = "docker.io/hdsu/scdisinfact_env:latest"
+scarchon_container_digest = "sha256:f3645e283b56493df1c64453698346924606a9c56bf7c00b7a8c4c8880e43ece"
 
 [adapter]
 path = "models/scdisinfact/train_predict.py"

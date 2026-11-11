@@ -10,6 +10,8 @@ repository = "https://github.com/theislab/trvaep"
 revision = "pypi:trvaep==0.1.0"
 scarchon_repository = "https://github.com/hdsu-bioquant/scArchon"
 scarchon_revision = "42f6c2c202936966ae10c522f784881128b7efbb"
+scarchon_container = "docker.io/hdsu/trvae_env:latest"
+scarchon_container_digest = "sha256:c586e5868c1aaab4ff670fe90edbe9e6bec8b76874db11954c041775c1bd77bd"
 reference = "official PyTorch implementation with scArchon architecture and training configuration"
 
 [adapter]

@@ -7,6 +7,20 @@ import zlib
 import anndata as ad
 import numpy as np
 import pandas as pd
+from scipy import sparse
+
+
+def densify_expression(data: ad.AnnData) -> ad.AnnData:
+    """Materialize ``X`` in memory for trvaep 0.1.0's dense-only data loader.
+
+    The caller passes a fold-local AnnData copy, so this never changes the canonical sparse
+    view on disk and avoids duplicating the rest of the AnnData object a second time.
+    """
+    if sparse.issparse(data.X):
+        data.X = data.X.toarray()
+    else:
+        data.X = np.asarray(data.X)
+    return data
 
 
 def _fold(split: dict, fold: int) -> dict:
