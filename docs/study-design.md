@@ -98,17 +98,23 @@ and is reported separately rather than ranked as a deployable model.
 
 ### Context generalization
 
-The substantive panel for both the genetic and chemical tracks is:
+The substantive panel for both context tracks is:
 
 - STATE;
 - CPA, using the maintained `theislab/cpa` implementation;
 - bioLORD;
-- scDisInFact; and
-- trVAE, conditional on a successful joint-condition smoke test.
+- scDisInFact.
 
-All five must represent all perturbations jointly within one fit per context
-fold. If trVAE cannot do this faithfully, it is removed rather than converted
-to one fit per perturbation. scPRAM, scGen, and scVIDR are excluded because
+The chemical track additionally includes trVAE. Its joint chemical smoke test
+completed readily, while the 480-perturbation genetic fold took about 70 minutes
+for one epoch before an arithmetic-preserving MMD-loop optimization and still
+more than 16 minutes afterward. At the established 200 epochs, that would exceed
+53 GPU-hours per genetic fold. trVAE is therefore excluded from the genetic
+track under the prespecified scaling rule rather than being fit separately per
+perturbation.
+
+Every included model must represent all perturbations jointly within one fit per
+context fold. scPRAM, scGen, and scVIDR are excluded because
 their reference workflows require perturbation-specific or compound-specific
 fits. chemCPA is unnecessary because the chemical task holds out contexts, not
 unseen compounds. No-change, training-fold mean, and a context-aware linear
@@ -209,8 +215,8 @@ perturbation-bootstrap uncertainty.
   be used only after checking current GPU ownership and compatibility.
 - Helix is used for high-memory preprocessing, overflow, and final tracked runs
   when workstation resources are insufficient.
-- Run cheap truncated smoke tests before the 105 full context fits
-  (5 models × 3 chemical folds × 3 seeds plus 5 models × 4 genetic folds × 3
+- Run cheap truncated smoke tests before the 93 full context fits
+  (5 models × 3 chemical folds × 3 seeds plus 4 models × 4 genetic folds × 3
   seeds).
 - Completed runs retain resolved configuration, environment lock and code
   revision, checkpoint, predictions, checksums, and a completion record; reruns
@@ -240,3 +246,22 @@ perturbation-bootstrap uncertainty.
 4. Smoke-test every context adapter on one genetic and one chemical fold;
    explicitly verify that trVAE is jointly perturbation-conditioned.
 5. Verify the declared native input and output conversion for every model.
+
+## Current launch readiness
+
+Smoke tests below mean one held-out-context fold with one training epoch. They
+verify the complete adapter contract and final frozen input shapes; they are not
+benchmark results and do not authorize the full launch.
+
+| Gate | Chemical | Genetic | Environment/reference | Status |
+| --- | --- | --- | --- | --- |
+| Frozen input views | 27,940 cells × 8,811 genes | 201,043 cells × 6,640 genes | manifests and checksums validated | ready |
+| STATE | passed | passed | pinned Pixi environment | ready |
+| CPA 0.8.8 | passed | passed | matched to pinned scArchon image | ready |
+| bioLORD | passed | passed | pinned official revision | ready |
+| scDisInFact | passed | passed | source tree and core dependencies match the pinned scArchon image | ready |
+| trVAE | passed | excluded by the prespecified scaling rule | matched to pinned scArchon image, using its corresponding stable pandas release | ready |
+| No-change, fold-mean, and linear baselines | passed | passed | completion records validated | ready |
+| Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
+
+The full benchmark remains deliberately unlaunched until every row is ready.

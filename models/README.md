@@ -184,8 +184,10 @@ pixi run -e state python state/train_predict.py \
 ```
 
 The same command shape applies to `sciplex3-nine-drug-context-transfer` and to
-the four other jointly conditioned context adapters: `cpa`, `biolord`,
-`scdisinfact`, and `trvae`. STATE, CPA, bioLORD, and trVAE consume `raw.h5ad`;
+the jointly conditioned context adapters: `cpa`, `biolord`, `scdisinfact`, and
+`trvae`. trVAE is included only for the chemical track because its joint genetic
+scaling smoke exceeded the prespecified compute threshold. STATE, CPA, bioLORD,
+and trVAE consume `raw.h5ad`;
 scDisInFact consumes `counts.h5ad`. Each adapter records its native prediction
 space and the deterministic transform into the shared log1p evaluation space.
 STATE retains its native per-cell predictions. No-change and fold-mean context
@@ -209,3 +211,8 @@ runs/<experiment>/<model>/<fold-id>/seed-<seed>/
 `completion.json` is written last and checksums every required artifact. A
 matching rerun is skipped only when its resolved configuration and all artifact
 checksums still validate; an interrupted run remains resumable.
+
+If scDisInFact has already written its checkpoint, losses, and predictions but
+was interrupted during manifest or completion-record creation, rerun the same
+command with `--postprocess-existing`. This validates and finalizes those saved
+artifacts without repeating training.

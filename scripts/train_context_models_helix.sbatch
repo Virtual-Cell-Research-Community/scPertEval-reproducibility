@@ -32,6 +32,10 @@ SEED_INDEX="$((SLURM_ARRAY_TASK_ID / TASKS_PER_SEED))"
 TASK_INDEX="$((SLURM_ARRAY_TASK_ID % TASKS_PER_SEED))"
 SEED="${SEEDS[${SEED_INDEX}]}"
 if [[ "${TASK_INDEX}" -lt 4 ]]; then
+  if [[ "${MODEL}" == "trvae" ]]; then
+    echo "trVAE is excluded from the genetic track by its joint-scaling smoke test." >&2
+    exit 2
+  fi
   EXPERIMENT="replogle-nadig-four-context-50-cell"
   FOLD="${TASK_INDEX}"
 else
