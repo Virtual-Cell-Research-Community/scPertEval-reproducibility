@@ -12,7 +12,7 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from models.baselines.context_baselines import predict_context_baselines
-from models.data.prepare_context import prepare_context_view
+from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
 from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
@@ -704,6 +704,38 @@ def test_sciplex_context_view_applies_frozen_global_gene_panel(tmp_path: Path) -
     assert result.var["gene_panel_hvg"].sum() == 8
     assert result.uns["gene_panel"]["differential_expression"]["n_conditions"] == 2
     assert file_checksum(source) == source_sha256
+
+
+def test_context_preparation_reuses_validated_perturbationdata_checksum(tmp_path: Path) -> None:
+    root = tmp_path / "PerturbationData"
+    registry_dir = root / "registry"
+    derived_dir = root / "derived" / "example"
+    registry_dir.mkdir(parents=True)
+    derived_dir.mkdir(parents=True)
+    source = derived_dir / "adata.h5ad"
+    source.write_bytes(b"canonical data")
+    checksum = file_checksum(source)
+    registry = registry_dir / "example.toml"
+    registry.write_text(
+        "\n".join(
+            [
+                'id = "example"',
+                "[derived]",
+                'path = "derived/example/adata.h5ad"',
+                f"size_bytes = {source.stat().st_size}",
+                'checksum_type = "sha256"',
+                f'checksum = "{checksum}"',
+                "",
+            ]
+        )
+    )
+
+    records, states = _input_provenance({"example": source}, {"example": registry})
+    _verify_inputs_unchanged({"example": source}, records, states)
+
+    assert records["example"]["sha256"] == checksum
+    assert records["example"]["checksum_source"] == "PerturbationData-registry"
+    assert records["example"]["verified_unchanged"] is True
 
 
 def test_state_context_toml_retains_heldout_controls_and_relabels_predictions(tmp_path: Path) -> None:

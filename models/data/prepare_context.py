@@ -8,6 +8,7 @@ import os
 import shlex
 import sys
 import tempfile
+import tomllib
 from pathlib import Path
 
 import anndata as ad
@@ -398,10 +399,77 @@ def _parse_inputs(values: list[str]) -> dict[str, Path]:
     return result
 
 
+def _input_provenance(
+    inputs: dict[str, Path],
+    registries: dict[str, Path],
+) -> tuple[dict[str, dict], dict[str, tuple[int, int]]]:
+    """Resolve trusted registry checksums or hash inputs when no registry is supplied."""
+    unknown = sorted(set(registries) - set(inputs))
+    if unknown:
+        raise ValueError(f"registry entries have no matching --input: {', '.join(unknown)}")
+    records = {}
+    states = {}
+    for name, path in inputs.items():
+        stat = path.stat()
+        states[name] = (stat.st_size, stat.st_mtime_ns)
+        if name not in registries:
+            records[name] = {
+                "path": str(path),
+                "sha256": file_checksum(path),
+                "checksum_source": "direct",
+            }
+            continue
+
+        registry_path = registries[name]
+        registry = tomllib.loads(registry_path.read_text())
+        derived = registry["derived"]
+        expected_path = (registry_path.parent.parent / derived["path"]).resolve()
+        if path.resolve() != expected_path:
+            raise ValueError(
+                f"input {name!r} resolves to {path.resolve()}, but registry declares {expected_path}"
+            )
+        if derived["checksum_type"] != "sha256" or len(derived["checksum"]) != 64:
+            raise ValueError(f"registry {registry_path} does not pin a derived SHA-256 checksum")
+        if stat.st_size != int(derived["size_bytes"]):
+            raise ValueError(
+                f"input {name!r} size {stat.st_size} differs from registry size {derived['size_bytes']}"
+            )
+        records[name] = {
+            "path": str(path),
+            "sha256": str(derived["checksum"]),
+            "checksum_source": "PerturbationData-registry",
+            "registry": {
+                "path": str(registry_path),
+                "sha256": file_checksum(registry_path),
+            },
+        }
+    return records, states
+
+
+def _verify_inputs_unchanged(
+    inputs: dict[str, Path],
+    records: dict[str, dict],
+    states: dict[str, tuple[int, int]],
+) -> None:
+    for name, path in inputs.items():
+        stat = path.stat()
+        if (stat.st_size, stat.st_mtime_ns) != states[name]:
+            raise RuntimeError(f"canonical input metadata changed during preparation: {path}")
+        if records[name]["checksum_source"] == "direct" and file_checksum(path) != records[name]["sha256"]:
+            raise RuntimeError(f"canonical input checksum changed during preparation: {path}")
+        records[name]["verified_unchanged"] = True
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--input", action="append", required=True, help="CONTEXT=/path/to/canonical.h5ad")
+    parser.add_argument(
+        "--input-registry",
+        action="append",
+        default=[],
+        help="CONTEXT=/path/to/PerturbationData/registry.toml; reuses its validated derived SHA-256",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--minimum-cells", type=int, default=50)
     parser.add_argument("--max-cells", type=int, default=100)
@@ -411,10 +479,11 @@ def main() -> int:
 
     config = json.loads(args.config.read_text())
     inputs = _parse_inputs(args.input)
+    registries = _parse_inputs(args.input_registry)
     for path in inputs.values():
         if not path.is_file():
             raise FileNotFoundError(path)
-    input_checksums = {name: file_checksum(path) for name, path in inputs.items()}
+    input_records, input_states = _input_provenance(inputs, registries)
     if args.output.resolve() in {path.resolve() for path in inputs.values()}:
         raise ValueError("--output must not overwrite a canonical input")
     result = prepare_context_view(
@@ -426,9 +495,7 @@ def main() -> int:
         seed=args.seed,
     )
     _atomic_write_h5ad(result, args.output)
-    for name, path in inputs.items():
-        if file_checksum(path) != input_checksums[name]:
-            raise RuntimeError(f"canonical input changed during preparation: {path}")
+    _verify_inputs_unchanged(inputs, input_records, input_states)
     counts = _write_context_metadata(args.output, result)
     gene_panel = _write_gene_panel_metadata(args.output, result, config)
     manifest = {
@@ -436,10 +503,7 @@ def main() -> int:
         "experiment": config["id"],
         "config_sha256": file_checksum(args.config),
         "command": shlex.join([sys.executable, *sys.argv]),
-        "inputs": {
-            name: {"path": str(path), "sha256": input_checksums[name], "verified_unchanged": True}
-            for name, path in inputs.items()
-        },
+        "inputs": input_records,
         "output": {
             "path": args.output.name,
             "sha256": file_checksum(args.output),

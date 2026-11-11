@@ -138,6 +138,10 @@ uv run python -m models.data.prepare_context \
   --input replogle-weissman-2022-rpe1=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/replogle-weissman-2022-rpe1/adata.h5ad \
   --input nadig-oconner-2024-hepg2=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/nadig-oconner-2024-hepg2/adata.h5ad \
   --input nadig-oconner-2024-jurkat=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/nadig-oconner-2024-jurkat/adata.h5ad \
+  --input-registry replogle-weissman-2022-k562-essential=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/replogle-weissman-2022-k562-essential.toml \
+  --input-registry replogle-weissman-2022-rpe1=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/replogle-weissman-2022-rpe1.toml \
+  --input-registry nadig-oconner-2024-hepg2=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/nadig-oconner-2024-hepg2.toml \
+  --input-registry nadig-oconner-2024-jurkat=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/nadig-oconner-2024-jurkat.toml \
   --output models/data/replogle-nadig-four-context-50-cell/raw.h5ad
 ```
 
@@ -149,13 +153,15 @@ canonical raw-count object:
 uv run python -m models.data.prepare_context \
   --config configs/experiments/sciplex3-nine-drug-context-transfer.json \
   --input srivatsan-trapnell-2020-sciplex3=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/srivatsan-trapnell-2020-sciplex3/adata.h5ad \
+  --input-registry srivatsan-trapnell-2020-sciplex3=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/srivatsan-trapnell-2020-sciplex3.toml \
   --output models/data/sciplex3-nine-drug-context-transfer/raw.h5ad
 ```
 
 Each command writes `raw.manifest.json`, exact `raw.cell-counts.tsv`, and—where
 applicable—`raw.gene-panel.tsv` plus the per-condition ranked
-`raw.gene-panel-de.tsv`. Input checksums are taken before preparation and verified
-again after the atomic output write.
+`raw.gene-panel-de.tsv`. Validated SHA-256 values are reused from PerturbationData's
+registry while input paths, sizes, and modification metadata are checked before and
+after the atomic output write. Without `--input-registry`, files are hashed directly.
 
 STATE uses cell-load's few-shot split rather than zero-shot splitting. Every
 treated condition in the held-out context is assigned to the test split, while
