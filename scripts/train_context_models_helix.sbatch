@@ -45,6 +45,11 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+# Beast and Beauty expose the NVIDIA driver through NixOS' OpenGL-driver path. This is a
+# no-op on conventional Helix nodes, but keeps the same launcher usable on all three hosts.
+if [[ -d /run/opengl-driver/lib ]]; then
+  export LD_LIBRARY_PATH="/run/opengl-driver/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
 
 echo "[$(date -Is)] model=${MODEL} experiment=${EXPERIMENT} fold=${FOLD} seed=${SEED} node=${SLURM_JOB_NODELIST} gpu=${CUDA_VISIBLE_DEVICES}"
 pixi run --locked -e "${MODEL}" python "${MODEL}/train_predict.py" \
