@@ -25,7 +25,12 @@ from models.scdisinfact.context_config import (
 from models.scdisinfact.joint_patch import apply_joint_condition_mmd_patch
 from models.state.context_config import model_conditions
 from workflows.predictions import build_prediction_manifest
-from workflows.run_contract import begin_run, complete_run, repository_revision
+from workflows.run_contract import (
+    begin_run,
+    complete_run,
+    repository_revision,
+    resume_incomplete_run,
+)
 
 ROOT = REPOSITORY_ROOT
 DATA_ROOT = ROOT / "models" / "data"
@@ -131,6 +136,57 @@ def _predict_native_counts(
     return predictions
 
 
+def _postprocess_existing(
+    args: argparse.Namespace,
+    *,
+    fold_id: str,
+    counts_path: Path,
+    counts_manifest: Path,
+) -> None:
+    """Validate and finalize saved native-count predictions without retraining."""
+    handle = resume_incomplete_run(
+        args.runs_root,
+        experiment=args.dataset,
+        model="scdisinfact",
+        fold=fold_id,
+        seed=args.seed,
+    )
+    checkpoint_path = handle.directory / "checkpoints" / "model.pt"
+    metrics_path = handle.directory / "checkpoints" / "training-losses.npz"
+    prediction_path = handle.directory / "predictions" / "predictions.h5ad"
+    resolved = json.loads((handle.directory / "resolved-run.json").read_text())
+    prediction_manifest = build_prediction_manifest(
+        prediction_path=prediction_path,
+        truth_path=counts_path,
+        dataset_manifest_path=counts_manifest,
+        split_manifest_path=args.split_manifest,
+        capability="population",
+        model_id="scdisinfact",
+        implementation_revision=IMPLEMENTATION_REVISION,
+        adapter_revision=repository_revision(ROOT),
+        fold=args.fold,
+        seed=args.seed,
+        environment="models/pixi.lock#scdisinfact",
+        command=" ".join(resolved["command"]),
+        minimum_cells_per_condition=50,
+        expression_space="raw_counts",
+        evaluation_transform="normalize-total-10000-log1p",
+    )
+    prediction_manifest_path = prediction_path.with_suffix(".manifest.json")
+    prediction_manifest_path.write_text(json.dumps(prediction_manifest, indent=2) + "\n")
+    complete_run(
+        handle,
+        {
+            "checkpoint": checkpoint_path,
+            "metrics": metrics_path,
+            "prediction": prediction_path,
+            "prediction_manifest": prediction_manifest_path,
+        },
+        precomputed_checksums={"prediction": prediction_manifest["artifact"]["sha256"]},
+    )
+    print(f"finalized existing predictions at {prediction_path}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", required=True)
@@ -145,6 +201,11 @@ def main() -> None:
     parser.add_argument("--runs-root", type=Path, default=RUN_ROOT)
     parser.add_argument("--counts-manifest", type=Path)
     parser.add_argument("--truth-manifest", type=Path)
+    parser.add_argument(
+        "--postprocess-existing",
+        action="store_true",
+        help="validate and finalize existing checkpoint/predictions without training",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
@@ -175,6 +236,15 @@ def main() -> None:
     ]:
         if not required.is_file():
             raise FileNotFoundError(required)
+
+    if args.postprocess_existing:
+        _postprocess_existing(
+            args,
+            fold_id=fold_id,
+            counts_path=counts_path,
+            counts_manifest=counts_manifest,
+        )
+        return
 
     configuration = {
         "model": MODEL_PARAMS,
@@ -287,7 +357,7 @@ def main() -> None:
     predictions.write_h5ad(prediction_path, compression="gzip")
     prediction_manifest = build_prediction_manifest(
         prediction_path=prediction_path,
-        truth_path=truth_path,
+        truth_path=counts_path,
         dataset_manifest_path=counts_manifest,
         split_manifest_path=args.split_manifest,
         capability="population",
