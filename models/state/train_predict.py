@@ -618,6 +618,7 @@ def main() -> None:
             "prediction": out_path,
             "prediction_manifest": prediction_manifest_path,
         },
+        precomputed_checksums={"prediction": prediction_manifest["artifact"]["sha256"]},
     )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 

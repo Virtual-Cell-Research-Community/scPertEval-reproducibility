@@ -276,6 +276,7 @@ def main() -> int:
                 "prediction": output,
                 "prediction_manifest": manifest_path,
             },
+            precomputed_checksums={"prediction": manifest["artifact"]["sha256"]},
         )
         print(f"wrote {prediction.shape} {model} predictions to {output}")
     return 0

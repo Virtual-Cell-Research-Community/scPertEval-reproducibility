@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import tomllib
 from pathlib import Path
@@ -377,6 +378,35 @@ def test_run_contract_skips_only_checksum_valid_completed_runs(tmp_path: Path) -
     prediction.write_bytes(b"tampered")
     third = begin_run(root, **kwargs)
     assert not third.skipped
+
+
+def test_run_contract_accepts_a_valid_precomputed_artifact_checksum(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.json"
+    input_path.write_text('{"frozen": true}\n')
+    handle = begin_run(
+        tmp_path / "runs",
+        experiment="experiment",
+        model="model",
+        fold="holdout-a",
+        seed=42,
+        configuration={"epochs": 1},
+        inputs={"input": input_path},
+        command=["python", "runner.py"],
+        repo_root=ROOT,
+    )
+    prediction = handle.directory / "predictions" / "predictions.h5ad"
+    prediction.write_bytes(b"prediction")
+    checksum = hashlib.sha256(b"prediction").hexdigest()
+
+    completion = complete_run(
+        handle,
+        {"prediction": prediction},
+        precomputed_checksums={"prediction": checksum},
+    )
+
+    record = json.loads(completion.read_text())
+    assert record["artifacts"][0]["sha256"] == checksum
+    assert completed_run_is_valid(handle.directory, resolved_sha256=handle.resolved_sha256)
 
 
 def test_run_contract_resumes_incomplete_run_without_rewriting_provenance(tmp_path: Path) -> None:

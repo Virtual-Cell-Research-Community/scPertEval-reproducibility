@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -192,12 +193,24 @@ def resume_incomplete_run(
     )
 
 
-def complete_run(handle: RunHandle, artifacts: dict[str, Path]) -> Path:
+def complete_run(
+    handle: RunHandle,
+    artifacts: dict[str, Path],
+    *,
+    precomputed_checksums: dict[str, str] | None = None,
+) -> Path:
     """Write the completion marker last, after checksumming every required artifact."""
     if handle.skipped:
         raise ValueError("cannot complete a run that was skipped")
     if not artifacts:
         raise ValueError("a completed run must declare at least one artifact")
+    precomputed_checksums = precomputed_checksums or {}
+    unknown_roles = precomputed_checksums.keys() - artifacts.keys()
+    if unknown_roles:
+        raise ValueError(f"precomputed checksums refer to unknown artifact roles: {sorted(unknown_roles)}")
+    for role, checksum in precomputed_checksums.items():
+        if re.fullmatch(r"[0-9a-f]{64}", checksum) is None:
+            raise ValueError(f"invalid precomputed SHA-256 for artifact role {role!r}")
     records = []
     run_root = handle.directory.resolve()
     for role, path in sorted(artifacts.items()):
@@ -212,7 +225,7 @@ def complete_run(handle: RunHandle, artifacts: dict[str, Path]) -> Path:
             {
                 "role": role,
                 "path": recorded_path,
-                "sha256": file_checksum(path),
+                "sha256": precomputed_checksums.get(role) or file_checksum(path),
                 "size_bytes": path.stat().st_size,
             }
         )
