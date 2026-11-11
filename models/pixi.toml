@@ -182,6 +182,7 @@ pytorch-gpu = "2.0.0.*"
 numpy = ">=1.22.4,<1.24"
 scipy = "<1.13"
 anndata = ">=0.9,<0.10"
+scanpy = ">=1.9,<1.10"
 setuptools = "<81"
 
 [feature.cpa.pypi-dependencies]
