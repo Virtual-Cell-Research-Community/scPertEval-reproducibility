@@ -108,8 +108,8 @@ The substantive panel for both context tracks is:
 The chemical track additionally includes trVAE. Its joint chemical smoke test
 completed readily, while the 480-perturbation genetic fold took about 70 minutes
 for one epoch before an arithmetic-preserving MMD-loop optimization and still
-more than 16 minutes afterward. At the established 200 epochs, that would exceed
-53 GPU-hours per genetic fold. trVAE is therefore excluded from the genetic
+more than 20 minutes afterward. At the established 200 epochs, that would exceed
+66 GPU-hours per genetic fold. trVAE is therefore excluded from the genetic
 track under the prespecified scaling rule rather than being fit separately per
 perturbation.
 
