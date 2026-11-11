@@ -21,6 +21,10 @@ space = "normalize_total_10000_log1p"
 perturbation_conditioning = "joint categorical attribute"
 context_conditioning = "joint categorical attribute with held-out controls available"
 
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+
 [training]
 seeds = [42, 43, 44]
 max_epochs = 500

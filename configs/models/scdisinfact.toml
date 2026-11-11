@@ -24,6 +24,10 @@ perturbation_conditioning = "one joint categorical condition factor"
 context_conditioning = "batch factor with held-out controls available"
 joint_mmd_reference_policy = "use the requested reference when represented; otherwise use the first represented context; zero when fewer than two contexts are represented"
 
+[output]
+space = "count_scale_mean"
+evaluation_transform = "normalize-total-10000-log1p"
+
 [training]
 seeds = [42, 43, 44]
 max_epochs = 200

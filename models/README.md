@@ -142,7 +142,8 @@ uv run python -m models.data.prepare_context \
   --input-registry replogle-weissman-2022-rpe1=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/replogle-weissman-2022-rpe1.toml \
   --input-registry nadig-oconner-2024-hepg2=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/nadig-oconner-2024-hepg2.toml \
   --input-registry nadig-oconner-2024-jurkat=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/nadig-oconner-2024-jurkat.toml \
-  --output models/data/replogle-nadig-four-context-50-cell/raw.h5ad
+  --output models/data/replogle-nadig-four-context-50-cell/raw.h5ad \
+  --counts-output models/data/replogle-nadig-four-context-50-cell/counts.h5ad
 ```
 
 Materialize sci-Plex3. This command applies the declared global union of 8,192
@@ -154,14 +155,18 @@ uv run python -m models.data.prepare_context \
   --config configs/experiments/sciplex3-nine-drug-context-transfer.json \
   --input srivatsan-trapnell-2020-sciplex3=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/derived/srivatsan-trapnell-2020-sciplex3/adata.h5ad \
   --input-registry srivatsan-trapnell-2020-sciplex3=/home/pschaefer/sds-hd/sd22b002/projects/PerturbationData/registry/srivatsan-trapnell-2020-sciplex3.toml \
-  --output models/data/sciplex3-nine-drug-context-transfer/raw.h5ad
+  --output models/data/sciplex3-nine-drug-context-transfer/raw.h5ad \
+  --counts-output models/data/sciplex3-nine-drug-context-transfer/counts.h5ad
 ```
 
-Each command writes `raw.manifest.json`, exact `raw.cell-counts.tsv`, and—where
-applicable—`raw.gene-panel.tsv` plus the per-condition ranked
-`raw.gene-panel-de.tsv`. Validated SHA-256 values are reused from PerturbationData's
-registry while input paths, sizes, and modification metadata are checked before and
-after the atomic output write. Without `--input-registry`, files are hashed directly.
+Each command writes aligned normalized/log1p `raw.h5ad` and raw-count
+`counts.h5ad` model views, plus `raw.manifest.json`, exact
+`raw.cell-counts.tsv`, and—where applicable—`raw.gene-panel.tsv` plus the
+per-condition ranked `raw.gene-panel-de.tsv`. Both H5ADs contain the same cells
+and genes in the same order; only their expression representation differs.
+Validated SHA-256 values are reused from PerturbationData's registry while input
+paths, sizes, and modification metadata are checked before and after the atomic
+output writes. Without `--input-registry`, files are hashed directly.
 
 STATE uses cell-load's few-shot split rather than zero-shot splitting. Every
 treated condition in the held-out context is assigned to the test split, while
@@ -178,7 +183,11 @@ pixi run -e state python state/train_predict.py \
   --perturbation-key model_perturbation
 ```
 
-The same command shape applies to `sciplex3-nine-drug-context-transfer`.
+The same command shape applies to `sciplex3-nine-drug-context-transfer` and to
+the four other jointly conditioned context adapters: `cpa`, `biolord`,
+`scdisinfact`, and `trvae`. STATE, CPA, bioLORD, and trVAE consume `raw.h5ad`;
+scDisInFact consumes `counts.h5ad`. Each adapter records its native prediction
+space and the deterministic transform into the shared log1p evaluation space.
 STATE retains its native per-cell predictions. No-change and fold-mean context
 baselines emit fixed 100-cell populations so they participate in both profile
 and distributional sensitivity analyses. The context linear baseline is a

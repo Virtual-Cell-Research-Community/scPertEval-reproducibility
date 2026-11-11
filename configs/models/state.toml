@@ -15,14 +15,23 @@ path = "models/state/train_predict.py"
 environment = "models/pixi.toml#state"
 lockfile = "models/pixi.lock"
 
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "one joint categorical condition across every perturbation in a fold"
+context_conditioning = "held-out-context controls remain available; held-out-context treated cells remain test-only"
+
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+prediction = "native per-cell predictions; no pseudobulk during inference"
+
 [training]
-seed = 42
+seeds = [42, 43, 44]
 max_steps = 10000
 early_stop_patience = 10
 batch_size = 64
 cell_set_len = 64
 hidden_dim = 328
-prediction = "native per-cell predictions; no pseudobulk during inference"
 
 [resources]
 gpus = 1

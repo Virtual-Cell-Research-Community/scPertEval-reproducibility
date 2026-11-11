@@ -26,6 +26,10 @@ space = "normalize_total_10000_log1p"
 perturbation_conditioning = "one joint categorical condition across all perturbations"
 context_conditioning = "implicit in source-cell expression with held-out controls available"
 
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+
 [training]
 seeds = [42, 43, 44]
 max_epochs = 200
