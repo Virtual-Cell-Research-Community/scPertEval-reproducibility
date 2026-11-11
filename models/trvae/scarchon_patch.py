@@ -9,8 +9,11 @@ def apply_scarchon_patches() -> None:
     """Apply the two material fixes between official trvaep 0.1.0 and scArchon."""
     import trvaep.model._losses as losses
     import trvaep.model.train as training
+    from trvaep.data_loader import CustomDatasetFromAdata
     from trvaep.model import helper_module
-    from trvaep.utils import one_hot_encoder
+    from trvaep.utils import one_hot_encoder, train_test_split
+
+    from models.trvae.context_config import densify_expression
 
     def decoder_forward(self, z, c=None):
         if c is not None:
@@ -66,7 +69,20 @@ def apply_scarchon_patches() -> None:
 
         return mmd_loss
 
+    def materialized_make_dataset(self):
+        # trvaep 0.1.0 keeps shuffled AnnData views here. Indexing a dense shuffled view one
+        # row at a time repeatedly realizes the entire view and grows memory until OOM. Copy
+        # each split once, then materialize only that split's X matrix.
+        train_adata, validation_adata = train_test_split(self.adata, self.train_frac)
+        train_adata = densify_expression(train_adata.copy())
+        validation_adata = densify_expression(validation_adata.copy())
+        dataset_train = CustomDatasetFromAdata(train_adata, self.condition_key)
+        dataset_valid = CustomDatasetFromAdata(validation_adata, self.condition_key)
+        self.model.label_encoder = dataset_train.get_label_ecnoder()
+        return dataset_train, dataset_valid
+
     helper_module.Decoder.forward = decoder_forward
     losses.mmd = corrected_mmd
     # Trainer imported this name directly at module import time.
     training.mmd = corrected_mmd
+    training.Trainer.make_dataset = materialized_make_dataset

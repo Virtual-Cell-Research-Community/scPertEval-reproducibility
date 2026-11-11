@@ -141,22 +141,24 @@ def main() -> None:
     from trvaep.model import CVAE, Trainer
 
     data = ad.read_h5ad(raw)
-    training = densify_expression(select_trvae_training_data(
+    training = select_trvae_training_data(
         data,
         split,
         args.fold,
         perturbation_key=args.perturbation_key,
         context_key=args.context_key,
-    ))
-    controls = densify_expression(select_heldout_controls(
-        data,
-        split,
-        args.fold,
-        perturbation_key=args.perturbation_key,
-        context_key=args.context_key,
-        population_size=args.prediction_population_size,
-        seed=args.seed,
-    ))
+    )
+    controls = densify_expression(
+        select_heldout_controls(
+            data,
+            split,
+            args.fold,
+            perturbation_key=args.perturbation_key,
+            context_key=args.context_key,
+            population_size=args.prediction_population_size,
+            seed=args.seed,
+        )
+    )
     n_conditions = training.obs[args.perturbation_key].astype(str).nunique()
     model = CVAE(
         training.n_vars,

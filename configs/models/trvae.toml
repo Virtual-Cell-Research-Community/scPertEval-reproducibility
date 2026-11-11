@@ -17,6 +17,7 @@ reference = "official PyTorch implementation with scArchon architecture and trai
 [adapter]
 path = "models/trvae/train_predict.py"
 compatibility_patch = "models/trvae/scarchon_patch.py"
+split_materialization = "copy train and validation AnnData views once before dense-only trvaep loading"
 environment = "models/pixi.toml#trvae"
 lockfile = "models/pixi.lock"
 
