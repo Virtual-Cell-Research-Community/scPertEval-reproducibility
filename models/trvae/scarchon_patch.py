@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-import torch
+
+def eligible_mmd_groups(groups):
+    """Keep only condition groups that contribute to the pairwise MMD loss."""
+    return [group for group in groups if len(group) >= 2]
 
 
 def apply_scarchon_patches() -> None:
     """Apply the two material fixes between official trvaep 0.1.0 and scArchon."""
+    import torch
     import trvaep.model._losses as losses
     import trvaep.model.train as training
     from trvaep.data_loader import CustomDatasetFromAdata
@@ -55,14 +59,14 @@ def apply_scarchon_patches() -> None:
                 1e5,
                 1e6,
             ]
-            groups = losses.partition(values, labels, n_conditions)
+            # The reference implementation iterates over every configured condition pair and
+            # then immediately skips groups with fewer than two cells. With hundreds of joint
+            # perturbations, most condition slots are absent from a mini-batch, making those
+            # empty Python loops dominate runtime. Filtering first is arithmetically identical.
+            groups = eligible_mmd_groups(losses.partition(values, labels, n_conditions))
             loss = torch.zeros(1, device=values.device)
             for left in range(len(groups)):
-                if groups[left].size(0) < 2:
-                    continue
                 for right in range(left):
-                    if groups[right].size(0) < 2:
-                        continue
                     statistic = losses.MMDStatistic(groups[left].size(0), groups[right].size(0))
                     loss += statistic(groups[left], groups[right], alphas=alphas)
             return beta * loss

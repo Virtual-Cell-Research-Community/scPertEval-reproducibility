@@ -33,6 +33,7 @@ from models.trvae.context_config import build_prediction_adata as build_trvae_pr
 from models.trvae.context_config import densify_expression as densify_trvae_expression
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
 from models.trvae.context_config import select_trvae_training_data
+from models.trvae.scarchon_patch import eligible_mmd_groups
 from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
@@ -1155,3 +1156,16 @@ def test_trvae_context_helpers_build_one_joint_leak_free_fold() -> None:
         "context-b::G1": 3,
         "context-b::G2": 3,
     }
+
+
+def test_trvae_mmd_discards_only_groups_that_cannot_contribute() -> None:
+    groups = [
+        np.empty((0, 2)),
+        np.ones((1, 2)),
+        np.full((2, 2), 2),
+        np.full((3, 2), 3),
+    ]
+    eligible = eligible_mmd_groups(groups)
+    assert [len(group) for group in eligible] == [2, 3]
+    np.testing.assert_array_equal(eligible[0], groups[2])
+    np.testing.assert_array_equal(eligible[1], groups[3])
