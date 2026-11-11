@@ -67,31 +67,31 @@ N_FOLDS = 5
 FOLD_COLORS = ["#2a78d6", "#008300", "#e87ba4", "#eda100", "#1baf7a"]
 
 MODEL_SPECS = {
-    "gears": dict(
-        x="epoch", train_col="train_mse", val_col="val_mse",
-        train_label="Train MSE (test genes)", val_label="Val MSE (test genes)",
-        best_col="val_mse_de", best_direction="min",
-    ),
-    "presage": dict(
-        x="step", train_col="train_loss", val_col="val_loss",
-        train_label="Train MSE", val_label="Val MSE",
-        best_col="val_loss", best_direction="min",
-    ),
-    "scgpt": dict(
-        x="epoch", train_col="train_loss", val_col="val_pearson",
-        train_label="Train masked MSE (MLM)", val_label="Val Pearson r (response)",
-        best_col="val_pearson", best_direction="max",
-    ),
-    "sclambda": dict(
-        x="epoch", train_col="train_loss", val_col="val_corr",
-        train_label="Train loss (VAE recon + adversarial MI, a.u.)", val_label="Val Pearson r (Δexpr)",
-        best_col="val_corr", best_direction="max",
-    ),
-    "state": dict(
-        x="step", train_col="train_loss", val_col="val_loss",
-        train_label="Train energy-distance loss", val_label="Val energy-distance loss",
-        best_col="val_loss", best_direction="min",
-    ),
+    "gears": {
+        "x": "epoch", "train_col": "train_mse", "val_col": "val_mse",
+        "train_label": "Train MSE (test genes)", "val_label": "Val MSE (test genes)",
+        "best_col": "val_mse_de", "best_direction": "min",
+    },
+    "presage": {
+        "x": "step", "train_col": "train_loss", "val_col": "val_loss",
+        "train_label": "Train MSE", "val_label": "Val MSE",
+        "best_col": "val_loss", "best_direction": "min",
+    },
+    "scgpt": {
+        "x": "epoch", "train_col": "train_loss", "val_col": "val_pearson",
+        "train_label": "Train masked MSE (MLM)", "val_label": "Val Pearson r (response)",
+        "best_col": "val_pearson", "best_direction": "max",
+    },
+    "sclambda": {
+        "x": "epoch", "train_col": "train_loss", "val_col": "val_corr",
+        "train_label": "Train loss (VAE recon + adversarial MI, a.u.)", "val_label": "Val Pearson r (Δexpr)",
+        "best_col": "val_corr", "best_direction": "max",
+    },
+    "state": {
+        "x": "step", "train_col": "train_loss", "val_col": "val_loss",
+        "train_label": "Train energy-distance loss", "val_label": "Val energy-distance loss",
+        "best_col": "val_loss", "best_direction": "min",
+    },
 }
 BEST_MARKER_COLOR = "#e34948"  # dataviz palette's red slot (8) - reserved for this, not a fold
 MODEL_TITLES = {"gears": "GEARS", "presage": "PRESAGE", "scgpt": "scGPT", "sclambda": "scLAMBDA", "state": "STATE"}

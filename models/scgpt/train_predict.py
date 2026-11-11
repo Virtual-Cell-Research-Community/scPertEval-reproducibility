@@ -38,23 +38,21 @@ import anndata as ad
 import numpy as np
 import pandas as pd
 import torch
-from torch import nn
 
 ad.settings.allow_write_nullable_strings = True
 
-from gears import PertData  # noqa: E402
-from gears.utils import create_cell_graph_dataset_for_prediction  # noqa: E402
-from torch_geometric.loader import DataLoader  # noqa: E402
-
-import patch as _patch  # noqa: E402
+import patch as _patch
+from gears import PertData
+from gears.utils import create_cell_graph_dataset_for_prediction
+from torch_geometric.loader import DataLoader
 
 _patch.apply()
 
-import scgpt as scg  # noqa: E402
-from scgpt.model import TransformerGenerator  # noqa: E402
-from scgpt.loss import masked_mse_loss  # noqa: E402
-from scgpt.tokenizer.gene_tokenizer import GeneVocab  # noqa: E402
-from scgpt.utils import (  # noqa: E402
+import scgpt as scg
+from scgpt.loss import masked_mse_loss
+from scgpt.model import TransformerGenerator
+from scgpt.tokenizer.gene_tokenizer import GeneVocab
+from scgpt.utils import (
     compute_perturbation_metrics,
     load_pretrained,
     map_raw_id_to_vocab_id,

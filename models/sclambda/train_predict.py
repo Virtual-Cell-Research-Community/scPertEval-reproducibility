@@ -42,7 +42,7 @@ import pandas as pd
 
 ad.settings.allow_write_nullable_strings = True
 
-from sclambda.model import Model  # noqa: E402
+from sclambda.model import Model
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"

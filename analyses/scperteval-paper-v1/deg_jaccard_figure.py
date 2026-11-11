@@ -73,14 +73,14 @@ def _ensure_de(dataset: str, cache_dir: Path = DE_CACHE,
     try:
         with urllib.request.urlopen(list_url, timeout=60) as resp:
             listing = json.load(resp)
-    except Exception as exc:  # network / API failure
+    except Exception as exc:  # noqa: BLE001 - public API boundary; degrade to local cache
         print(f"[WARN] {dataset}: could not list public bucket ({exc})")
         return None
     names = [o["name"] for o in listing.get("items", []) if o["name"].endswith("__de.h5")]
     if not names:
         print(f"[INFO] {dataset}: not present in gs://{GCS_BUCKET}/{de_prefix}/")
         return None
-    obj_name = sorted(names)[-1]
+    obj_name = max(names)
 
     # 3. download to cache_dir
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -91,7 +91,7 @@ def _ensure_de(dataset: str, cache_dir: Path = DE_CACHE,
     try:
         urllib.request.urlretrieve(obj_url, tmp)
         tmp.replace(dest)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - network/filesystem boundary; clean partial download
         if tmp.exists():
             tmp.unlink()
         print(f"[WARN] {dataset}: download failed ({exc})")
@@ -231,7 +231,7 @@ def _count_table(ax, labels, datasets, size_matrix):
     ax.axis("off")
     # criterion label is a real first column; the whole block is sized to content and
     # centered in the (full-width) axes.
-    cell_text = [[lab] + ["-" if not np.isfinite(size_matrix[r, c]) else f"{int(round(size_matrix[r, c]))}"
+    cell_text = [[lab] + ["-" if not np.isfinite(size_matrix[r, c]) else f"{round(size_matrix[r, c])}"
                           for c in range(len(datasets))]
                  for r, lab in enumerate(labels)]
     table = ax.table(cellText=cell_text, colLabels=[""] + list(datasets),
@@ -322,8 +322,8 @@ def plot_figure(results, labels, out_path, suptitle=SUPTITLE):
 
     # one section title per band, same font; each lower band's title sits in its reserved
     # title_block just above the plots, so the white gap above every title is equal.
-    title_kw = dict(ha="center", fontsize=14, fontweight="bold")
-    sub_kw = dict(ha="center", va="top", fontsize=9)
+    title_kw = {"ha": "center", "fontsize": 14, "fontweight": "bold"}
+    sub_kw = {"ha": "center", "va": "top", "fontsize": 9}
     fig.text(xc, hist_row.y1 + 0.045, suptitle, va="bottom", **title_kw)                  # histograms
     fig.text(xc, heat_row.y1 + 0.022, "Mean Jaccard", va="bottom", **title_kw)           # heatmaps
     fig.text(xc, heat_row.y1 + 0.010, "reference: all-perturbed 8192-cell pool", **sub_kw)
@@ -398,7 +398,7 @@ def render(ttest_key="t-test", de_prefix=GCS_DE_PREFIX, cache_dir=DE_CACHE,
         print("No datasets available; run `scperteval de` first.")
         return
     plot_figure(results, labels, FIG_DIR / f"{out_stem}.png", suptitle=suptitle)
-    rows = [(r["dataset"], lab, int(round(sz)) if np.isfinite(sz) else "")
+    rows = [(r["dataset"], lab, round(sz) if np.isfinite(sz) else "")
             for r in results for lab, sz in zip(labels, r["median_sizes"])]
     pd.DataFrame(rows, columns=["dataset", "criterion", "median_set_size"]).to_csv(
         FIG_DIR / f"{out_stem}.csv", index=False)

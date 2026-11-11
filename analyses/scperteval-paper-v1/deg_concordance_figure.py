@@ -16,25 +16,21 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-
 from deg_jaccard_figure import (
-    build_criteria,
-    compute_dataset,
-    DESource,
-    _ensure_de,
-    _heatmap,
-    _count_table,
     DATASETS,
     DE_CACHE,
-    DE_DIR,
     FIG_DIR,
     GCS_DE_PREFIX,
-    latest_de,
-    TTEST_STAT_THR,
     MWU_CLIFF_THR,
     PADJ_THR,
+    TTEST_STAT_THR,
+    DESource,
+    _count_table,
+    _ensure_de,
+    _heatmap,
+    build_criteria,
+    compute_dataset,
 )
-import deg_jaccard_figure as _D
 
 PADJ_FLOOR = 1e-300
 CONCORDANCE_SUPTITLE = "Concordance@k: t-test vs MWU (Squair AUCC)"
@@ -61,7 +57,7 @@ def _k_grid(n_genes, kmax=500):
         ks.add(k)
         k *= 2
     for frac in (0.1, 0.25, 0.5, 0.75, 1.0):
-        ks.add(max(1, int(round(frac * limit))))
+        ks.add(max(1, round(frac * limit)))
     ks.add(limit)
     return np.array(sorted(ks), int)
 
@@ -217,8 +213,8 @@ def plot_figure(results, curves, labels, out_path, suptitle=CONCORDANCE_SUPTITLE
         cax = fig.add_axes([right + 0.015, last_pos.y0 + (last_pos.height - cb_h) / 2.0, 0.012, cb_h])
         fig.colorbar(last_im, cax=cax, label="Mean Jaccard")
 
-    title_kw = dict(ha="center", fontsize=14, fontweight="bold")
-    sub_kw = dict(ha="center", va="top", fontsize=9)
+    title_kw = {"ha": "center", "fontsize": 14, "fontweight": "bold"}
+    sub_kw = {"ha": "center", "va": "top", "fontsize": 9}
     fig.text(xc, hist_row.y1 + 0.045, suptitle, va="bottom", **title_kw)
     fig.text(xc, heat_row.y1 + 0.022, "Mean Jaccard", va="bottom", **title_kw)
     fig.text(xc, heat_row.y1 + 0.010, "reference: all-perturbed 8192-cell pool", **sub_kw)

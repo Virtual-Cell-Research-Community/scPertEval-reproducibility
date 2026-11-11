@@ -72,7 +72,7 @@ def extract_state_dict(obj):
 def count_params(path):
     try:
         obj = torch.load(path, map_location="cpu", weights_only=True)
-    except Exception:
+    except Exception:  # noqa: BLE001 - retry legacy checkpoints that reject weights_only
         obj = torch.load(path, map_location="cpu", weights_only=False)
     sd = extract_state_dict(obj)
     total = sum(v.numel() for v in sd.values())

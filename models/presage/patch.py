@@ -42,13 +42,12 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import model_harness as presage_model_harness_module
 import scanpy as sc
 import scipy.sparse
-from tqdm import tqdm
-
-import model_harness as presage_model_harness_module
 import train as presage_train_module
 from presage_datamodule import ReploglePRESAGEDataModule
+from tqdm import tqdm
 
 
 class _CheckpointPreservingOS:

@@ -63,8 +63,8 @@ LOGS_DIR = MODELS_DIR / "slurm" / "logs"
 
 # Best-effort: how each model prints "an epoch finished" in slurm/logs/*.out|.err.
 EPOCH_PATTERNS = {
-    "gears": re.compile(r"^Epoch (\d+): Train Overall MSE", re.M),
-    "scgpt": re.compile(r"epoch (\d+) done in", re.I),
+    "gears": re.compile(r"^Epoch (\d+): Train Overall MSE", re.MULTILINE),
+    "scgpt": re.compile(r"epoch (\d+) done in", re.IGNORECASE),
     "sclambda": re.compile(r"Epoch (\d+) complete!"),
     "presage": re.compile(r"Epoch (\d+):"),  # Lightning progress-bar line
     "state": re.compile(r"Epoch (\d+):"),  # Lightning progress-bar line
@@ -73,8 +73,8 @@ EPOCH_PATTERNS = {
 # Two different early-stopping signals: Lightning's EarlyStopping(verbose=True)
 # message (state/presage) and scgpt's own patience loop's log line - see docstring.
 EARLY_STOP_PATTERNS = [
-    re.compile(r"did not improve in the last \d+ records.*Signaling Trainer to stop", re.I),
-    re.compile(r"early stop at epoch \d+", re.I),
+    re.compile(r"did not improve in the last \d+ records.*Signaling Trainer to stop", re.IGNORECASE),
+    re.compile(r"early stop at epoch \d+", re.IGNORECASE),
 ]
 # state-only: approximating steps reached from Lightning's own bookkeeping text.
 VAL_CHECK_INTERVAL_RE = re.compile(r"'val_check_interval':\s*(\d+)")
@@ -129,7 +129,7 @@ def elapsed_to_seconds(elapsed):
 
 
 def seconds_to_hm(seconds):
-    h, rem = divmod(int(round(seconds)), 3600)
+    h, rem = divmod(round(seconds), 3600)
     m = rem // 60
     return f"{h}h {m}m"
 
@@ -215,11 +215,11 @@ def build_summary_rows(args, by_model):
             avg_reached = sum(reached_vals) / len(reached_vals) if reached_vals else None
             avg_progress = progress_str(model, avg_reached, any(r["approx"] for r in group))
             folds_str = ",".join(sorted((r["fold"] for r in group), key=int))
-            rows.append(dict(
-                model=model, params=params_str, gpu=gpu, folds=folds_str,
-                avg_elapsed=seconds_to_hm(avg_elapsed_s), avg_maxrss=avg_rss,
-                avg_progress=avg_progress, early_stop=stop_str,
-            ))
+            rows.append({
+                "model": model, "params": params_str, "gpu": gpu, "folds": folds_str,
+                "avg_elapsed": seconds_to_hm(avg_elapsed_s), "avg_maxrss": avg_rss,
+                "avg_progress": avg_progress, "early_stop": stop_str,
+            })
     return rows
 
 
@@ -232,7 +232,7 @@ def print_summary_table(rows):
     print("".join(f"{label:<{widths[key]}}" for key, label in SUMMARY_COLUMNS))
     print("-" * sum(widths.values()))
     for r in rows:
-        print("".join(f"{str(r[key]):<{widths[key]}}" for key, _ in SUMMARY_COLUMNS))
+        print("".join(f"{r[key]!s:<{widths[key]}}" for key, _ in SUMMARY_COLUMNS))
 
 
 def write_markdown(rows, path):

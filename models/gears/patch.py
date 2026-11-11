@@ -40,19 +40,18 @@ import tempfile
 from pathlib import Path
 
 import anndata as ad
-import numpy as np
-import pandas as pd
-import requests
-import torch
-from torch_geometric.data import Data
-from tqdm import tqdm
-
 import gears.gears as _gears_module
 import gears.inference as _inference
 import gears.pertdata as _pertdata
 import gears.utils as _utils
+import numpy as np
+import pandas as pd
+import requests
+import torch
 from gears import PertData
 from gears.utils import print_sys
+from torch_geometric.data import Data
+from tqdm import tqdm
 
 
 def restore_series_nonzero() -> None:
@@ -119,7 +118,7 @@ def fast_get_dropout_non_zero_genes(adata):
 
     ctrl_zero = np.where(np.array(ctrl)[0] == 0)[0]
 
-    for pert in adata.uns["rank_genes_groups_cov_all"].keys():
+    for pert in adata.uns["rank_genes_groups_cov_all"]:
         p = pert_full_id2pert[pert]
         X = condition2mean_expression[p]
 

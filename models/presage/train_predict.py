@@ -44,10 +44,9 @@ import pandas as pd
 
 ad.settings.allow_write_nullable_strings = True
 
-import datamodule as presage_datamodule_module  # noqa: E402
-import train as presage_train_module  # noqa: E402
-
-import patch as _patch  # noqa: E402
+import datamodule as presage_datamodule_module
+import patch as _patch
+import train as presage_train_module
 
 HERE = Path(__file__).resolve().parent
 DATA_DIR = HERE.parent / "data"

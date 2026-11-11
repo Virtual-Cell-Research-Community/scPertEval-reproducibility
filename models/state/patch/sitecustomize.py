@@ -33,16 +33,15 @@ nothing.
 
 import os
 
-from lightning.pytorch.callbacks import EarlyStopping
-
 import state.tx.utils as _utils
+from lightning.pytorch.callbacks import EarlyStopping
 
 _original_get_checkpoint_callbacks = _utils.get_checkpoint_callbacks
 
 
 def _get_checkpoint_callbacks_with_early_stopping(output_dir, name, val_freq, _ckpt_every_n_steps):
     callbacks = _original_get_checkpoint_callbacks(output_dir, name, val_freq, _ckpt_every_n_steps)
-    patience = int(os.environ.get("STATE_EARLY_STOP_PATIENCE", 10))
+    patience = int(os.environ.get("STATE_EARLY_STOP_PATIENCE", "10"))
     # verbose=True (not EarlyStopping's own default of False) so that if it actually
     # triggers, the reason ("did not improve in the last N records... Signaling Trainer to
     # stop") is printed to stdout — otherwise a run stopped by EarlyStopping is silently

@@ -23,9 +23,8 @@ import pandas as pd
 
 ad.settings.allow_write_nullable_strings = True
 
-from gears import GEARS, PertData  # noqa: E402
-
-import patch as _patch  # noqa: E402
+import patch as _patch
+from gears import GEARS, PertData
 
 _patch.apply()
 

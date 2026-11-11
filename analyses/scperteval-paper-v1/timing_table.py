@@ -17,9 +17,8 @@ import pandas as pd
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-from matplotlib.colors import LogNorm
-
 from drf_table_figure import DATASETS, DESC, DRF_DIR, FIG_DIR, ROWS
+from matplotlib.colors import LogNorm
 
 
 def _is_dark(rgba, thresh=0.55):
