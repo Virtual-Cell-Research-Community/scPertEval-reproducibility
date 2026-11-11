@@ -209,7 +209,7 @@ def main() -> None:
         split_manifest_path=args.split_manifest,
         capability="population",
         model_id="cpa",
-        implementation_revision="theislab/cpa@7cda37e9cca2078af1b2373dc6f9422a5bc6f87d",
+        implementation_revision="cpa-tools==0.8.8",
         adapter_revision=repository_revision(ROOT),
         fold=args.fold,
         seed=args.seed,

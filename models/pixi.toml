@@ -170,7 +170,7 @@ smoke-test = "python -c \"import torch, state; from state.tx.models.state_transi
 # --- CPA (https://github.com/theislab/cpa) ---------------------------------
 # The scArchon wrapper trains one binary target at a time, which does not satisfy this
 # benchmark's frozen one-joint-model-per-fold contract. Use CPA's own multi-perturbation API
-# directly instead, pinned to the latest tagged upstream release. CPA 0.8.5 constrains Python,
+# directly instead, pinned to the release carried by the reference container. CPA 0.8.8 constrains Python,
 # NumPy, scvi-tools, and torch tightly, so it needs its own environment rather than sharing
 # STATE's modern stack.
 [feature.cpa.system-requirements]
@@ -188,7 +188,7 @@ llvmlite = "0.41.*"
 setuptools = "<81"
 
 [feature.cpa.pypi-dependencies]
-cpa-tools = { git = "https://github.com/theislab/cpa.git", rev = "7cda37e9cca2078af1b2373dc6f9422a5bc6f87d" }
+cpa-tools = "==0.8.8"
 jax = "==0.4.23"
 jaxlib = "==0.4.23"
 
