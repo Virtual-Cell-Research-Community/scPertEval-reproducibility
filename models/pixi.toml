@@ -167,6 +167,27 @@ transformers = "<5"
 [feature.state.tasks]
 smoke-test = "python -c \"import torch, state; from state.tx.models.state_transition import StateTransitionPerturbationModel; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\" && state --help"
 
+# --- CPA (https://github.com/theislab/cpa) ---------------------------------
+# The scArchon wrapper trains one binary target at a time, which does not satisfy this
+# benchmark's frozen one-joint-model-per-fold contract. Use CPA's own multi-perturbation API
+# directly instead, pinned to the latest tagged upstream release. CPA 0.8.5 constrains Python,
+# NumPy, scvi-tools, and torch tightly, so it needs its own environment rather than sharing
+# STATE's modern stack.
+[feature.cpa.system-requirements]
+cuda = "11.8"
+
+[feature.cpa.dependencies]
+python = "3.10.*"
+pytorch-gpu = "2.0.1.*"
+numpy = ">=1.22.4,<1.24"
+anndata = ">=0.9,<0.10"
+
+[feature.cpa.pypi-dependencies]
+cpa-tools = { git = "https://github.com/theislab/cpa.git", rev = "7cda37e9cca2078af1b2373dc6f9422a5bc6f87d" }
+
+[feature.cpa.tasks]
+smoke-test = "python -c \"import cpa, torch; from importlib.metadata import version; print('cpa-tools', version('cpa-tools')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+
 # --- TabICL (via royerlab/tfm-perturbation's TabICLMultiviewModel) ----------
 # tfm-perturbation (github.com/royerlab/tfm-perturbation) is a benchmarking framework for
 # tabular foundation models on perturbation-response prediction. It also ships a separate
@@ -202,4 +223,5 @@ scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
+cpa = { features = ["cpa"], no-default-feature = true }
 tabicl = { features = ["tabicl"], no-default-feature = true }
