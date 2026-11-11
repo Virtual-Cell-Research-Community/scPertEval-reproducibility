@@ -192,6 +192,7 @@ packaging = "==24.2"
 cpa-tools = "==0.8.8"
 jax = "==0.4.23"
 jaxlib = "==0.4.23"
+pyarrow = "==20.0.0"
 
 [feature.cpa.tasks]
 smoke-test = "python -c \"import cpa, torch; from importlib.metadata import version; print('cpa-tools', version('cpa-tools')); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
