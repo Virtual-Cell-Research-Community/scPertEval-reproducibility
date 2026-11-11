@@ -91,6 +91,40 @@ def download_dataset(dataset_id: str, root: Path, *, force: bool = False) -> lis
     return paths
 
 
+def stage_dataset_sources(
+    dataset_id: str,
+    source_directory: Path,
+    root: Path,
+    *,
+    force: bool = False,
+) -> list[Path]:
+    """Stage already-downloaded, checksum-verified sources as symlinks.
+
+    This is intended for maintainers validating public regeneration against an internal
+    canonical object without storing a second copy of the immutable upstream downloads.
+    Public users normally use ``download`` instead.
+    """
+    manifest = load_manifest(dataset_id)
+    destination = raw_directory(dataset_id, root)
+    destination.mkdir(parents=True, exist_ok=True)
+    paths = []
+    for artifact in source_artifacts(manifest):
+        source = source_directory / artifact["name"]
+        if not source.is_file():
+            raise FileNotFoundError(source)
+        verify_file(source, artifact)
+        output = destination / artifact["name"]
+        if output.exists() or output.is_symlink():
+            if not force:
+                verify_file(output, artifact)
+                paths.append(output)
+                continue
+            output.unlink()
+        output.symlink_to(source.resolve())
+        paths.append(output)
+    return paths
+
+
 def prepare_dataset(dataset_id: str, root: Path, *, force: bool = False) -> Path:
     """Prepare one canonical raw-count object from its verified sources."""
     manifest = load_manifest(dataset_id)
@@ -166,11 +200,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, help="data root (default: data/ or SCPERTEVAL_DATA_ROOT)")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in ["download", "prepare", "validate", "all"]:
+    for command in ["download", "stage", "prepare", "validate", "all"]:
         sub = subparsers.add_parser(command)
         sub.add_argument("dataset", help="dataset manifest ID")
-        if command in {"download", "prepare", "all"}:
+        if command in {"download", "stage", "prepare", "all"}:
             sub.add_argument("--force", action="store_true")
+        if command == "stage":
+            sub.add_argument("--from-directory", type=Path, required=True)
         if command == "validate":
             sub.add_argument("--structural-only", action="store_true")
     return parser
@@ -182,6 +218,14 @@ def main() -> int:
     if args.command in {"download", "all"}:
         for path in download_dataset(args.dataset, root, force=args.force):
             print(f"verified source: {path}")
+    if args.command == "stage":
+        for path in stage_dataset_sources(
+            args.dataset,
+            args.from_directory,
+            root,
+            force=args.force,
+        ):
+            print(f"staged verified source: {path}")
     if args.command in {"prepare", "all"}:
         print(f"prepared: {prepare_dataset(args.dataset, root, force=args.force)}")
     if args.command in {"validate", "all"}:

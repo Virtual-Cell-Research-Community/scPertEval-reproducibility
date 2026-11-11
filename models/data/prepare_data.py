@@ -321,6 +321,30 @@ def smoke_subsample(
     return adata[keep_idx].copy()
 
 
+def finalize_model_annotations(adata: ad.AnnData, cell_type: str) -> ad.AnnData:
+    """Add model adapter fields and make string-like annotations H5AD-safe.
+
+    Canonical metadata can contain object columns with a mixture of strings, integer batch
+    identifiers, and missing values. Casting every annotation to ``object`` preserves that
+    mixture and h5py cannot serialize it as a variable-length string array. Numeric and boolean
+    columns remain native; only object, categorical, and pandas-string columns are normalized to
+    concrete strings.
+    """
+    pert = adata.obs["perturbation"].astype(str).to_numpy()
+    adata.obs["condition"] = np.where(pert == "control", "ctrl", [f"{gene}+ctrl" for gene in pert])
+    adata.obs["cell_type"] = cell_type
+    adata.var["gene_name"] = adata.var_names.astype(str)
+
+    adata.obs.index = pd.Index(adata.obs.index.astype(str), name=adata.obs.index.name)
+    adata.var.index = pd.Index(adata.var.index.astype(str), name=adata.var.index.name)
+    for frame in [adata.obs, adata.var]:
+        for column in frame.columns:
+            dtype = frame[column].dtype
+            if dtype == object or isinstance(dtype, (pd.CategoricalDtype, pd.StringDtype)):
+                frame[column] = np.asarray(frame[column].astype("string").fillna(""), dtype=str)
+    return adata
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -372,16 +396,7 @@ def main() -> None:
         adata = smoke_subsample(adata, args.n_perts, args.cells_per_pert, args.control_cells, args.seed)
         print(f"after smoke subsample: {adata.shape}, {adata.obs['perturbation'].nunique()} perturbations")
 
-    pert = adata.obs["perturbation"].to_numpy()
-    adata.obs["condition"] = np.where(pert == "control", "ctrl", [f"{g}+ctrl" for g in pert])
-    adata.obs["cell_type"] = args.cell_type
-    adata.var["gene_name"] = adata.var_names
-    adata.obs.index = pd.Index(np.asarray(adata.obs.index, dtype=object), name=adata.obs.index.name)
-    adata.var.index = pd.Index(np.asarray(adata.var.index, dtype=object), name=adata.var.index.name)
-    for col in adata.obs.columns:
-        adata.obs[col] = np.asarray(adata.obs[col], dtype=object)
-    for col in adata.var.columns:
-        adata.var[col] = np.asarray(adata.var[col], dtype=object)
+    adata = finalize_model_annotations(adata, args.cell_type)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     adata.write_h5ad(out_path)

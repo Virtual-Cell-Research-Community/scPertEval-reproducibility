@@ -4,6 +4,7 @@ import json
 import tomllib
 from pathlib import Path
 
+import anndata as ad
 import numpy as np
 import pandas as pd
 import pytest
@@ -12,9 +13,10 @@ from anndata import AnnData
 
 from models.baselines.context_baselines import predict_context_baselines
 from models.data.prepare_context import prepare_context_view
-from models.data.prepare_data import prepare_canonical_raw
+from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits
 from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
+from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
     compare_to_reference,
@@ -151,6 +153,57 @@ def test_canonical_raw_model_view_maps_controls_and_normalizes_without_mutating_
     assert result.obs["perturbation"].tolist() == ["control", "G1", "G2"]
     expected = np.log1p(np.array([[5.0, 5.0], [10.0, 0.0], [0.0, 10.0]], dtype=np.float32))
     np.testing.assert_allclose(result.X.toarray(), expected, rtol=1e-6)
+
+
+def test_model_annotations_serialize_mixed_object_columns(tmp_path: Path) -> None:
+    model_view = AnnData(
+        X=sp.csr_matrix(np.eye(3, dtype=np.float32)),
+        obs=pd.DataFrame(
+            {
+                "perturbation": ["control", "G1", "G2"],
+                "batch": ["batch-a", 2, None],
+                "is_control": [True, False, False],
+                "numeric_qc": [1.0, 2.0, 3.0],
+            },
+            index=["cell-1", "cell-2", "cell-3"],
+        ),
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+    finalized = finalize_model_annotations(model_view, "K562")
+    output = tmp_path / "model-view.h5ad"
+    finalized.write_h5ad(output)
+    restored = ad.read_h5ad(output)
+
+    assert restored.obs["batch"].tolist() == ["batch-a", "2", ""]
+    assert restored.obs["condition"].tolist() == ["ctrl", "G1+ctrl", "G2+ctrl"]
+    assert restored.obs["is_control"].tolist() == [True, False, False]
+    assert restored.obs["numeric_qc"].tolist() == [1.0, 2.0, 3.0]
+
+
+def test_stage_dataset_sources_verifies_and_symlinks_without_copying(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_directory = tmp_path / "upstream"
+    source_directory.mkdir()
+    source = source_directory / "source.txt"
+    source.write_bytes(b"verified source")
+    manifest = {
+        "source": {
+            "filename": source.name,
+            "url": "https://example.invalid/source.txt",
+            "size_bytes": source.stat().st_size,
+            "checksum_type": "md5",
+            "checksum": data_workflow.file_checksum(source, "md5"),
+        }
+    }
+    monkeypatch.setattr(data_workflow, "load_manifest", lambda _dataset_id: manifest)
+
+    staged = data_workflow.stage_dataset_sources("example", source_directory, tmp_path / "data")
+
+    assert len(staged) == 1
+    assert staged[0].is_symlink()
+    assert staged[0].resolve() == source.resolve()
 
 
 def test_unseen_perturbation_split_manifest_is_explicit_and_full_coverage(tmp_path: Path) -> None:
