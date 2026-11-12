@@ -25,6 +25,7 @@ from models.data.prepare_data import (
     finalize_model_annotations,
     prepare_canonical_raw,
     prepare_frozen_experiment_raw,
+    smoke_subsample,
     validate_frozen_experiment_metadata,
 )
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
@@ -383,6 +384,32 @@ def test_merge_disambiguated_gene_names_sums_duplicate_symbol_columns() -> None:
     assert result.var_names.tolist() == ["G1", "G2"]
     assert result.X.toarray().tolist() == [[3.0, 4.0]]
     assert result.var["n_merged"].tolist() == [2, 1]
+
+
+def test_smoke_subsample_can_retain_every_perturbation_with_bounded_cells() -> None:
+    perturbations = ["control"] * 4 + ["G1"] * 3 + ["G2"] * 3
+    source = AnnData(
+        X=sp.csr_matrix(np.ones((len(perturbations), 2), dtype=np.float32)),
+        obs=pd.DataFrame(
+            {"perturbation": perturbations},
+            index=[f"cell-{index}" for index in range(len(perturbations))],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+
+    result = smoke_subsample(
+        source,
+        n_perts=2,
+        cells_per_pert=2,
+        control_cells=3,
+        seed=42,
+    )
+
+    assert result.obs["perturbation"].value_counts().to_dict() == {
+        "control": 3,
+        "G1": 2,
+        "G2": 2,
+    }
 
 
 def test_all_toml_files_parse() -> None:
