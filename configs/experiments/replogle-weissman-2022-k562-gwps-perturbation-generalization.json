@@ -36,6 +36,14 @@
     "strategy": "all-measured-genes",
     "n_genes": 8248
   },
+  "model_view_preparation": {
+    "cell_selection": "all-cells-for-frozen-targets-plus-all-controls",
+    "reapply_generic_qc_filters": false,
+    "miller_mean_cell_downsampling": false,
+    "gene_selection": "all-measured-genes",
+    "normalization": "normalize-total-10000-log1p",
+    "raw_counts_remain_immutable": true
+  },
   "canonical_input": {
     "dataset_declaration": "configs/datasets/replogle-weissman-2022-k562-gwps.toml",
     "sha256": "b3456b45fe2226902151a9d075c48b97d9d7f93b156c4fad7d5b2adbbe70397d",

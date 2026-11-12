@@ -342,6 +342,55 @@ def validate_frozen_experiment_metadata(
     }
 
 
+def prepare_frozen_experiment_raw(
+    adata: ad.AnnData,
+    experiment: dict,
+    *,
+    perturbation_key: str = "perturbation",
+    control_key: str = "is_control",
+    control_value: str | None = None,
+    target_sum: float = 1e4,
+) -> ad.AnnData:
+    """Create the exact frozen-cohort model view without extra cell or gene selection."""
+    perturbations, control_mask = canonical_annotations(
+        adata.obs,
+        perturbation_key=perturbation_key,
+        control_key=control_key,
+        control_value=control_value,
+    )
+    frozen = set(map(str, experiment["perturbations"]))
+    keep = control_mask | np.isin(perturbations, list(frozen))
+    result = adata[keep].to_memory() if adata.isbacked else adata[keep].copy()
+    selected_perturbations = perturbations[keep]
+    selected_controls = control_mask[keep]
+    result.obs["perturbation"] = selected_perturbations
+    result.obs["is_control"] = selected_controls
+    assert_raw_counts(result.X)
+
+    observed = set(selected_perturbations[~selected_controls])
+    if observed != frozen:
+        raise ValueError(
+            "materialized cohort does not match the frozen perturbations: "
+            f"missing={sorted(frozen - observed)}, extra={sorted(observed - frozen)}"
+        )
+    expected_genes = int(experiment["gene_panel"]["n_genes"])
+    if result.n_vars != expected_genes:
+        raise ValueError(
+            f"materialized gene panel has {result.n_vars} genes; expected {expected_genes}"
+        )
+    expected_cells = int(control_mask.sum()) + int(
+        pd.Series(perturbations[~control_mask]).isin(frozen).sum()
+    )
+    if result.n_obs != expected_cells:
+        raise ValueError(
+            f"materialized cohort has {result.n_obs} cells; expected {expected_cells}"
+        )
+
+    sc.pp.normalize_total(result, target_sum=target_sum)
+    sc.pp.log1p(result)
+    return result
+
+
 def prepare_canonical_raw(
     adata: ad.AnnData,
     *,
@@ -586,21 +635,48 @@ def main() -> None:
         print(json.dumps(report, indent=2, sort_keys=True))
         return
 
-    adata = ad.read_h5ad(source_path)
-    if args.input is not None:
-        adata = prepare_canonical_raw(
-            adata,
-            perturbation_key=args.perturbation_key,
-            control_key=args.control_key,
-            control_value=args.control_value,
+    if args.input is not None and experiment is not None:
+        source = ad.read_h5ad(source_path, backed="r")
+        try:
+            validate_frozen_experiment_metadata(
+                source,
+                experiment,
+                perturbation_key=args.perturbation_key,
+                control_key=args.control_key,
+                control_value=args.control_value,
+            )
+            adata = prepare_frozen_experiment_raw(
+                source,
+                experiment,
+                perturbation_key=args.perturbation_key,
+                control_key=args.control_key,
+                control_value=args.control_value,
+            )
+        finally:
+            source.file.close()
+        print(
+            "frozen canonical raw-count cohort normalized for models: "
+            f"{adata.shape}, {adata.obs['perturbation'].nunique() - 1} perturbations"
         )
-        print(f"canonical raw-count input normalized for models: {adata.shape}")
-    adata = apply_miller_fixes(
-        adata,
-        seed=args.seed,
-        compatible_models=set(args.compatible_models),
-    )
-    print(f"after Miller fixes: {adata.shape}, {adata.obs['perturbation'].nunique()} perturbations")
+    else:
+        adata = ad.read_h5ad(source_path)
+        if args.input is not None:
+            adata = prepare_canonical_raw(
+                adata,
+                perturbation_key=args.perturbation_key,
+                control_key=args.control_key,
+                control_value=args.control_value,
+            )
+            print(f"canonical raw-count input normalized for models: {adata.shape}")
+        adata = apply_miller_fixes(
+            adata,
+            seed=args.seed,
+            compatible_models=set(args.compatible_models),
+        )
+        print(
+            f"after Miller fixes: {adata.shape}, "
+            f"{adata.obs['perturbation'].nunique()} perturbations"
+        )
 
     if args.smoke:
         adata = smoke_subsample(adata, args.n_perts, args.cells_per_pert, args.control_cells, args.seed)
@@ -609,7 +685,12 @@ def main() -> None:
     adata = finalize_model_annotations(adata, args.cell_type)
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    adata.write_h5ad(out_path)
+    temporary_out = out_path.with_name(f".{out_path.name}.{os.getpid()}.tmp")
+    try:
+        adata.write_h5ad(temporary_out)
+        os.replace(temporary_out, out_path)
+    finally:
+        temporary_out.unlink(missing_ok=True)
     print(f"wrote {adata.shape} to {out_path}")
 
 

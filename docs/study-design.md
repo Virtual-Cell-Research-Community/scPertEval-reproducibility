@@ -43,6 +43,14 @@ embedding. It retains all 8,248 measured genes. Five full-coverage folds each
 hold out 1,387 test targets; the remaining 5,548 targets form the development
 pool in that fold.
 
+The GWPS model view retains every canonical cell belonging to those 6,935
+targets plus every canonical control cell. It does not reapply the historical
+Miller mean-cell downsampling or HVG selection: the cohort and complete 8,248
+gene panel are already frozen, and population predictions must match the
+observed treated-cell count. The generated view changes only annotations and
+the model expression representation (`normalize_total(10,000)` then `log1p`);
+the canonical raw-count object remains immutable.
+
 ### Context generalization
 
 - Genetic: Replogle–Nadig K562, RPE1, HepG2, and Jurkat, using four

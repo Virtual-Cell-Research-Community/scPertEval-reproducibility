@@ -24,6 +24,7 @@ from models.data.prepare_data import (
     canonical_annotations,
     finalize_model_annotations,
     prepare_canonical_raw,
+    prepare_frozen_experiment_raw,
     validate_frozen_experiment_metadata,
 )
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
@@ -151,6 +152,14 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
     assert experiment["role"] == "primary"
     assert experiment["training_seeds"] == [42, 43, 44]
     assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8248}
+    assert experiment["model_view_preparation"] == {
+        "cell_selection": "all-cells-for-frozen-targets-plus-all-controls",
+        "reapply_generic_qc_filters": False,
+        "miller_mean_cell_downsampling": False,
+        "gene_selection": "all-measured-genes",
+        "normalization": "normalize-total-10000-log1p",
+        "raw_counts_remain_immutable": True,
+    }
     assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 6935
     assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
     assert experiment["eligibility"]["n_targets_shared"] == 6935
@@ -190,6 +199,28 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
     assert set(tabicl["train"]) == {*folds[0]["train"], *folds[0]["val"], "control"}
     assert tabicl["test"] == folds[0]["test"]
     assert set(tabicl["train"]).isdisjoint(tabicl["test"])
+
+    validation = json.loads(
+        (
+            ROOT
+            / "configs"
+            / "experiments"
+            / "replogle-weissman-2022-k562-gwps-metadata-validation.json"
+        ).read_text()
+    )
+    assert validation["input_sha256"] == experiment["canonical_input"]["sha256"]
+    assert validation["shape"] == [
+        experiment["canonical_input"]["n_obs"],
+        experiment["canonical_input"]["n_vars"],
+    ]
+    assert validation["n_frozen_targets"] == experiment["n_perturbations"]
+    assert validation["n_targets_at_minimum"] == experiment["eligibility"][
+        "n_targets_at_least_50_cells"
+    ]
+    assert validation["n_measured_targets_at_minimum"] == experiment["eligibility"][
+        "n_targets_measured_at_least_50_cells"
+    ]
+    assert validation["status"] == "valid"
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:
@@ -314,6 +345,32 @@ def test_metadata_only_validation_checks_frozen_cohort_without_reading_expressio
         "minimum_cells_requirement": 2,
         "status": "valid",
     }
+
+    materialized = prepare_frozen_experiment_raw(
+        source,
+        {
+            **experiment,
+            "gene_panel": {"strategy": "all-measured-genes", "n_genes": 2},
+        },
+        perturbation_key="target_gene",
+        control_key="control_class",
+        control_value="non-targeting",
+    )
+    assert materialized.shape == (6, 2)
+    assert materialized.obs["perturbation"].tolist() == [
+        "control",
+        "control",
+        "G1",
+        "G1",
+        "G2",
+        "G2",
+    ]
+    assert materialized.obs["is_control"].tolist() == [True, True, False, False, False, False]
+    np.testing.assert_allclose(
+        np.expm1(materialized.X.toarray()).sum(axis=1),
+        10_000,
+        rtol=1e-5,
+    )
 
 
 def test_merge_disambiguated_gene_names_sums_duplicate_symbol_columns() -> None:

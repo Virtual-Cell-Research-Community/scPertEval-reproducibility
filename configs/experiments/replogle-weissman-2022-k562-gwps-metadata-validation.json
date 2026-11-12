@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "experiment": "replogle-weissman-2022-k562-gwps-perturbation-generalization",
+  "dataset": "replogle-weissman-2022-k562-gwps",
+  "input_sha256": "b3456b45fe2226902151a9d075c48b97d9d7f93b156c4fad7d5b2adbbe70397d",
+  "validator_commit": "8044c88",
+  "validation_mode": "backed-obs-var-metadata-only",
+  "source_fields": {
+    "perturbation_key": "target_gene",
+    "control_key": "control_class",
+    "control_value": "non-targeting"
+  },
+  "shape": [1814089, 8248],
+  "n_control_cells": 74599,
+  "n_targeted_cells": 1739490,
+  "n_source_targets": 9834,
+  "n_targets_at_minimum": 9134,
+  "n_measured_targets_at_minimum": 7055,
+  "minimum_cells_requirement": 50,
+  "n_frozen_targets": 6935,
+  "n_frozen_targeted_cells": 1258417,
+  "frozen_cells_minimum": 50,
+  "frozen_cells_median": 167.0,
+  "frozen_cells_maximum": 1147,
+  "all_frozen_targets_measured": true,
+  "status": "valid"
+}
