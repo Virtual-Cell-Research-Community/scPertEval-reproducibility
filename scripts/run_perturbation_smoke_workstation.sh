@@ -12,6 +12,7 @@ LOG_ROOT="${LOG_ROOT:-${PROJECT_ROOT}/logs/perturbation-smoke-workstation}"
 GPU_ZERO="${GPU_ZERO:-0}"
 GPU_ONE="${GPU_ONE:-1}"
 SERIAL="${SERIAL:-0}"
+FETCH_ASSETS="${FETCH_ASSETS:-1}"
 
 if [[ ! -x "${PIXI_BIN}" ]]; then
     echo "Pixi is not executable at ${PIXI_BIN}." >&2
@@ -25,9 +26,13 @@ fi
 mkdir -p "${LOG_ROOT}" "${RUNS_ROOT}"
 cd "${MODELS_DIR}"
 
-echo "[$(date -Is)] Fetching/checking scGPT and PRESAGE/TabICL assets"
-"${PIXI_BIN}" run -e scgpt fetch-checkpoint || exit $?
-"${PIXI_BIN}" run -e presage fetch-cache || exit $?
+if [[ "${FETCH_ASSETS}" == "1" ]]; then
+    echo "[$(date -Is)] Fetching/checking scGPT and PRESAGE/TabICL assets"
+    "${PIXI_BIN}" run -e scgpt fetch-checkpoint || exit $?
+    "${PIXI_BIN}" run -e presage fetch-cache || exit $?
+else
+    echo "[$(date -Is)] Reusing preverified model assets"
+fi
 
 run_model() {
     local gpu="$1"
