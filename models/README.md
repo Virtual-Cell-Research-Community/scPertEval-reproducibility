@@ -101,6 +101,7 @@ completion marker. Re-running the same command skips a checksum-valid completed 
 models/slurm/submit_all.sh                 # five folds x three seeds; TabICLv2 once per fold
 models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
 models/slurm/submit_all.sh --smoke         # fold 0, seed 42, reduced training budgets
+models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/preparation job
 ```
 
 The stochastic models use 15-task arrays (five folds × seeds 42, 43, and 44). TabICLv2 is

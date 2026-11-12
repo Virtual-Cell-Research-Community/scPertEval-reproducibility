@@ -1,20 +1,27 @@
 #!/bin/bash
 # Submit the frozen five-fold x three-seed GWPS grid.
 #
-# Usage: models/slurm/submit_all.sh [--test-only] [--smoke] [dataset] [model ...]
+# Usage: models/slurm/submit_all.sh [--test-only] [--smoke] [--afterok JOB_ID] [dataset] [model ...]
 #   models/slurm/submit_all.sh
 #   models/slurm/submit_all.sh --test-only
 #   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-gwps gears scgpt
+#   models/slurm/submit_all.sh --smoke --afterok 123456
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_ONLY=0
 SMOKE=0
+AFTEROK=""
 while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --test-only) TEST_ONLY=1 ;;
         --smoke) SMOKE=1 ;;
+        --afterok)
+            [[ -n "${2:-}" ]] || { echo "--afterok requires a job id" >&2; exit 2; }
+            AFTEROK="$2"
+            shift
+            ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
     shift
@@ -46,6 +53,12 @@ for MODEL in "${MODELS[@]}"; do
         --array="$ARRAY"
         --export=ALL,MODEL="$MODEL",DATASET="$DATASET",MODELS_DIR="$MODELS_DIR",FOLD_COUNT=5,SEEDS=42:43:44,SMOKE="$SMOKE"
     )
+    if [[ "$SMOKE" == "1" ]]; then
+        SBATCH_ARGS+=(--cpus-per-task=8 --mem=64G --time=08:00:00)
+    fi
+    if [[ -n "$AFTEROK" ]]; then
+        SBATCH_ARGS+=(--dependency="afterok:$AFTEROK")
+    fi
     if [[ "$TEST_ONLY" == "1" ]]; then
         SBATCH_ARGS+=(--test-only)
     fi
