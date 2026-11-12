@@ -33,7 +33,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
+import random
 import sys
 import tempfile
 from pathlib import Path
@@ -41,6 +41,7 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import torch
 
 ad.settings.allow_write_nullable_strings = True
 
@@ -49,12 +50,15 @@ import patch as _patch
 import train as presage_train_module
 
 HERE = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.model_runs import add_point_run_arguments, begin_point_model_run
+
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 CACHE_DIR = HERE / "cache"  # populated by `pixi run -e presage fetch-cache`
-OUT_DIR = HERE / "predictions"
-SAVED_MODELS_DIR = HERE / "saved_models"
-METRICS_DIR = HERE / "metrics"
 
 
 def build_pathway_files(cache_dir: Path, out_path: Path) -> Path:
@@ -196,11 +200,29 @@ def main() -> None:
         default=16,
         help="data.batch_size (default: 16, PRESAGE's own official replogle_k562_essential override; see build_config)",
     )
+    add_point_run_arguments(parser)
     args = parser.parse_args()
 
-    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    run = begin_point_model_run(
+        args,
+        repository_root=REPOSITORY_ROOT,
+        model_id="presage",
+        environment="models/pixi.lock#presage",
+        configuration={"epochs": args.epochs, "batch_size": args.batch_size},
+    )
+    if run.skipped:
+        print(f"skipping verified completed run: {run.handle.directory}")
+        return
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    presage_train_module.pl.seed_everything(args.seed, workers=True)
+
+    raw = run.raw_path
     seed_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_presage.json"
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run.prediction_path
 
     if not (CACHE_DIR / "cache" / "pathway_embeddings").exists():
         raise FileNotFoundError(f"{CACHE_DIR} has no gene-embedding cache — run `pixi run -e presage fetch-cache` first")
@@ -261,8 +283,8 @@ def main() -> None:
     )
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's checkpoint.
-    fold_metrics_dir = METRICS_DIR / args.dataset / f"fold_{args.fold}"
-    _patch.apply(args.dataset, SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}", fold_metrics_dir)
+    fold_metrics_dir = run.handle.directory / "logs" / "presage-csv"
+    _patch.apply(args.dataset, run.checkpoint_dir, fold_metrics_dir)
     presage_train_module.train(config)
     # CSVLogger (injected by _patch.apply above) writes to fold_metrics_dir/metrics.csv —
     # relocate to a flat file matching predictions/saved_models' own <dataset>/fold_<i>
@@ -270,7 +292,7 @@ def main() -> None:
     # the directory (log_dir), not the "metrics.csv" filename itself (hardcoded in Lightning's
     # ExperimentWriter), hence the move; fold_metrics_dir is empty afterwards, so remove it
     # rather than leaving a stray dir behind.
-    shutil.move(str(fold_metrics_dir / "metrics.csv"), str(METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"))
+    os.replace(fold_metrics_dir / "metrics.csv", run.metrics_path)
     fold_metrics_dir.rmdir()
 
     # datamodule.setup("test") deliberately bundles train perturbations in alongside test
@@ -301,7 +323,14 @@ def main() -> None:
     preds = preds.add(control_mean.reindex(preds.columns), axis=1)
     pred_adata = ad.AnnData(X=preds.to_numpy().astype(np.float32), obs={"perturbation": preds.index.to_numpy()})
     pred_adata.var_names = pd.Index(preds.columns)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    checkpoints = sorted(path for path in run.checkpoint_dir.rglob("*") if path.is_file())
+    if not checkpoints:
+        raise FileNotFoundError(f"PRESAGE produced no checkpoint under {run.checkpoint_dir}")
+    run.complete(
+        implementation_revision="Genentech/PRESAGE@2c7b231c60cf110c4aab0acf8ecd2c2b3268fffb",
+        checkpoints=checkpoints,
+    )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

@@ -16,6 +16,13 @@ pixi run -e presage fetch-cache         # PRESAGE's gene-embedding cache (~3.4GB
 pixi run -e sclambda fetch-embeddings   # GenePT gene-embedding pickle (Zenodo)
 ```
 
+On Helix, fetch the currently missing scGPT and PRESAGE/TabICL assets as restart-safe CPU
+jobs from the repository root:
+
+```bash
+sbatch scripts/fetch_perturbation_model_assets_helix.sbatch
+```
+
 `gears` and `tabicl` fetch what they need automatically on first run (GEARS' own GO-annotation
 reference from Harvard Dataverse; TabICL's pretrained checkpoint from Hugging Face, via
 `huggingface_hub`'s own lock-protected cache — safe under concurrent folds by construction).
@@ -26,7 +33,7 @@ environment — run the `presage fetch-cache` line above regardless of whether y
 PRESAGE itself.
 
 GEARS' own downloads are the one spot worth knowing about if you're launching multiple folds
-at once (`submit_all.sh` does, via a 5-task SLURM array): on a cold cache, all 5 fold
+at once (`submit_all.sh` does, via a 15-task fold-by-seed SLURM array): on a cold cache, all
 processes race to fetch the same reference files into the same shared `gears/pert_data/`
 directory. This is patched to be crash-safe in `gears/patch.py` (`_atomic_download`,
 `_atomic_tar_download_and_extract` — downloads land in a private temp file/dir first, only
@@ -46,18 +53,8 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 `models/data/`; it never changes the canonical file.
 
 ```bash
-# Apply the model-only normalization and Miller-consistent preparation. The final common
-# perturbation cohort is compatible with GEARS, PRESAGE, scGPT, scLAMBDA, STATE, and TabICLv2.
-uv run python -m models.data.prepare_data \
-  --input data/processed/replogle-weissman-2022-k562-essential/adata.h5ad \
-  --dataset-name replogle-weissman-2022-k562-essential \
-  --cell-type K562 \
-  --compatible-models gears state
-
-# Freeze the five-fold split and its checksum-bearing archival manifest.
-uv run python -m models.data.prepare_split \
-  models/data/replogle-weissman-2022-k562-essential/raw.h5ad \
-  --dataset-id replogle-weissman-2022-k562-essential
+# Materialize the exact frozen GWPS cohort, then freeze its five-fold split.
+sbatch ../scripts/prepare_k562_gwps_model_view_helix.sbatch
 ```
 
 The older `--source replogle22k562` interface remains available only for reproducing the
@@ -74,12 +71,12 @@ scientific-Python stack, nothing model-specific.
 Every model exposes the same CLI shape:
 
 ```bash
-pixi run -e gears    python gears/train_predict.py    --dataset replogle22k562 --fold 0
-pixi run -e scgpt    python scgpt/train_predict.py    --dataset replogle22k562 --fold 0
-pixi run -e presage  python presage/train_predict.py  --dataset replogle22k562 --fold 0
-pixi run -e sclambda python sclambda/train_predict.py --dataset replogle22k562 --fold 0
-pixi run -e state    python state/train_predict.py    --dataset replogle22k562 --fold 0
-pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle22k562 --fold 0
+pixi run -e gears    python gears/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e scgpt    python scgpt/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e presage  python presage/train_predict.py  --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e sclambda python sclambda/train_predict.py --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e state    python state/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
 ```
 
 All flags beyond `--dataset`/`--fold` default to each model's own full-scale values (see each
@@ -94,14 +91,21 @@ pseudobulk (one row per perturbation × cell type), so its default of 16 hard-cr
 erroring earlier); `--batch-size 2` works there. The others degrade more gracefully but still
 warrant a smaller value at smoke scale for the same reason.
 
-## 4. Train + predict, the full sweep (all models × all 5 folds)
+Each adapter writes to `runs/<dataset>/<model>/fold-<n>/seed-<seed>/`, including its resolved
+configuration, checkpoint, training metrics, validated prediction manifest, checksums, and a
+completion marker. Re-running the same command skips a checksum-valid completed run.
+
+## 4. Train + predict, the full sweep
 
 ```bash
-models/slurm/submit_all.sh                              # all 6 models, replogle22k562
-models/slurm/submit_all.sh replogle22k562 gears scgpt    # just these two
+models/slurm/submit_all.sh                 # five folds x three seeds; TabICLv2 once per fold
+models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
+models/slurm/submit_all.sh --smoke         # fold 0, seed 42, reduced training budgets
 ```
 
-Submits one independent 5-task SLURM array job per model (`models/slurm/train.sbatch`).
+The stochastic models use 15-task arrays (five folds × seeds 42, 43, and 44). TabICLv2 is
+training-free and deterministic, so it uses one five-fold array at archival seed 42. `--smoke`
+submits only fold 0 at seed 42 with model-specific truncated budgets.
 
 ## 5. Baselines that need no training
 

@@ -1,0 +1,36 @@
+schema_version = 1
+id = "presage"
+title = "PRESAGE"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+
+[implementation]
+package = "Genentech/PRESAGE"
+revision = "2c7b231c60cf110c4aab0acf8ecd2c2b3268fffb"
+
+[adapter]
+path = "models/presage/train_predict.py"
+environment = "models/pixi.toml#presage"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "joint pathway and gene-embedding model across training perturbations"
+
+[output]
+space = "control-centered log1p delta"
+evaluation_transform = "add_control_mean"
+prediction = "one centroid per held-out perturbation, archived in absolute log1p expression"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 1000
+early_stop_patience = 10
+batch_size = 16
+
+[resources]
+gpus = 1
+cpus = 64
+memory_gb = 64
+time = "2-00:00:00"

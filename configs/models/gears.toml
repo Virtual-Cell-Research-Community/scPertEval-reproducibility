@@ -15,11 +15,19 @@ path = "models/gears/train_predict.py"
 environment = "models/pixi.toml#gears"
 lockfile = "models/pixi.lock"
 
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "single-gene identity with the frozen GEARS gene-to-GO support cohort"
+
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+prediction = "one centroid per held-out perturbation"
+
 [training]
-seed = 42
+seeds = [42, 43, 44]
 epochs = 20
 batch_size = 32
-prediction = "one centroid per held-out perturbation"
 
 [resources]
 gpus = 1

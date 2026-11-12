@@ -32,6 +32,7 @@ import argparse
 import contextlib
 import io
 import pickle
+import random
 import re
 import sys
 from pathlib import Path
@@ -39,21 +40,25 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import torch
 
 ad.settings.allow_write_nullable_strings = True
 
 from sclambda.model import Model
 
 HERE = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.model_runs import add_point_run_arguments, begin_point_model_run
+
 DATA_DIR = HERE.parent / "data"
 # Populated by `pixi run -e sclambda fetch-embeddings` (models/pixi.toml) — not downloaded
 # here, so this script has no direct download dependency of its own.
 GENEPT_PICKLE = (
     HERE / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
 )
-OUT_DIR = HERE / "predictions"
-SAVED_MODELS_DIR = HERE / "saved_models"
-METRICS_DIR = HERE / "metrics"
 
 # sclambda's own Model.train() (sclambda/model.py) only prints every 10 epochs
 # (`if (epoch+1) % 10 == 0`), via plain print() (stdout, unlike GEARS' print_sys which goes
@@ -120,17 +125,34 @@ def main() -> None:
         default=DEFAULT_EPOCHS,
         help=f"training epochs (default: {DEFAULT_EPOCHS}, full-scale; must be >= {MIN_EPOCHS}, see above)",
     )
+    add_point_run_arguments(parser)
     args = parser.parse_args()
     if args.epochs < MIN_EPOCHS:
         raise SystemExit(f"--epochs must be >= {MIN_EPOCHS} (scLAMBDA never checkpoints below that, see module docstring)")
 
+    run = begin_point_model_run(
+        args,
+        repository_root=REPOSITORY_ROOT,
+        model_id="sclambda",
+        environment="models/pixi.lock#sclambda",
+        configuration={"epochs": args.epochs},
+    )
+    if run.skipped:
+        print(f"skipping verified completed run: {run.handle.directory}")
+        return
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run.prediction_path
 
     if not GENEPT_PICKLE.exists():
         raise FileNotFoundError(f"{GENEPT_PICKLE} missing — run `pixi run -e sclambda fetch-embeddings` first")
 
-    adata = ad.read_h5ad(DATA_DIR / args.dataset / "raw.h5ad")
+    adata = ad.read_h5ad(run.raw_path)
 
     with open(fold_path, "rb") as f:
         fold = pickle.load(f)
@@ -151,7 +173,7 @@ def main() -> None:
         training_epochs=args.epochs,
         # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
         # index would silently overwrite each other's checkpoint.
-        model_path=str(SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"),
+        model_path=str(run.checkpoint_dir / "sclambda"),
         # multi_gene stays at its default (True) despite this being a single-gene dataset:
         # scLAMBDA's README's multi_gene=False path assumes bare-gene-symbol conditions
         # ("gene_a", no suffix). Ours are "<GENE>+ctrl" (the GEARS convention, shared across
@@ -164,7 +186,7 @@ def main() -> None:
     )
     with _tee_stdout() as captured:
         model.train()
-    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path = run.metrics_path
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(_parse_sclambda_metrics(captured.getvalue())).to_csv(metrics_path, index=False)
 
@@ -177,7 +199,14 @@ def main() -> None:
     pred_adata = ad.AnnData(X=np.vstack(rows).astype(np.float32), obs={"perturbation": perturbations})
     pred_adata.var_names = pd.Index(np.asarray(adata.var_names))
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    checkpoint_path = run.checkpoint_dir / "sclambda" / "ckpt.pth"
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(f"scLAMBDA produced no checkpoint at {checkpoint_path}")
+    run.complete(
+        implementation_revision="gefeiwang/scLAMBDA@a5be849797eb26e098c7002b819a5261f51dbead",
+        checkpoints=[checkpoint_path],
+    )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

@@ -58,22 +58,28 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import random
 import sys
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import pandas as pd
+import torch
 from tfm_perturbation.datamodules.presage import PresageAnnDataDataModule
 from tfm_perturbation.models.transcriptomics.tabicl_multiview import TabICLMultiviewModel
 
 ad.settings.allow_write_nullable_strings = True
 
 HERE = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.model_runs import add_point_run_arguments, begin_point_model_run
+
 DATA_DIR = HERE.parent / "data"
 PRESAGE_CACHE = HERE.parent / "presage" / "cache" / "cache"
-RUN_DIR = HERE / "runs"
-OUT_DIR = HERE / "predictions"
 CONTROL_LABEL = "control"
 
 # Mirrors tfm-perturbation's own experiments/configs/modality/top_plus_perturbseq_k562_essential.yaml,
@@ -97,13 +103,35 @@ def main() -> None:
         help="models/data/<dataset>/{raw.h5ad,folds/} to train/predict on (default: smoke_k562)",
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold in <dataset>_folds/ to train/predict on")
+    add_point_run_arguments(parser, deterministic=True)
     args = parser.parse_args()
 
-    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    run = begin_point_model_run(
+        args,
+        repository_root=REPOSITORY_ROOT,
+        model_id="tabicl",
+        environment="models/pixi.lock#tabicl",
+        configuration={
+            "training_mode": "in_context",
+            "fusion_weighting_mode": "none",
+            "validation_filtering": False,
+        },
+        deterministic=True,
+    )
+    if run.skipped:
+        print(f"skipping verified completed run: {run.handle.directory}")
+        return
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+    raw = run.raw_path
     split_json_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_tabicl.json"
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's artifact.
-    run_dir = RUN_DIR / args.dataset / f"fold_{args.fold}"
+    run_dir = run.checkpoint_dir / "tabicl"
 
     datamodule = PresageAnnDataDataModule(
         dataset=args.dataset,
@@ -156,9 +184,22 @@ def main() -> None:
     )
     pred_adata.var_names = pd.Index(gene_names)
 
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run.prediction_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    pd.DataFrame(
+        [
+            {
+                "training_mode": "in_context",
+                "gradient_updates": 0,
+                "modalities": len(MODALITY_PICKLE_PATHS),
+            }
+        ]
+    ).to_csv(run.metrics_path, index=False)
+    run.complete(
+        implementation_revision="royerlab/tfm-perturbation@c7b2786c2aee946db1da442c39ad1d9bdb303d14",
+        extra_artifacts={"in_context_artifact": run_dir / "tabicl_multiview_artifact.pkl"},
+    )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

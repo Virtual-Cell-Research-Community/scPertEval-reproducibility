@@ -1,0 +1,36 @@
+schema_version = 1
+id = "scgpt"
+title = "scGPT"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+
+[implementation]
+package = "bowang-lab/scGPT"
+revision = "cebd6fae655b9c585a4807daa3ac31bb764f06b4"
+
+[adapter]
+path = "models/scgpt/train_predict.py"
+environment = "models/pixi.toml#scgpt"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "single-gene flag over the measured expression panel"
+
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+prediction = "one centroid per held-out perturbation"
+
+[training]
+seeds = [42, 43, 44]
+max_epochs = 15
+early_stop_patience = 10
+batch_size = 64
+
+[resources]
+gpus = 1
+cpus = 64
+memory_gb = 64
+time = "2-00:00:00"

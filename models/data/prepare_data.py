@@ -386,6 +386,11 @@ def prepare_frozen_experiment_raw(
             f"materialized cohort has {result.n_obs} cells; expected {expected_cells}"
         )
 
+    # Canonical raw-count objects may retain a stale Scanpy log1p marker in ``uns`` from
+    # source processing even though X has been restored to counts. assert_raw_counts above
+    # is the authoritative value check; remove the stale marker before applying this view's
+    # one deliberate transform so Scanpy does not emit a misleading double-log warning.
+    result.uns.pop("log1p", None)
     sc.pp.normalize_total(result, target_sum=target_sum)
     sc.pp.log1p(result)
     return result

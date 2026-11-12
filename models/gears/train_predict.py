@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import io
+import random
 import re
 import sys
 from pathlib import Path
@@ -20,6 +21,7 @@ from pathlib import Path
 import anndata as ad
 import numpy as np
 import pandas as pd
+import torch
 
 ad.settings.allow_write_nullable_strings = True
 
@@ -29,11 +31,14 @@ from gears import GEARS, PertData
 _patch.apply()
 
 HERE = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.model_runs import add_point_run_arguments, begin_point_model_run
+
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
-OUT_DIR = HERE / "predictions"
-SAVED_MODELS_DIR = HERE / "saved_models"
-METRICS_DIR = HERE / "metrics"
 
 _EPOCH_MSE_RE = re.compile(r"Epoch (\d+): Train Overall MSE: ([\d.]+) Validation Overall MSE: ([\d.]+)\.")
 _EPOCH_DE_MSE_RE = re.compile(r"Train Top 20 DE MSE: ([\d.]+) Validation Top 20 DE MSE: ([\d.]+)\.")
@@ -102,11 +107,32 @@ def main() -> None:
     # cellsimbench's gears.yaml uses 512; only affects eval throughput, not results, so
     # it's safe as the default at every scale.
     parser.add_argument("--test-batch-size", type=int, default=512, help="eval batch size (default: 512)")
+    add_point_run_arguments(parser)
     args = parser.parse_args()
 
-    raw = DATA_DIR / args.dataset / "raw.h5ad"
+    run = begin_point_model_run(
+        args,
+        repository_root=REPOSITORY_ROOT,
+        model_id="gears",
+        environment="models/pixi.lock#gears",
+        configuration={
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "test_batch_size": args.test_batch_size,
+        },
+    )
+    if run.skipped:
+        print(f"skipping verified completed run: {run.handle.directory}")
+        return
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+
+    raw = run.raw_path
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run.prediction_path
     adata = ad.read_h5ad(raw)
 
     pert_data = PertData(str(PERT_DATA_DIR))
@@ -129,13 +155,13 @@ def main() -> None:
     model.model_initialize(hidden_size=64)
     with _tee_stderr() as captured:
         model.train(epochs=args.epochs)
-    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path = run.metrics_path
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(_parse_gears_metrics(captured.getvalue())).to_csv(metrics_path, index=False)
     # GEARS' own save_model() does a single-level os.mkdir(path), which raises if the
     # parent doesn't exist yet. Namespaced by dataset too — otherwise a smoke run and a
     # full run at the same fold index would silently overwrite each other's checkpoint.
-    saved_model_dir = SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"
+    saved_model_dir = run.checkpoint_dir
     saved_model_dir.mkdir(parents=True, exist_ok=True)
     model.save_model(str(saved_model_dir))
 
@@ -146,12 +172,15 @@ def main() -> None:
     # GEARS' own perturbation-similarity graph (model.pert_list) is built from a fixed,
     # pre-downloaded GO-annotation reference (PertData.set_pert_genes's gene2go_all.pkl) —
     # independent of our own data, and doesn't cover every gene we measure. GEARS.predict()
-    # hard-crashes (ValueError) on any gene it doesn't cover; filter those out rather than
-    # let one uncovered test gene kill the whole fold's job after a full training run.
+    # hard-crashes (ValueError) on any gene it doesn't cover. The frozen cohort was selected
+    # against this reference, so any miss is a cohort/reference drift error, not something an
+    # adapter may silently drop after training.
     ungraphed = [g for g in single_gene_perts if g not in model.pert_list]
     if ungraphed:
-        print(f"WARNING: {len(ungraphed)} test perturbations not in GEARS' own perturbation graph, skipping: {ungraphed}")
-    single_gene_perts = [g for g in single_gene_perts if g in model.pert_list]
+        raise ValueError(
+            f"frozen common cohort contains {len(ungraphed)} targets outside GEARS' graph: "
+            f"{ungraphed}"
+        )
     pred_lists = [[g] for g in single_gene_perts]
     preds = model.predict(pred_lists)
 
@@ -167,7 +196,11 @@ def main() -> None:
     )
     pred_adata.var_names = pd.Index(gene_names)
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    checkpoints = sorted(path for path in saved_model_dir.rglob("*") if path.is_file())
+    if not checkpoints:
+        raise FileNotFoundError(f"GEARS produced no checkpoint under {saved_model_dir}")
+    run.complete(implementation_revision="cell-gears==0.1.2", checkpoints=checkpoints)
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

@@ -1,0 +1,37 @@
+schema_version = 1
+id = "tabicl"
+title = "TabICLv2"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+
+[implementation]
+package = "royerlab/tfm-perturbation"
+revision = "c7b2786c2aee946db1da442c39ad1d9bdb303d14"
+
+[adapter]
+path = "models/tabicl/train_predict.py"
+environment = "models/pixi.toml#tabicl"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "six frozen gene-embedding modalities used as in-context examples"
+
+[output]
+space = "control-centered log1p delta"
+evaluation_transform = "add_control_mean"
+prediction = "one centroid per held-out perturbation, archived in absolute log1p expression"
+
+[training]
+mode = "deterministic_in_context_inference"
+archival_seed = 42
+gradient_updates = 0
+fusion_weighting = "equal"
+validation_filtering = false
+
+[resources]
+gpus = 1
+cpus = 64
+memory_gb = 64
+time = "2-00:00:00"

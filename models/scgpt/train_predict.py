@@ -60,14 +60,17 @@ from scgpt.utils import (
 )
 
 HERE = Path(__file__).resolve().parent
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
+
+from workflows.model_runs import add_point_run_arguments, begin_point_model_run
+
 DATA_DIR = HERE.parent / "data"
 PERT_DATA_DIR = HERE / "pert_data"
 # Populated by `pixi run -e scgpt fetch-checkpoint` (models/pixi.toml) — not downloaded
 # here, so this script has no gdown dependency of its own.
 CHECKPOINT_DIR = HERE / "checkpoints" / "scGPT_human"
-OUT_DIR = HERE / "predictions"
-SAVED_MODELS_DIR = HERE / "saved_models"
-METRICS_DIR = HERE / "metrics"
 
 
 pad_token = "<pad>"
@@ -91,7 +94,6 @@ amp = True
 EARLY_STOP = 10
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-set_seed(42)
 
 
 def main() -> None:
@@ -111,10 +113,31 @@ def main() -> None:
     # own value — no smoke/full distinction needed, just exposed for configurability.
     parser.add_argument("--batch-size", type=int, default=64, help="training batch size (default: 64)")
     parser.add_argument("--eval-batch-size", type=int, default=64, help="eval batch size (default: 64)")
+    add_point_run_arguments(parser)
     args = parser.parse_args()
-    raw = DATA_DIR / args.dataset / "raw.h5ad"
+
+    run = begin_point_model_run(
+        args,
+        repository_root=REPOSITORY_ROOT,
+        model_id="scgpt",
+        environment="models/pixi.lock#scgpt",
+        configuration={
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "eval_batch_size": args.eval_batch_size,
+            "learning_rate": lr,
+            "max_sequence_length": max_seq_len,
+            "early_stop_patience": EARLY_STOP,
+        },
+    )
+    if run.skipped:
+        print(f"skipping verified completed run: {run.handle.directory}")
+        return
+    set_seed(args.seed)
+
+    raw = run.raw_path
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
-    out_path = OUT_DIR / args.dataset / f"fold_{args.fold}.h5ad"
+    out_path = run.prediction_path
 
     if not (CHECKPOINT_DIR / "best_model.pt").exists():
         raise FileNotFoundError(
@@ -285,7 +308,7 @@ def main() -> None:
                 break
         scheduler.step()
 
-    metrics_path = METRICS_DIR / args.dataset / f"fold_{args.fold}.csv"
+    metrics_path = run.metrics_path
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(metrics_rows).to_csv(metrics_path, index=False)
 
@@ -295,7 +318,7 @@ def main() -> None:
 
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's checkpoint.
-    fold_dir = SAVED_MODELS_DIR / args.dataset / f"fold_{args.fold}"
+    fold_dir = run.checkpoint_dir
     fold_dir.mkdir(parents=True, exist_ok=True)
     torch.save(model.state_dict(), fold_dir / "model.pt")
 
@@ -333,7 +356,12 @@ def main() -> None:
     )
     pred_adata.var_names = pd.Index(np.asarray(pert_data.gene_names.values))
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    pred_adata.write_h5ad(out_path)
+    pred_adata.write_h5ad(out_path, compression="gzip")
+    checkpoint_path = fold_dir / "model.pt"
+    run.complete(
+        implementation_revision="bowang-lab/scGPT@cebd6fae655b9c585a4807daa3ac31bb764f06b4",
+        checkpoints=[checkpoint_path],
+    )
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 

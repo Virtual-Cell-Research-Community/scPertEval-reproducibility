@@ -1,0 +1,34 @@
+schema_version = 1
+id = "sclambda"
+title = "scLAMBDA"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+
+[implementation]
+package = "gefeiwang/scLAMBDA"
+revision = "a5be849797eb26e098c7002b819a5261f51dbead"
+
+[adapter]
+path = "models/sclambda/train_predict.py"
+environment = "models/pixi.toml#sclambda"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "GenePT embedding for every perturbation in the frozen common cohort"
+
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+prediction = "one centroid per held-out perturbation"
+
+[training]
+seeds = [42, 43, 44]
+epochs = 200
+
+[resources]
+gpus = 1
+cpus = 64
+memory_gb = 64
+time = "2-00:00:00"

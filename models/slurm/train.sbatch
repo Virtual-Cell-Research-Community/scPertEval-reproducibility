@@ -1,7 +1,8 @@
 #!/bin/bash
-# Generic per-model, per-fold training job — one array task per fold (0-4, matching
-# prepare_split.py's N_FOLDS=5). Submitted via submit_all.sh, which loops over all 6 models
-# and sets MODEL/DATASET through --export; not meant to be sbatch'd directly without those set.
+# Generic per-model, per-fold, per-seed training job. submit_all.sh supplies a 15-task
+# array for stochastic models (5 folds x 3 seeds) and a five-task array for deterministic
+# TabICLv2. It also sets MODEL/DATASET through --export; this is not meant to be submitted
+# directly without those values.
 #
 # Every models/*/train_predict.py already exposes --dataset/--fold with full-scale defaults
 # (epochs/max_steps/batch_size etc. — see each script's own docstring for how those defaults
@@ -26,19 +27,19 @@
 # --exclude naming nodes that don't exist ("Invalid node name specified"), and there's no
 # longer any V100 node for the exclusion to matter for. If V100 nodes ever reappear under a
 # different name, re-add an --exclude for them.
-#SBATCH --account=dugourd
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=64G
 #SBATCH --time=2-00:00:00
-#SBATCH --array=0-4
-#SBATCH --output=slurm/logs/%x_fold%a_%j.out
-#SBATCH --error=slurm/logs/%x_fold%a_%j.err
+#SBATCH --output=slurm/logs/%x_task%a_%A.out
+#SBATCH --error=slurm/logs/%x_task%a_%A.err
 
 set -euo pipefail
 
 : "${MODEL:?set via sbatch --export=ALL,MODEL=<gears|scgpt|presage|sclambda|state|tabicl>}"
-DATASET="${DATASET:-replogle22k562}"
+DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
+FOLD_COUNT="${FOLD_COUNT:-5}"
+SEEDS="${SEEDS:-42:43:44}"
 # SLURM copies the submitted script to a spool dir before running it, so a
 # ${BASH_SOURCE[0]}-relative path resolves to the wrong place (and $SLURM_SUBMIT_DIR depends
 # on the submitting shell's cwd, which callers of this script aren't guaranteed to control) —
@@ -46,5 +47,31 @@ DATASET="${DATASET:-replogle22k562}"
 : "${MODELS_DIR:?set via sbatch --export=ALL,MODELS_DIR=/abs/path/to/models}"
 cd "$MODELS_DIR"
 
-echo "model=$MODEL dataset=$DATASET fold=$SLURM_ARRAY_TASK_ID node=$SLURM_JOB_NODELIST gpu=$CUDA_VISIBLE_DEVICES"
-pixi run -e "$MODEL" python "$MODEL/train_predict.py" --dataset "$DATASET" --fold "$SLURM_ARRAY_TASK_ID"
+if [[ "$MODEL" == "tabicl" ]]; then
+    FOLD="$SLURM_ARRAY_TASK_ID"
+    SEED=42
+else
+    IFS=: read -ra SEED_VALUES <<< "$SEEDS"
+    FOLD=$((SLURM_ARRAY_TASK_ID % FOLD_COUNT))
+    SEED_INDEX=$((SLURM_ARRAY_TASK_ID / FOLD_COUNT))
+    SEED="${SEED_VALUES[$SEED_INDEX]:?array index has no corresponding training seed}"
+fi
+
+EXTRA_ARGS=()
+if [[ "${SMOKE:-0}" == "1" ]]; then
+    case "$MODEL" in
+        gears) EXTRA_ARGS=(--epochs 2) ;;
+        presage) EXTRA_ARGS=(--epochs 2 --batch-size 4) ;;
+        scgpt) EXTRA_ARGS=(--epochs 2) ;;
+        sclambda) EXTRA_ARGS=(--epochs 10) ;;
+        state) EXTRA_ARGS=(--max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0) ;;
+        tabicl) EXTRA_ARGS=() ;;
+    esac
+fi
+
+echo "model=$MODEL dataset=$DATASET fold=$FOLD seed=$SEED smoke=${SMOKE:-0} node=$SLURM_JOB_NODELIST gpu=$CUDA_VISIBLE_DEVICES"
+pixi run -e "$MODEL" python "$MODEL/train_predict.py" \
+    --dataset "$DATASET" \
+    --fold "$FOLD" \
+    --seed "$SEED" \
+    "${EXTRA_ARGS[@]}"
