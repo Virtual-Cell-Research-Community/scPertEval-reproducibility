@@ -558,17 +558,19 @@ def smoke_subsample_indices(
 ) -> np.ndarray:
     """Choose bounded smoke-test rows using annotations alone."""
     rng = np.random.default_rng(seed)
-
-    pert_counts = pd.Series(perturbations).value_counts()
-    pert_counts = pert_counts[pert_counts.index != "control"]
-    eligible = np.sort(pert_counts[pert_counts >= cells_per_pert].index.to_numpy())
+    groups = pd.Series(perturbations).groupby(perturbations, sort=False).indices
+    eligible = np.sort(
+        np.asarray(
+            [label for label, indices in groups.items() if label != "control" and len(indices) >= cells_per_pert]
+        )
+    )
     chosen_perts = rng.choice(eligible, size=min(n_perts, len(eligible)), replace=False)
 
     keep_idx = []
-    control_idx = np.where(perturbations == "control")[0]
+    control_idx = groups.get("control", np.asarray([], dtype=int))
     keep_idx.append(rng.choice(control_idx, size=min(control_cells, len(control_idx)), replace=False))
     for p in chosen_perts:
-        idx = np.where(perturbations == p)[0]
+        idx = groups[p]
         keep_idx.append(rng.choice(idx, size=min(cells_per_pert, len(idx)), replace=False))
     return np.sort(np.concatenate(keep_idx))
 
