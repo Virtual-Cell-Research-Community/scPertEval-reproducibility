@@ -1,3 +1,7 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
 name = "scperteval-reproducibility"
 version = "0.1.0"
@@ -10,9 +14,12 @@ dependencies = [
   "rdkit>=2024.9",
   "requests>=2.32",
   "scanpy>=1.10,<1.13",
-  "scperteval @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@4685f11927e887745737600170da7a655b727553",
+  "scperteval @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@93884506116a96e3674524a483df19ca3f43705e",
   "scipy>=1.12",
 ]
+
+[project.scripts]
+reproduce-protocol-behavior = "analyses.protocol_behavior.cli:main"
 
 [dependency-groups]
 dev = [
@@ -26,4 +33,10 @@ line-length = 120
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.hatch.build.targets.wheel]
+packages = ["analyses", "workflows"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
 

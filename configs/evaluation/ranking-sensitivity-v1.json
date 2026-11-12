@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "ranking-sensitivity-v1",
-  "scperteval_revision": "4685f11927e887745737600170da7a655b727553",
+  "scperteval_revision": "93884506116a96e3674524a483df19ca3f43705e",
   "minimum_observed_cells": 50,
   "evaluation_space": {
     "space": "log1p_expression",
