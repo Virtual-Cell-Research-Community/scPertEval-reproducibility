@@ -64,6 +64,9 @@ for MODEL in "${MODELS[@]}"; do
         --array="$ARRAY"
         --export=ALL,MODEL="$MODEL",DATASET="$DATASET",MODELS_DIR="$MODELS_DIR",FOLD_COUNT=5,SEEDS=42:43:44,SMOKE="$SMOKE"
     )
+    if [[ "$MODEL" == "sclambda" && "$SMOKE" != "1" ]]; then
+        SBATCH_ARGS+=(--mem=256G)
+    fi
     if [[ "$SMOKE" == "1" ]]; then
         SBATCH_ARGS+=(--cpus-per-task=8 --mem=64G --time=08:00:00)
     fi

@@ -51,6 +51,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from models.sclambda.scalability_patch import initialize_scalable_model
 from workflows.model_runs import add_point_run_arguments, begin_point_model_run
 
 DATA_DIR = HERE.parent / "data"
@@ -125,6 +126,15 @@ def main() -> None:
         default=DEFAULT_EPOCHS,
         help=f"training epochs (default: {DEFAULT_EPOCHS}, full-scale; must be >= {MIN_EPOCHS}, see above)",
     )
+    parser.add_argument(
+        "--control-size",
+        type=int,
+        default=300,
+        help=(
+            "control cells used for validation and mean prediction (default: 300, matching "
+            "scLAMBDA's context-model validation population)"
+        ),
+    )
     add_point_run_arguments(parser)
     args = parser.parse_args()
     if args.epochs < MIN_EPOCHS:
@@ -135,7 +145,11 @@ def main() -> None:
         repository_root=REPOSITORY_ROOT,
         model_id="sclambda",
         environment="models/pixi.lock#sclambda",
-        configuration={"epochs": args.epochs},
+        configuration={
+            "epochs": args.epochs,
+            "control_size": args.control_size,
+            "scalability_patch": "categorical-embedding-table-v1",
+        },
     )
     if run.skipped:
         print(f"skipping verified completed run: {run.handle.directory}")
@@ -166,7 +180,8 @@ def main() -> None:
     pert_genes = sorted({c.split("+")[0] for c in adata.obs["condition"].unique() if c != "ctrl"})
     gene_embeddings = {g: np.asarray(genept[g], dtype=np.float32) for g in pert_genes}
 
-    model = Model(
+    model = initialize_scalable_model(
+        Model,
         adata,
         gene_embeddings,
         split_name="split",
@@ -174,6 +189,8 @@ def main() -> None:
         # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
         # index would silently overwrite each other's checkpoint.
         model_path=str(run.checkpoint_dir / "sclambda"),
+        seed=args.seed,
+        control_size=args.control_size,
         # multi_gene stays at its default (True) despite this being a single-gene dataset:
         # scLAMBDA's README's multi_gene=False path assumes bare-gene-symbol conditions
         # ("gene_a", no suffix). Ours are "<GENE>+ctrl" (the GEARS convention, shared across

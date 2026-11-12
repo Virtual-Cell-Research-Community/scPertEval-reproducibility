@@ -95,6 +95,14 @@ Each adapter writes to `runs/<dataset>/<model>/fold-<n>/seed-<seed>/`, including
 configuration, checkpoint, training metrics, validated prediction manifest, checksums, and a
 completion marker. Re-running the same command skips a checksum-valid completed run.
 
+The scLAMBDA adapter retains upstream `Model.train` and `Model.predict`, but replaces its
+quadratic initialization with an arithmetic-preserving categorical embedding table. Upstream
+otherwise scans all cells once per perturbation and allocates two unused full-cell embedding
+arrays when target-coordinate prediction is disabled. Validation and mean prediction use
+scLAMBDA's native `ctrl_size` option with 300 controls, matching the fixed validation population
+in its context-model implementation. The adapter also passes the declared training seed into
+scLAMBDA rather than allowing the library's constructor default to collapse all three seeds.
+
 ## 4. Train + predict, the full sweep
 
 ```bash
@@ -110,7 +118,8 @@ submits only fold 0 at seed 42 with model-specific truncated budgets. Full array
 one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several 48 GiB
 SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage and node
 capacity. Full tasks request 192 GiB RAM because the GWPS CSR arrays alone occupy about 47 GiB
-before AnnData and model-specific working copies; the previous 64 GiB request was unsafe.
+before AnnData and model-specific working copies; scLAMBDA receives a 256 GiB override for its
+dense training tensors. The previous 64 GiB request was unsafe.
 
 ## 5. Baselines that need no training
 

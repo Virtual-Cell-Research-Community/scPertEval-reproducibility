@@ -185,6 +185,14 @@ validation checkpoint; PRESAGE, scGPT, and STATE use validation-based early
 stopping; TabICLv2 uses equal modality fusion with no validation-based component
 selection and receives the full development pool as in-context examples.
 
+scLAMBDA uses all training cells. Its adapter vectorizes the upstream
+condition-by-cell embedding construction and omits target-coordinate arrays that
+the selected `use_tg_coord = false` model never reads; upstream training and
+prediction remain unchanged. Validation and mean prediction use scLAMBDA's
+native `ctrl_size = 300` option, matching the fixed validation population in its
+context-model implementation. The frozen run seed is passed into the model
+constructor so the three declared seeds remain distinct.
+
 ### sci-Plex3
 
 Reduce the approximately 27,000 measured genes to an approximately 9,000-gene

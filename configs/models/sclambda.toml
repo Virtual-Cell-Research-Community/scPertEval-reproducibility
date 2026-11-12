@@ -26,9 +26,11 @@ prediction = "one centroid per held-out perturbation"
 [training]
 seeds = [42, 43, 44]
 epochs = 200
+control_size = 300
+scalability_patch = "categorical-embedding-table-v1"
 
 [resources]
 gpus = 1
-cpus = 64
-memory_gb = 64
+cpus = 16
+memory_gb = 256
 time = "2-00:00:00"

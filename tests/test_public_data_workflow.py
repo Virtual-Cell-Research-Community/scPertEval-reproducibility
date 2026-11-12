@@ -39,6 +39,10 @@ from models.scdisinfact.context_config import (
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
 from models.scdisinfact.joint_patch import choose_present_reference, coerce_reference_id
+from models.sclambda.scalability_patch import (
+    build_condition_embedding_table,
+    selected_centered_condition_means,
+)
 from models.state.context_config import (
     build_context_toml,
     model_conditions,
@@ -278,6 +282,42 @@ def test_perturbation_baselines_validate_native_fold_and_predict_test_conditions
 
     with pytest.raises(ValueError, match="halves are required"):
         predict_perturbation_baseline("interpolated-technical-duplicate", data, fold)
+
+
+def test_sclambda_scalability_helpers_match_conditionwise_embedding_and_means() -> None:
+    conditions = np.array(["ctrl", "G1+ctrl", "G2+ctrl", "G1+ctrl"])
+    embeddings = {
+        "ctrl": np.zeros(3, dtype=np.float32),
+        "G1": np.array([1.0, 2.0, 3.0], dtype=np.float32),
+        "G2": np.array([4.0, 5.0, 6.0], dtype=np.float32),
+    }
+    unique, inverse, table = build_condition_embedding_table(conditions, embeddings)
+    by_condition = dict(zip(unique, table, strict=True))
+    np.testing.assert_allclose(by_condition["ctrl"], embeddings["ctrl"])
+    np.testing.assert_allclose(by_condition["G1+ctrl"], embeddings["G1"])
+    np.testing.assert_allclose(by_condition["G2+ctrl"], embeddings["G2"])
+    np.testing.assert_allclose(table[inverse], np.vstack([embeddings["ctrl"], embeddings["G1"], embeddings["G2"], embeddings["G1"]]))
+
+    expression = sp.csr_matrix(
+        np.array(
+            [
+                [1.0, 3.0],
+                [5.0, 7.0],
+                [9.0, 11.0],
+                [13.0, 15.0],
+            ],
+            dtype=np.float32,
+        )
+    )
+    means = selected_centered_condition_means(
+        expression,
+        inverse,
+        unique,
+        np.array(["G1+ctrl", "G2+ctrl"]),
+        np.array([1.0, 3.0], dtype=np.float32),
+    )
+    np.testing.assert_allclose(means["G1+ctrl"], [8.0, 8.0])
+    np.testing.assert_allclose(means["G2+ctrl"], [8.0, 8.0])
 
 
 def test_tabicl_initializes_with_frozen_validation_before_using_merged_pool(
