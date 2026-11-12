@@ -288,6 +288,7 @@ def test_prepare_canonical_raw_accepts_explicit_source_annotation_fields() -> No
     )
     assert result.obs["perturbation"].tolist() == ["control", "control", "G1", "G2"]
     assert result.obs["is_control"].tolist() == [True, True, False, False]
+    assert result.uns["log1p"] == {}
     np.testing.assert_allclose(np.expm1(result.X.toarray()).sum(axis=1), 10_000, rtol=1e-5)
 
 
@@ -367,6 +368,7 @@ def test_metadata_only_validation_checks_frozen_cohort_without_reading_expressio
         "G2",
     ]
     assert materialized.obs["is_control"].tolist() == [True, True, False, False, False, False]
+    assert materialized.uns["log1p"] == {}
     np.testing.assert_allclose(
         np.expm1(materialized.X.toarray()).sum(axis=1),
         10_000,

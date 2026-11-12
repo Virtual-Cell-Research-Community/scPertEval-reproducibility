@@ -414,6 +414,10 @@ def prepare_frozen_experiment_raw(
     result.uns.pop("log1p", None)
     sc.pp.normalize_total(result, target_sum=target_sum)
     sc.pp.log1p(result)
+    # Older AnnData versions used by scGPT cannot read the newer H5AD ``null``
+    # encoding produced for ``base=None``. An absent base has the same natural-log
+    # meaning and remains readable across all pinned model environments.
+    result.uns["log1p"].pop("base", None)
     return result
 
 
@@ -452,6 +456,7 @@ def prepare_canonical_raw(
         result.layers["counts"] = result.X.copy()
     sc.pp.normalize_total(result, target_sum=target_sum)
     sc.pp.log1p(result)
+    result.uns["log1p"].pop("base", None)
     return result
 
 
