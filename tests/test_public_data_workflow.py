@@ -412,6 +412,56 @@ def test_smoke_subsample_can_retain_every_perturbation_with_bounded_cells() -> N
     }
 
 
+def test_frozen_smoke_selects_backed_rows_before_materialization(tmp_path: Path) -> None:
+    perturbations = ["non-targeting"] * 4 + ["G1"] * 3 + ["G2"] * 3
+    source = AnnData(
+        X=sp.csr_matrix(np.arange(1, 21, dtype=np.int32).reshape(10, 2)),
+        obs=pd.DataFrame(
+            {
+                "target_gene": perturbations,
+                "control_class": ["non-targeting"] * 4 + ["targeted"] * 6,
+            },
+            index=[f"cell-{index}" for index in range(10)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    experiment = {
+        "perturbations": ["G1", "G2"],
+        "gene_panel": {"n_genes": 2},
+    }
+    full = prepare_frozen_experiment_raw(
+        source,
+        experiment,
+        perturbation_key="target_gene",
+        control_key="control_class",
+        control_value="non-targeting",
+    )
+    expected = smoke_subsample(full, n_perts=2, cells_per_pert=2, control_cells=3, seed=42)
+
+    source_path = tmp_path / "source.h5ad"
+    source.write_h5ad(source_path)
+    backed = ad.read_h5ad(source_path, backed="r")
+    try:
+        actual = prepare_frozen_experiment_raw(
+            backed,
+            experiment,
+            perturbation_key="target_gene",
+            control_key="control_class",
+            control_value="non-targeting",
+            smoke=(2, 2, 3, 42),
+        )
+    finally:
+        backed.file.close()
+
+    assert actual.obs_names.tolist() == expected.obs_names.tolist()
+    assert actual.obs["perturbation"].value_counts().to_dict() == {
+        "control": 3,
+        "G1": 2,
+        "G2": 2,
+    }
+    np.testing.assert_allclose(actual.X.toarray(), expected.X.toarray())
+
+
 def test_all_toml_files_parse() -> None:
     for path in MANIFEST_ROOT.glob("*.toml"):
         assert tomllib.loads(path.read_text())["id"] == path.stem

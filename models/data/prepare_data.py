@@ -350,8 +350,14 @@ def prepare_frozen_experiment_raw(
     control_key: str = "is_control",
     control_value: str | None = None,
     target_sum: float = 1e4,
+    smoke: tuple[int, int, int, int] | None = None,
 ) -> ad.AnnData:
-    """Create the exact frozen-cohort model view without extra cell or gene selection."""
+    """Create the exact frozen-cohort model view.
+
+    When ``smoke`` is provided as ``(n_perts, cells_per_pert, control_cells, seed)``,
+    choose the bounded cell population from backed metadata before materializing expression.
+    This avoids loading and normalizing the full cohort merely to discard almost all rows.
+    """
     perturbations, control_mask = canonical_annotations(
         adata.obs,
         perturbation_key=perturbation_key,
@@ -360,31 +366,46 @@ def prepare_frozen_experiment_raw(
     )
     frozen = set(map(str, experiment["perturbations"]))
     keep = control_mask | np.isin(perturbations, list(frozen))
-    result = adata[keep].to_memory() if adata.isbacked else adata[keep].copy()
-    selected_perturbations = perturbations[keep]
-    selected_controls = control_mask[keep]
-    result.obs["perturbation"] = selected_perturbations
-    result.obs["is_control"] = selected_controls
-    assert_raw_counts(result.X)
+    cohort_indices = np.flatnonzero(keep)
+    cohort_perturbations = perturbations[keep]
+    cohort_controls = control_mask[keep]
 
-    observed = set(selected_perturbations[~selected_controls])
+    observed = set(cohort_perturbations[~cohort_controls])
     if observed != frozen:
         raise ValueError(
             "materialized cohort does not match the frozen perturbations: "
             f"missing={sorted(frozen - observed)}, extra={sorted(observed - frozen)}"
         )
     expected_genes = int(experiment["gene_panel"]["n_genes"])
-    if result.n_vars != expected_genes:
+    if adata.n_vars != expected_genes:
         raise ValueError(
-            f"materialized gene panel has {result.n_vars} genes; expected {expected_genes}"
+            f"materialized gene panel has {adata.n_vars} genes; expected {expected_genes}"
         )
     expected_cells = int(control_mask.sum()) + int(
         pd.Series(perturbations[~control_mask]).isin(frozen).sum()
     )
-    if result.n_obs != expected_cells:
+    if len(cohort_indices) != expected_cells:
         raise ValueError(
-            f"materialized cohort has {result.n_obs} cells; expected {expected_cells}"
+            f"materialized cohort has {len(cohort_indices)} cells; expected {expected_cells}"
         )
+
+    if smoke is not None:
+        n_perts, cells_per_pert, control_cells, seed = smoke
+        selected = smoke_subsample_indices(
+            cohort_perturbations,
+            n_perts=n_perts,
+            cells_per_pert=cells_per_pert,
+            control_cells=control_cells,
+            seed=seed,
+        )
+        cohort_indices = cohort_indices[selected]
+        cohort_perturbations = cohort_perturbations[selected]
+        cohort_controls = cohort_controls[selected]
+
+    result = adata[cohort_indices].to_memory() if adata.isbacked else adata[cohort_indices].copy()
+    result.obs["perturbation"] = cohort_perturbations
+    result.obs["is_control"] = cohort_controls
+    assert_raw_counts(result.X)
 
     # Canonical raw-count objects may retain a stale Scanpy log1p marker in ``uns`` from
     # source processing even though X has been restored to counts. assert_raw_counts above
@@ -516,22 +537,40 @@ def smoke_subsample(
     """Further reduce an already Miller-fixed population to a tiny smoke-test scale — the same
     selection logic this script used to apply directly to the raw processed file, now layered
     on top of the shared Miller-consistent population instead."""
-    rng = np.random.default_rng(seed)
     pert = adata.obs["perturbation"].to_numpy()
+    keep_idx = smoke_subsample_indices(
+        pert,
+        n_perts=n_perts,
+        cells_per_pert=cells_per_pert,
+        control_cells=control_cells,
+        seed=seed,
+    )
+    return adata[keep_idx].copy()
 
-    pert_counts = pd.Series(pert).value_counts()
+
+def smoke_subsample_indices(
+    perturbations: np.ndarray,
+    *,
+    n_perts: int,
+    cells_per_pert: int,
+    control_cells: int,
+    seed: int,
+) -> np.ndarray:
+    """Choose bounded smoke-test rows using annotations alone."""
+    rng = np.random.default_rng(seed)
+
+    pert_counts = pd.Series(perturbations).value_counts()
     pert_counts = pert_counts[pert_counts.index != "control"]
     eligible = np.sort(pert_counts[pert_counts >= cells_per_pert].index.to_numpy())
     chosen_perts = rng.choice(eligible, size=min(n_perts, len(eligible)), replace=False)
 
     keep_idx = []
-    control_idx = np.where(pert == "control")[0]
+    control_idx = np.where(perturbations == "control")[0]
     keep_idx.append(rng.choice(control_idx, size=min(control_cells, len(control_idx)), replace=False))
     for p in chosen_perts:
-        idx = np.where(pert == p)[0]
+        idx = np.where(perturbations == p)[0]
         keep_idx.append(rng.choice(idx, size=min(cells_per_pert, len(idx)), replace=False))
-    keep_idx = np.sort(np.concatenate(keep_idx))
-    return adata[keep_idx].copy()
+    return np.sort(np.concatenate(keep_idx))
 
 
 def finalize_model_annotations(adata: ad.AnnData, cell_type: str) -> ad.AnnData:
@@ -656,6 +695,9 @@ def main() -> None:
                 perturbation_key=args.perturbation_key,
                 control_key=args.control_key,
                 control_value=args.control_value,
+                smoke=(args.n_perts, args.cells_per_pert, args.control_cells, args.seed)
+                if args.smoke
+                else None,
             )
         finally:
             source.file.close()
@@ -683,7 +725,7 @@ def main() -> None:
             f"{adata.obs['perturbation'].nunique()} perturbations"
         )
 
-    if args.smoke:
+    if args.smoke and not (args.input is not None and experiment is not None):
         adata = smoke_subsample(adata, args.n_perts, args.cells_per_pert, args.control_cells, args.seed)
         print(f"after smoke subsample: {adata.shape}, {adata.obs['perturbation'].nunique()} perturbations")
 
