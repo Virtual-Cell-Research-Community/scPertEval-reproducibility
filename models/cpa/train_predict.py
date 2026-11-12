@@ -82,7 +82,11 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--early-stop-patience", type=int, default=5)
     parser.add_argument("--check-val-every-n-epoch", type=int, default=5)
-    parser.add_argument("--prediction-population-size", type=int, default=100)
+    parser.add_argument(
+        "--prediction-population-size",
+        type=int,
+        help="fixed smoke-test override; default matches each observed treated population",
+    )
     parser.add_argument("--runs-root", type=Path, default=RUN_ROOT)
     parser.add_argument("--data-manifest", type=Path)
     parser.add_argument("--force", action="store_true")
@@ -119,7 +123,7 @@ def main() -> None:
             "batch_size": args.batch_size,
             "early_stop_patience": args.early_stop_patience,
             "check_val_every_n_epoch": args.check_val_every_n_epoch,
-            "prediction_population_size": args.prediction_population_size,
+            "prediction_population_size": args.prediction_population_size or "match-observed",
             "perturbation_key": args.perturbation_key,
             "context_key": args.context_key,
         },

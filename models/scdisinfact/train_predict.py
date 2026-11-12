@@ -23,7 +23,7 @@ from models.scdisinfact.context_config import (
     select_scdisinfact_training_data,
 )
 from models.scdisinfact.joint_patch import apply_joint_condition_mmd_patch
-from models.state.context_config import model_conditions
+from models.state.context_config import model_conditions, observed_population_sizes
 from workflows.predictions import build_prediction_manifest
 from workflows.run_contract import (
     begin_run,
@@ -197,7 +197,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--prediction-population-size", type=int, default=100)
+    parser.add_argument(
+        "--prediction-population-size",
+        type=int,
+        help="fixed smoke-test override; default matches each observed treated population",
+    )
     parser.add_argument("--runs-root", type=Path, default=RUN_ROOT)
     parser.add_argument("--counts-manifest", type=Path)
     parser.add_argument("--truth-manifest", type=Path)
@@ -250,7 +254,7 @@ def main() -> None:
         "model": MODEL_PARAMS,
         "max_epochs": args.max_epochs,
         "batch_size": args.batch_size,
-        "prediction_population_size": args.prediction_population_size,
+        "prediction_population_size": args.prediction_population_size or "match-observed",
         "perturbation_key": args.perturbation_key,
         "context_key": args.context_key,
         "fit_scope": "one-joint-model-across-all-perturbations-per-fold",
@@ -281,6 +285,17 @@ def main() -> None:
     apply_joint_condition_mmd_patch()
 
     full_counts = ad.read_h5ad(counts_path)
+    population_sizes = (
+        None
+        if args.prediction_population_size is not None
+        else observed_population_sizes(
+            full_counts,
+            split,
+            args.fold,
+            perturbation_key=args.perturbation_key,
+            context_key=args.context_key,
+        )
+    )
     training = select_scdisinfact_training_data(
         full_counts,
         split,
@@ -352,6 +367,7 @@ def main() -> None:
         full_counts.var,
         test_context=test_context,
         population_size=args.prediction_population_size,
+        population_sizes=population_sizes,
     )
     prediction_path = handle.directory / "predictions" / "predictions.h5ad"
     predictions.write_h5ad(prediction_path, compression="gzip")

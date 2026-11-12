@@ -5,7 +5,7 @@ An experiment declaration freezes training-affecting choices:
 - dataset and dataset-manifest checksum;
 - split and split-manifest checksum;
 - participating model declarations;
-- required prediction capability and archive size;
+- required prediction capability and population-size policy;
 - training seeds; and
 - the native-output-to-evaluation-space conversion contract.
 
@@ -14,4 +14,9 @@ from saved predictions without retraining, but the complete grid must be
 reported; variants are not split into privileged primary and inferior
 exploratory groups. A named reference variant is retained only as an anchor for
 describing rank changes.
+
+The frozen population-size policy is `match-observed`: for each held-out
+condition, population-capable models archive the same number of predictions as
+there are observed treated cells. Control-transforming models may sample
+held-out control cells with replacement to reach that condition-specific size.
 

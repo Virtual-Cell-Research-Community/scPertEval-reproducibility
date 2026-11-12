@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-import zlib
-
 import anndata as ad
 import numpy as np
 import pandas as pd
+
+from models.state.context_config import observed_population_sizes, sample_heldout_controls
 
 
 def _fold(split: dict, fold: int) -> dict:
@@ -58,24 +58,28 @@ def select_heldout_controls(
     *,
     perturbation_key: str = "model_perturbation",
     context_key: str = "context",
-    population_size: int = 100,
+    population_size: int | None = None,
     seed: int = 42,
 ) -> ad.AnnData:
-    """Select a deterministic control population from the held-out context."""
-    if population_size <= 0:
-        raise ValueError("population_size must be positive")
-    test_context = str(_fold(split, fold)["test_context"])
-    labels = data.obs[perturbation_key].astype(str)
-    contexts = data.obs[context_key].astype(str)
-    indices = np.flatnonzero(((contexts == test_context) & (labels == "control")).to_numpy())
-    if len(indices) < population_size:
-        raise ValueError(
-            f"held-out context {test_context!r} has {len(indices)} controls; need {population_size}"
+    """Select enough controls for the largest observed held-out population."""
+    if population_size is None:
+        sizes = observed_population_sizes(
+            data,
+            split,
+            fold,
+            perturbation_key=perturbation_key,
+            context_key=context_key,
         )
-    context_seed = zlib.crc32(test_context.encode())
-    rng = np.random.default_rng(np.asarray([seed, context_seed], dtype=np.uint32))
-    selected = np.sort(rng.choice(indices, population_size, replace=False))
-    return data[selected].copy()
+        population_size = max(sizes.values())
+    return sample_heldout_controls(
+        data,
+        split,
+        fold,
+        population_size,
+        perturbation_key=perturbation_key,
+        context_key=context_key,
+        seed=seed,
+    )
 
 
 def build_prediction_adata(
@@ -83,7 +87,8 @@ def build_prediction_adata(
     var: pd.DataFrame,
     *,
     test_context: str,
-    population_size: int,
+    population_size: int | None = None,
+    population_sizes: dict[str, int] | None = None,
 ) -> ad.AnnData:
     """Package per-condition predictions without altering native predicted counts."""
     if not predictions:
@@ -92,11 +97,18 @@ def build_prediction_adata(
     rows = []
     names = []
     for condition in sorted(predictions):
-        matrix = np.asarray(predictions[condition])
-        if matrix.shape != (population_size, len(var)):
+        expected_size = (
+            population_sizes[condition]
+            if population_sizes is not None
+            else population_size
+        )
+        if expected_size is None:
+            raise ValueError("population_sizes are required for match-observed predictions")
+        matrix = np.asarray(predictions[condition])[:expected_size]
+        if matrix.shape != (expected_size, len(var)):
             raise ValueError(
                 f"condition {condition!r} has shape {matrix.shape}; "
-                f"expected {(population_size, len(var))}"
+                f"expected {(expected_size, len(var))}"
             )
         if not np.isfinite(matrix).all() or np.any(matrix < 0):
             raise ValueError("scDisInFact predictions must be finite and non-negative")
@@ -104,7 +116,7 @@ def build_prediction_adata(
             raise ValueError("scDisInFact predicted count rows must have positive totals")
         matrices.append(matrix.astype(np.float32))
         archival = f"{test_context}::{condition}"
-        for index in range(population_size):
+        for index in range(expected_size):
             names.append(f"{archival}::prediction-{index}")
             rows.append(
                 {

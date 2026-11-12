@@ -89,7 +89,7 @@ def predict_context_baselines(
     fold: int | str,
     *,
     capability: str = "point",
-    population_size: int = 100,
+    population_size: int | None = None,
     seed: int = 42,
     linear_ridge: float = 1.0,
 ) -> dict[str, ad.AnnData]:
@@ -109,14 +109,28 @@ def predict_context_baselines(
     no_change_rows = []
     transfer_rows = []
     if capability == "population":
+        if population_size is None:
+            population_sizes = {
+                condition: int(((contexts == test_context) & (perturbations == condition)).sum())
+                for condition in model_conditions
+            }
+        else:
+            population_sizes = {condition: population_size for condition in model_conditions}
+        if any(size <= 0 for size in population_sizes.values()):
+            raise ValueError(f"held-out treated populations are empty: {population_sizes}")
+        maximum_population_size = max(population_sizes.values())
         control_indices = np.flatnonzero(test_control_mask)
-        if len(control_indices) < population_size:
-            raise ValueError(
-                f"held-out context {test_context!r} has {len(control_indices)} controls; "
-                f"expected at least {population_size}"
-            )
+        if not len(control_indices):
+            raise ValueError(f"held-out context {test_context!r} has no controls")
         rng = np.random.default_rng(seed)
-        selected_controls = np.sort(rng.choice(control_indices, population_size, replace=False))
+        replace = len(control_indices) < maximum_population_size
+        selected_controls = rng.choice(
+            control_indices,
+            maximum_population_size,
+            replace=replace,
+        )
+        if not replace:
+            selected_controls = np.sort(selected_controls)
         control_population = data.X[selected_controls]
         control_population_dense = (
             control_population.toarray() if sp.issparse(control_population) else np.asarray(control_population)
@@ -131,8 +145,9 @@ def predict_context_baselines(
             deltas.append(_mean(data.X[treated_mask]) - control)
         mean_delta = np.mean(deltas, axis=0)
         if capability == "population":
-            no_change_rows.append(control_population)
-            transfer_rows.append(control_population_dense + mean_delta)
+            size = population_sizes[condition]
+            no_change_rows.append(control_population[:size])
+            transfer_rows.append(control_population_dense[:size] + mean_delta)
         elif capability == "point":
             no_change_rows.append(test_control)
             transfer_rows.append(test_control + mean_delta)
@@ -146,7 +161,11 @@ def predict_context_baselines(
                 if rows and all(sp.issparse(row) for row in rows)
                 else np.vstack([row.toarray() if sp.issparse(row) else row for row in rows]).astype(np.float32)
             )
-            labels = [condition for condition in expected for _ in range(population_size)]
+            labels = [
+                condition
+                for condition, model_condition in zip(expected, model_conditions, strict=True)
+                for _ in range(population_sizes[model_condition])
+            ]
         else:
             matrix = np.vstack(rows).astype(np.float32)
             labels = expected
@@ -186,7 +205,11 @@ def main() -> int:
         help="prepared model-view manifest (default: <data stem>.manifest.json)",
     )
     parser.add_argument("--capability", choices=["point", "population"], default="population")
-    parser.add_argument("--population-size", type=int, default=100)
+    parser.add_argument(
+        "--population-size",
+        type=int,
+        help="fixed smoke-test override; default matches each observed treated population",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--linear-ridge", type=float, default=1.0)
     parser.add_argument(
@@ -221,7 +244,7 @@ def main() -> int:
             seed=args.seed,
             configuration={
                 "capability": args.capability,
-                "population_size": args.population_size,
+                "population_size": args.population_size or "match-observed",
                 "linear_ridge": args.linear_ridge if model == "linear" else None,
             },
             inputs={"model_view_manifest": data_manifest, "split_manifest": args.split},

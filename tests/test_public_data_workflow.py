@@ -21,14 +21,20 @@ from models.biolord.context_config import (
 from models.cpa.context_config import assign_cpa_splits, build_counterfactual_queries
 from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
 from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
-from models.data.prepare_split import build_split_manifest, kfold_gene_splits
+from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
 from models.scdisinfact.context_config import (
     build_prediction_adata,
     select_scdisinfact_training_data,
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
 from models.scdisinfact.joint_patch import choose_present_reference, coerce_reference_id
-from models.state.context_config import build_context_toml, model_conditions, relabel_context_predictions
+from models.state.context_config import (
+    build_context_toml,
+    model_conditions,
+    observed_population_sizes,
+    relabel_context_predictions,
+    sample_heldout_controls,
+)
 from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
 from models.trvae.context_config import densify_expression as densify_trvae_expression
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
@@ -44,6 +50,7 @@ from workflows.evaluate import (
     paired_perturbation_bootstrap,
     rank_models,
     summarize_evaluations,
+    validate_matched_population_sizes,
 )
 from workflows.predictions import build_prediction_manifest, expected_test_conditions, validate_prediction_h5ad
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
@@ -98,7 +105,10 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert len(genetic["folds"]) == len(genetic["contexts"]) == 4
     assert genetic["minimum_treated_cells_per_context"] == 50
     assert genetic["training_seeds"] == [42, 43, 44]
-    assert genetic["prediction_population_size"] == 100
+    assert genetic["prediction_population_policy"] == {
+        "mode": "match-observed",
+        "control_sampling": "with-replacement-if-needed",
+    }
     assert len(genetic["validation_conditions"]) == 48
     assert set(genetic["validation_conditions"]) <= set(genetic["perturbations"])
     assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 480 for fold in genetic["folds"])
@@ -111,7 +121,10 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert chemical["n_population_conditions"] == 33
     assert chemical["population_minimum_cells_per_context"] == 50
     assert chemical["training_seeds"] == [42, 43, 44]
-    assert chemical["prediction_population_size"] == 100
+    assert chemical["prediction_population_policy"] == {
+        "mode": "match-observed",
+        "control_sampling": "with-replacement-if-needed",
+    }
     assert len(chemical["population_exclusions"]) == 3
     assert len(chemical["folds"]) == len(chemical["contexts"]) == 3
     assert len(chemical["validation_conditions"]) == 4
@@ -119,6 +132,59 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     for fold in chemical["folds"]:
         assert len(expected_test_conditions(chemical, fold["id"], "point")) == 36
         assert len(expected_test_conditions(chemical, fold["id"], "population")) == 33
+
+
+def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
+    experiment = json.loads(
+        (
+            ROOT
+            / "configs"
+            / "experiments"
+            / "replogle-weissman-2022-k562-gwps-perturbation-generalization.json"
+        ).read_text()
+    )
+    assert experiment["role"] == "primary"
+    assert experiment["training_seeds"] == [42, 43, 44]
+    assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8248}
+    assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 6935
+    assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
+    assert experiment["eligibility"]["n_targets_shared"] == 6935
+    assert experiment["development_pool_policy"]["test_targets_never_available_to_models"]
+    assert experiment["development_pool_policy"][
+        "fixed_budget_and_training_free_methods_may_use_train_plus_validation"
+    ]
+    assert experiment["model_development_usage"]["tabicl"] == {
+        "in_context_examples": "train-plus-validation",
+        "selection": "none-equal-modality-fusion",
+        "early_stopping": False,
+        "gradient_training": False,
+    }
+    assert experiment["model_development_usage"]["gears"]["selection"] == (
+        "best-validation-checkpoint"
+    )
+
+    folds = kfold_gene_splits(
+        experiment["perturbations"],
+        n_folds=experiment["split"]["n_folds"],
+        seed=experiment["split"]["seed"],
+    )
+    payload = json.dumps(folds, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(payload).hexdigest() == experiment["split"]["folds_sha256"]
+    assert [len(fold["train"]) for fold in folds] == experiment["split"][
+        "training_targets_per_fold"
+    ]
+    assert [len(fold["val"]) for fold in folds] == experiment["split"][
+        "validation_targets_per_fold"
+    ]
+    assert [len(fold["test"]) for fold in folds] == experiment["split"][
+        "test_targets_per_fold"
+    ]
+
+    tabicl = to_tabicl_custom_split(folds[0])
+    assert tabicl["val"] == []
+    assert set(tabicl["train"]) == {*folds[0]["train"], *folds[0]["val"], "control"}
+    assert tabicl["test"] == folds[0]["test"]
+    assert set(tabicl["train"]).isdisjoint(tabicl["test"])
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:
@@ -468,6 +534,50 @@ def test_population_prediction_archive_rejects_more_than_100_cells(tmp_path: Pat
         )
 
 
+def test_population_prediction_archive_matches_observed_counts(tmp_path: Path) -> None:
+    truth = AnnData(
+        X=np.ones((6, 2), dtype=np.float32),
+        obs=pd.DataFrame(
+            {"perturbation": ["control", "G1", "G1", "G2", "G2", "G2"]},
+            index=[f"truth-{index}" for index in range(6)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    prediction = AnnData(
+        X=np.ones((5, 2), dtype=np.float32),
+        obs=pd.DataFrame(
+            {"perturbation": ["G1", "G1", "G2", "G2", "G2"]},
+            index=[f"prediction-{index}" for index in range(5)],
+        ),
+        var=truth.var.copy(),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    split = {
+        "prediction_population_policy": {"mode": "match-observed"},
+        "folds": [{"test": ["G1", "G2"]}],
+    }
+    assert validate_prediction_h5ad(
+        prediction_path,
+        truth_path,
+        split,
+        0,
+        "population",
+    )[:2] == (5, 2)
+
+    prediction[:-1].copy().write_h5ad(prediction_path)
+    with pytest.raises(ValueError, match="do not match observed treated-cell counts"):
+        validate_prediction_h5ad(
+            prediction_path,
+            truth_path,
+            split,
+            0,
+            "population",
+        )
+
+
 def test_matched_population_draw_and_rank_aggregation_are_deterministic() -> None:
     labels = ["control"] * 4 + ["G1"] * 4 + ["G2"] * 4
     data = AnnData(
@@ -500,6 +610,33 @@ def test_matched_population_draw_and_rank_aggregation_are_deterministic() -> Non
     ranking = rank_models(summary)
     assert set(summary["aggregation"]) == {"mean", "median", "effect-weighted-mean"}
     assert (ranking.loc[ranking["model"] == "m1", "rank"] == 1).all()
+
+
+def test_population_sizes_must_match_observed_treated_counts() -> None:
+    truth = AnnData(
+        X=np.ones((8, 2), dtype=np.float32),
+        obs=pd.DataFrame(
+            {"perturbation": ["control"] * 2 + ["G1"] * 2 + ["G2"] * 4},
+            index=[f"truth-{index}" for index in range(8)],
+        ),
+        var=pd.DataFrame(index=["a", "b"]),
+    )
+    matching = AnnData(
+        X=np.ones((6, 2), dtype=np.float32),
+        obs=pd.DataFrame(
+            {"perturbation": ["G1"] * 2 + ["G2"] * 4},
+            index=[f"prediction-{index}" for index in range(6)],
+        ),
+        var=truth.var.copy(),
+    )
+    assert validate_matched_population_sizes(truth, matching, ["G1", "G2"]) == {
+        "G1": 2,
+        "G2": 4,
+    }
+
+    mismatched = matching[:-1].copy()
+    with pytest.raises(ValueError, match="do not match observed treated-cell counts"):
+        validate_matched_population_sizes(truth, mismatched, ["G1", "G2"])
 
 
 def test_one_factor_rank_comparisons_and_paired_bootstrap_report_reversals() -> None:
@@ -957,6 +1094,42 @@ def test_cpa_context_helpers_assign_joint_fold_and_build_bounded_queries() -> No
         "context-b::G2": 3,
     }
     assert set(queries.obs["context"].astype(str)) == {"context-b"}
+
+
+def test_context_population_queries_match_observed_counts_and_resample_controls() -> None:
+    split = {
+        "perturbations": ["G1", "G2"],
+        "folds": [
+            {
+                "id": "holdout-b",
+                "test_context": "context-b",
+                "train_contexts": ["context-a"],
+            }
+        ],
+    }
+    labels = ["control"] * 2 + ["G1"] * 3 + ["G2"] * 5
+    data = AnnData(
+        X=np.arange(30, dtype=np.float32).reshape(10, 3),
+        obs=pd.DataFrame(
+            {
+                "context": ["context-b"] * 10,
+                "model_perturbation": labels,
+            },
+            index=[f"cell-{index}" for index in range(10)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2", "G3"]),
+    )
+    assert observed_population_sizes(data, split, 0) == {"G1": 3, "G2": 5}
+    controls = sample_heldout_controls(data, split, 0, 5, seed=7)
+    assert controls.n_obs == 5
+    assert controls.obs_names.is_unique
+    assert controls.obs["source_obs_name"].nunique() <= 2
+
+    queries = build_counterfactual_queries(data, split, 0, seed=7)
+    assert queries.obs["perturbation"].value_counts().to_dict() == {
+        "context-b::G2": 5,
+        "context-b::G1": 3,
+    }
 
 
 def test_biolord_context_helpers_build_and_relabel_bounded_populations() -> None:

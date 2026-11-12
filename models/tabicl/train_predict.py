@@ -35,11 +35,12 @@ Two things fall out of reuse already in this repo:
   cross-dataset Perturb-seq pseudobulk modalities (RPE1/HEPG2/Jurkat pseudobulk features) —
   we don't have those other datasets processed through their pipeline, only our own K562 smoke
   subsample.
-- ``models/data/smoke_k562_folds/fold_<i>_presage.json`` (built by
-  ``models/data/prepare_split.py``'s ``to_presage_custom_split`` for models/presage) is already
-  in the exact flat ``{"train": [...], "val": [...], "test": [...]}`` schema
-  ``tfm_perturbation.utils.load_split_json`` expects — reused as-is, no new split-conversion
-  needed, so gears/scgpt/presage/sclambda/state/tabicl are all scored on identical held-out genes.
+- ``models/data/<dataset>/folds/fold_<i>_tabicl.json`` (built by
+  ``models/data/prepare_split.py``'s ``to_tabicl_custom_split``) is in
+  the exact flat ``{"train": [...], "val": [...], "test": [...]}`` schema
+  ``tfm_perturbation.utils.load_split_json`` expects. Its test genes are identical to every
+  other model's; because TabICLv2 performs no checkpoint selection, the frozen validation genes
+  are merged into its in-context development examples rather than unnecessarily discarded.
 
 ``presage_data_root=None`` skips their PRESAGE-cache-backed auxiliary eval files (geneset/
 perturbation-cluster/ncells files) — optional inputs their own code already treats as "None" when
@@ -99,7 +100,7 @@ def main() -> None:
     args = parser.parse_args()
 
     raw = DATA_DIR / args.dataset / "raw.h5ad"
-    split_json_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_presage.json"
+    split_json_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_tabicl.json"
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's artifact.
     run_dir = RUN_DIR / args.dataset / f"fold_{args.fold}"
@@ -119,6 +120,11 @@ def main() -> None:
         # Our smoke adata has no batch/plate column — falls back to global-control logFC.
         batch_key=None,
         modality_pickle_paths=MODALITY_PICKLE_PATHS,
+        # Keep validation out of model selection: all modalities are fused equally and no
+        # validation-R2 component filtering is applied. The full development pool can
+        # therefore be used as in-context examples without changing a selected checkpoint.
+        fusion_weighting_mode="none",
+        ica_r2_threshold=0.0,
         presage_data_root=None,
         degs_cache_dir=str(run_dir / "degs"),
     )

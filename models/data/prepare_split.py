@@ -29,6 +29,9 @@ Outputs, alongside the input raw.h5ad in its own models/data/<dataset>/ folder:
   ``scPerturbDataModule.setup``/``pert_to_ind`` split format (bare gene symbols, ``"control"``
   instead of ``ctrl``, folded into train) — see ``to_presage_custom_split``. Same gene membership
   as ``fold_<i>.pkl``, just relabeled, so gears/scgpt/presage are all scored on identical folds.
+- ``folds/fold_<i>_tabicl.json`` — the same test fold, but with the frozen validation genes
+  merged into TabICLv2's in-context development examples. TabICLv2 performs no fitting or
+  checkpoint selection, so withholding those examples would only reduce its available data.
 
 Usage::
 
@@ -111,6 +114,15 @@ def to_presage_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
     return {
         "train": [*fold["train"], "control"],
         "val": list(fold["val"]),
+        "test": list(fold["test"]),
+    }
+
+
+def to_tabicl_custom_split(fold: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Expose the full non-test development pool to training-free TabICLv2."""
+    return {
+        "train": [*sorted([*fold["train"], *fold["val"]]), "control"],
+        "val": [],
         "test": list(fold["test"]),
     }
 
@@ -206,6 +218,9 @@ def main() -> None:
 
         presage_split = to_presage_custom_split(fold)
         (fold_dir / f"fold_{i}_presage.json").write_text(json.dumps(presage_split, indent=2) + "\n")
+
+        tabicl_split = to_tabicl_custom_split(fold)
+        (fold_dir / f"fold_{i}_tabicl.json").write_text(json.dumps(tabicl_split, indent=2) + "\n")
 
         print(f"  fold {i}: train={len(split_dict['train'])} val={len(split_dict['val'])} test={len(split_dict['test'])}")
 

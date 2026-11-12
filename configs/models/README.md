@@ -13,11 +13,11 @@ PRESAGE, scGPT, scLAMBDA, STATE, and TabICLv2. No-change, training-condition
 mean, and the bilinear PCA baseline anchor the rankings. The interpolated
 technical duplicate remains an oracle control, not a ranked model.
 
-The context-generalization panel uses STATE, CPA, bioLORD, scDisInFact, and
-trVAE for both genetic and chemical context transfer. trVAE remains conditional
-on a successful jointly perturbation-conditioned smoke test; failure removes it
-rather than changing the task to one fit per perturbation. No-change,
-training-condition mean, and a context-aware linear model are ranked baselines.
+The genetic context-generalization panel uses STATE, CPA, bioLORD, and
+scDisInFact. The chemical panel additionally uses trVAE. trVAE passed a joint
+chemical smoke test but is excluded from the 480-perturbation genetic track by
+the prespecified scaling rule. No-change, training-condition mean, and a
+context-aware linear model are ranked baselines.
 
 Hugo's six existing model environments remain in Pixi. New model runners also
 receive one Pixi environment per model, reconstructed from pinned reference

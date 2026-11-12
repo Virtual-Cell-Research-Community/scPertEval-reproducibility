@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import warnings
+import zlib
 from pathlib import Path
 
 import anndata as ad
+import numpy as np
+import pandas as pd
 
 
 def _fold(split: dict, fold: int) -> dict:
@@ -31,6 +35,67 @@ def model_conditions(split: dict, *, capability: str) -> list[str]:
                 continue
             conditions.append(f"{drug['canonical_label']}::{float(dose):g}nM")
     return sorted(conditions)
+
+
+def observed_population_sizes(
+    data: ad.AnnData,
+    split: dict,
+    fold: int,
+    *,
+    perturbation_key: str = "model_perturbation",
+    context_key: str = "context",
+) -> dict[str, int]:
+    """Return the held-out treated-cell count for every population condition."""
+    required = {perturbation_key, context_key}
+    missing = sorted(required - set(data.obs.columns))
+    if missing:
+        raise ValueError(f"context data are missing obs fields: {', '.join(missing)}")
+    test_context = str(_fold(split, fold)["test_context"])
+    allowed = model_conditions(split, capability="population")
+    in_context = data.obs[context_key].astype(str) == test_context
+    labels = data.obs.loc[in_context, perturbation_key].astype(str)
+    counts = labels[labels.isin(allowed)].value_counts().to_dict()
+    missing_conditions = sorted(set(allowed) - set(counts))
+    if missing_conditions:
+        raise ValueError(f"held-out context is missing population conditions: {missing_conditions}")
+    return {condition: int(counts[condition]) for condition in allowed}
+
+
+def sample_heldout_controls(
+    data: ad.AnnData,
+    split: dict,
+    fold: int,
+    population_size: int,
+    *,
+    perturbation_key: str = "model_perturbation",
+    context_key: str = "context",
+    seed: int = 42,
+) -> ad.AnnData:
+    """Sample held-out controls, with replacement only when the requested size requires it."""
+    if population_size <= 0:
+        raise ValueError("population_size must be positive")
+    test_context = str(_fold(split, fold)["test_context"])
+    labels = data.obs[perturbation_key].astype(str)
+    contexts = data.obs[context_key].astype(str)
+    indices = np.flatnonzero(((contexts == test_context) & (labels == "control")).to_numpy())
+    if not len(indices):
+        raise ValueError(f"held-out context {test_context!r} has no control cells")
+    context_seed = zlib.crc32(test_context.encode())
+    rng = np.random.default_rng(np.asarray([seed, context_seed], dtype=np.uint32))
+    replace = len(indices) < population_size
+    selected = rng.choice(indices, population_size, replace=replace)
+    if not replace:
+        selected = np.sort(selected)
+    # Replacement sampling temporarily repeats source observation names. The archival query
+    # identifiers assigned immediately below are unique, so suppress AnnData's transient warning.
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Observation names are not unique")
+        result = data[selected].copy()
+    result.obs["source_obs_name"] = result.obs_names.astype(str)
+    result.obs_names = pd.Index(
+        [f"{test_context}::control-sample-{index}" for index in range(population_size)]
+    )
+    return result
 
 
 def build_context_toml(

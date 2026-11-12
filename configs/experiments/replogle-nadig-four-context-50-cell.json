@@ -602,7 +602,10 @@
     43,
     44
   ],
-  "prediction_population_size": 100,
+  "prediction_population_policy": {
+    "mode": "match-observed",
+    "control_sampling": "with-replacement-if-needed"
+  },
   "model_fit_scope": "one-joint-model-across-all-perturbations-per-fold",
   "hyperparameter_policy": "published-or-established-config-no-hpo"
 }

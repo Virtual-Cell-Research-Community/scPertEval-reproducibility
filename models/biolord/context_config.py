@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import zlib
-
 import anndata as ad
 import numpy as np
 import pandas as pd
 
-from models.state.context_config import model_conditions
+from models.state.context_config import (
+    model_conditions,
+    observed_population_sizes,
+    sample_heldout_controls,
+)
 
 
 def _fold(split: dict, fold: int) -> dict:
@@ -64,24 +66,28 @@ def select_heldout_controls(
     *,
     perturbation_key: str = "model_perturbation",
     context_key: str = "context",
-    population_size: int = 100,
+    population_size: int | None = None,
     seed: int = 42,
 ) -> ad.AnnData:
-    """Select a deterministic, bounded control population from the held-out context."""
-    if population_size <= 0:
-        raise ValueError("population_size must be positive")
-    test_context = str(_fold(split, fold)["test_context"])
-    labels = data.obs[perturbation_key].astype(str)
-    contexts = data.obs[context_key].astype(str)
-    indices = np.flatnonzero(((contexts == test_context) & (labels == "control")).to_numpy())
-    if len(indices) < population_size:
-        raise ValueError(
-            f"held-out context {test_context!r} has {len(indices)} controls; need {population_size}"
+    """Select enough held-out controls for the largest observed treated population."""
+    if population_size is None:
+        sizes = observed_population_sizes(
+            data,
+            split,
+            fold,
+            perturbation_key=perturbation_key,
+            context_key=context_key,
         )
-    context_seed = zlib.crc32(test_context.encode())
-    rng = np.random.default_rng(np.asarray([seed, context_seed], dtype=np.uint32))
-    selected = np.sort(rng.choice(indices, population_size, replace=False))
-    return data[selected].copy()
+        population_size = max(sizes.values())
+    return sample_heldout_controls(
+        data,
+        split,
+        fold,
+        population_size,
+        perturbation_key=perturbation_key,
+        context_key=context_key,
+        seed=seed,
+    )
 
 
 def relabel_biolord_predictions(
@@ -90,7 +96,8 @@ def relabel_biolord_predictions(
     fold: int,
     *,
     perturbation_key: str = "model_perturbation",
-    population_size: int = 100,
+    population_size: int | None = None,
+    population_sizes: dict[str, int] | None = None,
 ) -> ad.AnnData:
     """Keep frozen test conditions and assign canonical archival identifiers."""
     if perturbation_key not in prediction.obs:
@@ -100,6 +107,18 @@ def relabel_biolord_predictions(
     labels = prediction.obs[perturbation_key].astype(str)
     result = prediction[labels.isin(allowed)].copy()
     result.obs["perturbation"] = test_context + "::" + result.obs[perturbation_key].astype(str)
+    if population_sizes is not None:
+        sizes = population_sizes
+    elif population_size is not None:
+        sizes = {condition: population_size for condition in allowed}
+    else:
+        raise ValueError("population_sizes are required for match-observed predictions")
+    model_labels = result.obs[perturbation_key].astype(str)
+    keep = np.zeros(result.n_obs, dtype=bool)
+    for condition, size in sizes.items():
+        indices = np.flatnonzero((model_labels == condition).to_numpy())
+        keep[indices[:size]] = True
+    result = result[keep].copy()
     within_population = result.obs.groupby("perturbation", observed=True).cumcount()
     result.obs_names = pd.Index(
         [
@@ -109,9 +128,11 @@ def relabel_biolord_predictions(
     )
     counts = result.obs["perturbation"].value_counts()
     expected = {f"{test_context}::{condition}" for condition in allowed}
-    if set(counts.index) != expected or not (counts == population_size).all():
+    expected_counts = {f"{test_context}::{condition}": size for condition, size in sizes.items()}
+    actual_counts = {condition: int(counts.get(condition, 0)) for condition in expected}
+    if actual_counts != expected_counts:
         raise ValueError(
             "bioLORD predictions do not cover the frozen populations; "
-            f"expected {population_size} cells for {len(expected)} conditions, got {counts.to_dict()}"
+            f"expected {expected_counts}, got {actual_counts}"
         )
     return result

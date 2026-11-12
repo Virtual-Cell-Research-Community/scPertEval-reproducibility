@@ -91,6 +91,31 @@ def matched_draw(
     return data[np.asarray(keep)].copy()
 
 
+def validate_matched_population_sizes(
+    truth: ad.AnnData,
+    prediction: ad.AnnData,
+    conditions: list[str],
+) -> dict[str, int]:
+    """Require one predicted cell for every observed treated cell by condition."""
+    truth_labels = truth.obs["perturbation"].astype(str)
+    prediction_labels = prediction.obs["perturbation"].astype(str)
+    truth_counts = truth_labels[truth_labels.isin(conditions)].value_counts().to_dict()
+    prediction_counts = prediction_labels.value_counts().to_dict()
+    expected = {condition: int(truth_counts.get(condition, 0)) for condition in conditions}
+    observed = {condition: int(prediction_counts.get(condition, 0)) for condition in conditions}
+    if observed != expected:
+        differences = {
+            condition: {"observed": expected[condition], "predicted": observed[condition]}
+            for condition in conditions
+            if expected[condition] != observed[condition]
+        }
+        raise ValueError(
+            "population prediction counts do not match observed treated-cell counts: "
+            f"{differences}"
+        )
+    return expected
+
+
 def _load_fold(
     truth_path: Path,
     prediction_path: Path,
@@ -200,26 +225,20 @@ def evaluate_bundle(
         population_variants = [
             variant for variant in grid["variants"] if variant["id"].startswith("population-")
         ]
-        draw_size = int(grid["population"]["draw_size"])
-        for draw_seed in grid["population"]["draw_seeds"]:
-            drawn_truth = matched_draw(truth, conditions, draw_size, draw_seed, retain_controls=True)
-            drawn_prediction = matched_draw(
+        population_policy = grid["population"]
+        if population_policy.get("size_policy") != "match-observed":
+            raise ValueError("only the match-observed population-size policy is supported")
+        validate_matched_population_sizes(truth, prediction, conditions)
+        frames.extend(
+            _score_variants(
+                truth,
                 prediction,
-                conditions,
-                draw_size,
-                draw_seed,
-                retain_controls=False,
+                population_variants,
+                minimum_observed_cells=grid["minimum_observed_cells"],
+                seed=seed,
+                draw_seed=None,
             )
-            frames.extend(
-                _score_variants(
-                    drawn_truth,
-                    drawn_prediction,
-                    population_variants,
-                    minimum_observed_cells=draw_size,
-                    seed=seed,
-                    draw_seed=draw_seed,
-                )
-            )
+        )
 
     detail = pd.concat(frames, ignore_index=True)
     detail["effect_strength"] = detail["perturbation"].map(effects)

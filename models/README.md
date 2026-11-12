@@ -191,7 +191,7 @@ and trVAE consume `raw.h5ad`;
 scDisInFact consumes `counts.h5ad`. Each adapter records its native prediction
 space and the deterministic transform into the shared log1p evaluation space.
 STATE retains its native per-cell predictions. No-change and fold-mean context
-baselines emit fixed 100-cell populations so they participate in both profile
+baselines emit populations matched to each observed treated-cell count so they participate in both profile
 and distributional sensitivity analyses. The context linear baseline is a
 single joint ridge model over condition identities and control-state PCs and
 uses only held-out-context control cells.

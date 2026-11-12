@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-import zlib
-
 import anndata as ad
 import numpy as np
 import pandas as pd
 
-from models.state.context_config import model_conditions
+from models.state.context_config import (
+    model_conditions,
+    observed_population_sizes,
+    sample_heldout_controls,
+)
 
 
 def _fold(split: dict, fold: int) -> dict:
@@ -65,37 +67,47 @@ def build_counterfactual_queries(
     *,
     perturbation_key: str = "model_perturbation",
     context_key: str = "context",
-    population_size: int = 100,
+    population_size: int | None = None,
     seed: int = 42,
 ) -> ad.AnnData:
-    """Repeat held-out controls for every retained condition CPA must predict."""
-    if population_size <= 0:
-        raise ValueError("population_size must be positive")
+    """Build one held-out-control query per observed treated cell and condition."""
     fold_spec = _fold(split, fold)
     test_context = str(fold_spec["test_context"])
-    labels = data.obs[perturbation_key].astype(str)
-    contexts = data.obs[context_key].astype(str)
-    control_indices = np.flatnonzero(((contexts == test_context) & (labels == "control")).to_numpy())
-    if len(control_indices) < population_size:
-        raise ValueError(
-            f"held-out context {test_context!r} has {len(control_indices)} controls; "
-            f"need {population_size}"
+    conditions = model_conditions(split, capability="population")
+    sizes = (
+        {condition: population_size for condition in conditions}
+        if population_size is not None
+        else observed_population_sizes(
+            data,
+            split,
+            fold,
+            perturbation_key=perturbation_key,
+            context_key=context_key,
         )
-    context_seed = zlib.crc32(test_context.encode())
-    rng = np.random.default_rng(np.asarray([seed, context_seed], dtype=np.uint32))
-    selected = np.sort(rng.choice(control_indices, population_size, replace=False))
-    controls = data[selected].copy()
+    )
+    if any(size <= 0 for size in sizes.values()):
+        raise ValueError("population sizes must be positive")
+    controls = sample_heldout_controls(
+        data,
+        split,
+        fold,
+        max(sizes.values()),
+        perturbation_key=perturbation_key,
+        context_key=context_key,
+        seed=seed,
+    )
 
     queries = []
-    for condition in model_conditions(split, capability="population"):
-        query = controls.copy()
+    for condition in conditions:
+        size = sizes[condition]
+        query = controls[:size].copy()
         query.obs[perturbation_key] = condition
         query.obs[context_key] = test_context
         query.obs["cpa_dose"] = 1.0
         query.obs["cpa_split"] = "test"
         query.obs["perturbation"] = f"{test_context}::{condition}"
         query.obs_names = pd.Index(
-            [f"{test_context}::{condition}::prediction-{index}" for index in range(population_size)]
+            [f"{test_context}::{condition}::prediction-{index}" for index in range(size)]
         )
         queries.append(query)
     return ad.concat(queries, join="inner", merge="same", index_unique=None)

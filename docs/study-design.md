@@ -21,9 +21,12 @@ The study contains both generalization axes; neither is optional.
 
 ### Perturbation generalization
 
-- Replogle K562 essential is the implementation pilot.
-- Replogle K562 GWPS is the final large genetic benchmark.
-- Nadig HepG2 is an independent genetic benchmark.
+- Replogle K562 essential is an implementation and adapter smoke-test pilot;
+  it is not a second reported benchmark.
+- Replogle K562 GWPS is the sole perturbation-generalization benchmark in the
+  ranking-sensitivity study.
+- Nadig HepG2 participates in the four-context genetic track rather than a
+  separate perturbation-generalization arm.
 - Perturbed genes are divided into seeded, full-coverage five-fold splits.
 - Every eligible model and baseline uses the same cells, genes, folds, and test
   perturbations.
@@ -33,6 +36,12 @@ after requiring a measured target gene and compatibility with the GEARS and
 scLAMBDA references. Five folds therefore contain 314 or 315 test targets each.
 The 190 targets absent from the measured gene space are deliberately excluded;
 this study will not add an alias-recovery branch.
+
+The definitive K562 GWPS cohort contains 6,935 targets after requiring at
+least 50 treated cells, a measured target gene, GEARS GO support, and a GenePT
+embedding. It retains all 8,248 measured genes. Five full-coverage folds each
+hold out 1,387 test targets; the remaining 5,548 targets form the development
+pool in that fold.
 
 ### Context generalization
 
@@ -59,12 +68,21 @@ metrics.
 
 - Every benchmark uses a minimum of 50 observed treated cells per evaluated
   perturbation and context.
-- Population models archive at most 100 genuine predicted cells per evaluation
-  population. They are never padded by duplicating point predictions.
-- Distributional metrics compare matched draws of exactly 50 observed and 50
-  predicted cells using ten prespecified draw seeds.
+- Population models archive exactly as many predicted cells as there are
+  observed treated cells for that evaluation population.
+- Models that transform held-out controls may sample those controls with
+  replacement when a treated population is larger than the available unique
+  control pool. These are genuine cell-level model outputs, not duplicated
+  point predictions.
+- Distributional metrics compare each complete observed population with its
+  equally sized predicted population. No fixed-size evaluation subsampling is
+  applied.
 - Point predictions remain eligible only for profile metrics.
-- Context models use training seeds 42, 43, and 44.
+- Every stochastic trainable model uses training seeds 42, 43, and 44.
+- Deterministic and training-free methods produce one prediction artifact per
+  fold. Their fixed scores may be aligned with the three seed-level result
+  tables for comparison, but repeated copies are not treated as independent
+  replicates.
 - Each prediction artifact is retained separately by model, fold, and seed.
   Predictions are never averaged into an ensemble.
 
@@ -131,8 +149,33 @@ for evaluation never trigger retraining.
 
 ### Replogle K562
 
-Retain all 8,563 measured genes as the shared output panel. This avoids an
+Retain all 8,248 measured genes as the shared output panel. This avoids an
 otherwise unnecessary selection rule at little storage cost.
+
+## Development-pool and validation policy
+
+Every fold first defines an 80% development pool and a 20% test set. Test
+perturbations or held-out treated contexts are unavailable to every model.
+Inside the common development pool, each model follows its documented native
+selection procedure:
+
+- models with validation-based early stopping or checkpoint selection retain
+  the frozen validation subset for that purpose;
+- fixed-budget models that do not select on validation data may train on the
+  full development pool; and
+- TabICLv2 receives the full development pool as in-context examples and never
+  receives test perturbations.
+
+This keeps the test information identical while avoiding an artificial data
+penalty for methods that do not use early stopping. Each run manifest records
+which development rows were used for fitting and which, if any, were used for
+selection. In the context tracks, STATE, CPA, and bioLORD retain validation
+conditions for checkpoint selection, whereas fixed-budget scDisInFact and
+trVAE fit all treated cells from the training contexts. In perturbation
+generalization, GEARS and scLAMBDA run fixed epoch budgets but still select a
+validation checkpoint; PRESAGE, scGPT, and STATE use validation-based early
+stopping; TabICLv2 uses equal modality fusion with no validation-based component
+selection and receives the full development pool as in-context examples.
 
 ### sci-Plex3
 
@@ -229,9 +272,13 @@ perturbation-bootstrap uncertainty.
 - Public scripts reproduce raw-to-analysis processing without private
   repositories.
 - Full predictions and derived tidy metrics are retained. Population predictions
-  are capped at 100 cells per evaluation population.
-- The pessimistic whole-study storage bound is below approximately 500 GB; the
-  expected archive is smaller because several models produce point profiles.
+  match the number of observed treated cells per evaluation population.
+- A measured, uncompressed float32 projection is approximately 194 GB for all
+  population matrices: 41.52 GB per GWPS seed for its one population model,
+  4.55 GB per model/seed across all genetic-context folds, and 0.35 GB per
+  model/seed across all chemical-context folds. Including checkpoints,
+  manifests, point predictions, and overhead, the 500 GB study budget remains
+  conservative; H5AD compression should reduce the realized archive.
 - Exact model and baseline predictions may be published in a versioned Zenodo
   record, partitioned by dataset and model if needed.
 - Figures consume versioned predictions or tidy result tables, never private

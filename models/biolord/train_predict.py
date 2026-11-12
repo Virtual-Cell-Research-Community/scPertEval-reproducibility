@@ -21,6 +21,7 @@ from models.biolord.context_config import (
     relabel_biolord_predictions,
     select_heldout_controls,
 )
+from models.state.context_config import observed_population_sizes
 from workflows.predictions import build_prediction_manifest
 from workflows.run_contract import begin_run, complete_run, repository_revision
 
@@ -71,7 +72,11 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--early-stop-patience", type=int, default=20)
     parser.add_argument("--check-val-every-n-epoch", type=int, default=10)
-    parser.add_argument("--prediction-population-size", type=int, default=100)
+    parser.add_argument(
+        "--prediction-population-size",
+        type=int,
+        help="fixed smoke-test override; default matches each observed treated population",
+    )
     parser.add_argument("--runs-root", type=Path, default=RUN_ROOT)
     parser.add_argument("--data-manifest", type=Path)
     parser.add_argument("--force", action="store_true")
@@ -110,7 +115,7 @@ def main() -> None:
             "batch_size": args.batch_size,
             "early_stop_patience": args.early_stop_patience,
             "check_val_every_n_epoch": args.check_val_every_n_epoch,
-            "prediction_population_size": args.prediction_population_size,
+            "prediction_population_size": args.prediction_population_size or "match-observed",
             "perturbation_key": args.perturbation_key,
             "context_key": args.context_key,
         },
@@ -131,6 +136,17 @@ def main() -> None:
         args.fold,
         perturbation_key=args.perturbation_key,
         context_key=args.context_key,
+    )
+    population_sizes = (
+        None
+        if args.prediction_population_size is not None
+        else observed_population_sizes(
+            data,
+            split,
+            args.fold,
+            perturbation_key=args.perturbation_key,
+            context_key=args.context_key,
+        )
     )
     biolord.Biolord.setup_anndata(
         data,
@@ -184,6 +200,7 @@ def main() -> None:
         args.fold,
         perturbation_key=args.perturbation_key,
         population_size=args.prediction_population_size,
+        population_sizes=population_sizes,
     )
     predictions.X = np.asarray(predictions.X, dtype=np.float32)
     prediction_path = handle.directory / "predictions" / "predictions.h5ad"

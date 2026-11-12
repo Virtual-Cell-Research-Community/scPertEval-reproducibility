@@ -71,6 +71,33 @@ def expected_test_conditions(split: dict, fold: int | str, capability: str) -> l
     raise ValueError("split fold does not declare explicit or expandable test conditions")
 
 
+def observed_test_condition_counts(
+    truth: ad.AnnData,
+    split: dict,
+    fold: int | str,
+    capability: str,
+) -> dict[str, int]:
+    """Count observed treated cells for every frozen test condition."""
+    expected = expected_test_conditions(split, fold, capability)
+    fold_spec = _fold(split, fold)
+    if "test_context" in fold_spec:
+        required = {"context", "evaluation_condition"}
+        missing = sorted(required - set(truth.obs.columns))
+        if missing:
+            raise ValueError(f"context-transfer truth is missing obs fields: {', '.join(missing)}")
+        mask = truth.obs["context"].astype(str) == str(fold_spec["test_context"])
+        labels = truth.obs.loc[mask, "evaluation_condition"].astype(str)
+    else:
+        if "perturbation" not in truth.obs:
+            raise ValueError("perturbation-generalization truth is missing obs['perturbation']")
+        labels = truth.obs["perturbation"].astype(str)
+    counts = labels[labels.isin(expected)].value_counts().to_dict()
+    missing = sorted(set(expected) - set(counts))
+    if missing:
+        raise ValueError(f"truth is missing frozen test conditions: {missing}")
+    return {condition: int(counts[condition]) for condition in expected}
+
+
 def validate_prediction_h5ad(
     prediction_path: Path,
     truth_path: Path,
@@ -104,16 +131,34 @@ def validate_prediction_h5ad(
             if not (counts == 1).all():
                 raise ValueError("point prediction bundle must contain exactly one row per test condition")
         elif capability == "population":
-            if minimum_cells_per_condition is None:
-                raise ValueError("population prediction bundle requires minimum_cells_per_condition")
-            if minimum_cells_per_condition > maximum_cells_per_condition:
-                raise ValueError("population prediction minimum exceeds the archival maximum")
-            below = counts[counts < minimum_cells_per_condition]
-            if len(below):
-                raise ValueError(f"population prediction bundle has undersized conditions: {below.to_dict()}")
-            above = counts[counts > maximum_cells_per_condition]
-            if len(above):
-                raise ValueError(f"population prediction bundle exceeds archival cap: {above.to_dict()}")
+            policy = split.get("prediction_population_policy", {})
+            if policy.get("mode") == "match-observed":
+                expected_counts = observed_test_condition_counts(truth, split, fold, capability)
+                actual_counts = {condition: int(counts.get(condition, 0)) for condition in expected}
+                if actual_counts != expected_counts:
+                    differences = {
+                        condition: {
+                            "observed": expected_counts[condition],
+                            "predicted": actual_counts[condition],
+                        }
+                        for condition in expected
+                        if expected_counts[condition] != actual_counts[condition]
+                    }
+                    raise ValueError(
+                        "population prediction counts do not match observed treated-cell counts: "
+                        f"{differences}"
+                    )
+            else:
+                if minimum_cells_per_condition is None:
+                    raise ValueError("population prediction bundle requires minimum_cells_per_condition")
+                if minimum_cells_per_condition > maximum_cells_per_condition:
+                    raise ValueError("population prediction minimum exceeds the archival maximum")
+                below = counts[counts < minimum_cells_per_condition]
+                if len(below):
+                    raise ValueError(f"population prediction bundle has undersized conditions: {below.to_dict()}")
+                above = counts[counts > maximum_cells_per_condition]
+                if len(above):
+                    raise ValueError(f"population prediction bundle exceeds archival cap: {above.to_dict()}")
         else:
             raise ValueError(f"unknown prediction capability: {capability}")
         if not _finite_matrix(prediction.X):
@@ -196,10 +241,23 @@ def build_prediction_manifest(
         },
     }
     if capability == "population":
-        manifest["population"] = {
-            "minimum_cells_per_condition": minimum_cells_per_condition,
-            "maximum_cells_per_condition": maximum_cells_per_condition,
-        }
+        population_policy = split.get("prediction_population_policy", {})
+        if population_policy.get("mode") == "match-observed":
+            truth = ad.read_h5ad(truth_path, backed="r")
+            try:
+                condition_counts = observed_test_condition_counts(truth, split, fold, capability)
+            finally:
+                truth.file.close()
+            manifest["population"] = {
+                "size_policy": "match-observed",
+                "control_sampling": population_policy.get("control_sampling"),
+                "condition_counts": condition_counts,
+            }
+        else:
+            manifest["population"] = {
+                "minimum_cells_per_condition": minimum_cells_per_condition,
+                "maximum_cells_per_condition": maximum_cells_per_condition,
+            }
     return manifest
 
 

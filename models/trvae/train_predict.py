@@ -17,7 +17,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from models.state.context_config import model_conditions
+from models.state.context_config import model_conditions, observed_population_sizes
 from models.trvae.context_config import (
     build_prediction_adata,
     densify_expression,
@@ -86,7 +86,11 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=512)
-    parser.add_argument("--prediction-population-size", type=int, default=100)
+    parser.add_argument(
+        "--prediction-population-size",
+        type=int,
+        help="fixed smoke-test override; default matches each observed treated population",
+    )
     parser.add_argument("--runs-root", type=Path, default=RUN_ROOT)
     parser.add_argument("--data-manifest", type=Path)
     parser.add_argument("--force", action="store_true")
@@ -115,7 +119,7 @@ def main() -> None:
         "model": MODEL_PARAMS,
         "max_epochs": args.max_epochs,
         "batch_size": args.batch_size,
-        "prediction_population_size": args.prediction_population_size,
+        "prediction_population_size": args.prediction_population_size or "match-observed",
         "perturbation_key": args.perturbation_key,
         "context_key": args.context_key,
         "fit_scope": "one-joint-model-across-all-perturbations-per-fold",
@@ -141,6 +145,17 @@ def main() -> None:
     from trvaep.model import CVAE, Trainer
 
     data = ad.read_h5ad(raw)
+    population_sizes = (
+        None
+        if args.prediction_population_size is not None
+        else observed_population_sizes(
+            data,
+            split,
+            args.fold,
+            perturbation_key=args.perturbation_key,
+            context_key=args.context_key,
+        )
+    )
     training = select_trvae_training_data(
         data,
         split,
@@ -212,6 +227,7 @@ def main() -> None:
         data.var,
         test_context=test_context,
         population_size=args.prediction_population_size,
+        population_sizes=population_sizes,
     )
     prediction_path = handle.directory / "predictions" / "predictions.h5ad"
     predictions.write_h5ad(prediction_path, compression="gzip")
