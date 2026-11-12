@@ -281,6 +281,16 @@ perturbation-bootstrap uncertainty.
   revision, checkpoint, predictions, checksums, and a completion record; reruns
   skip validated completed artifacts.
 
+The first full-data scLAMBDA scaling trial was run on Beauty GPU 0 only after
+checking both workstations. Beast's two GPUs were occupied, Beauty GPU 1 was in
+active use by another process, and Beauty GPU 0 had sufficient free capacity.
+The patched initialization completed with about 46 GiB GPU memory and the
+10-epoch end-to-end run took approximately 17 minutes. The resulting
+1,387-by-8,248 point-prediction artifact passed the frozen-fold prediction
+contract and all completion-record checksums. Production workstation sweeps are
+serialized on one GPU so they neither compete with other users nor issue
+concurrent 48 GiB reads from SDS.
+
 ## Reproducibility and storage policy
 
 - Raw datasets are downloaded from authoritative sources and are not

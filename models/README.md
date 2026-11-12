@@ -105,6 +105,23 @@ scLAMBDA rather than allowing the library's constructor default to collapse all 
 
 ## 4. Train + predict, the full sweep
 
+On a workstation, run one model serially on one explicitly selected GPU. The
+launcher preserves one append-only log per fold/seed, stops on the first
+failure, and relies on the shared run contract to skip checksum-valid results:
+
+```bash
+GPU=0 \
+RUNS_ROOT=/path/on/shared-storage/runs \
+scripts/run_perturbation_model_workstation.sh sclambda
+```
+
+Run it inside tmux or another persistent session. `FOLDS` and `SEEDS` can
+restrict a scaling trial. `FORCE_INCOMPLETE=1` only adds `--force` when a run
+directory has an old resolved configuration but no completion record; it does
+not force already completed runs.
+
+On Slurm, submit the same frozen grid as arrays:
+
 ```bash
 models/slurm/submit_all.sh                 # five folds x three seeds; TabICLv2 once per fold
 models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
@@ -120,6 +137,15 @@ SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage
 capacity. Full tasks request 192 GiB RAM because the GWPS CSR arrays alone occupy about 47 GiB
 before AnnData and model-specific working copies; scLAMBDA receives a 256 GiB override for its
 dense training tensors. The previous 64 GiB request was unsafe.
+
+A full-data scLAMBDA scaling run on a 96 GiB RTX PRO 6000 validated the
+categorical-embedding initialization end to end: 1,333,016 cells and 8,248
+genes fit in approximately 46 GiB GPU memory, training took about 10.4 seconds
+per epoch, and the 10-epoch run completed in about 17 minutes including the
+SDS read, initialization, validation, and prediction write. Its output covered
+all 1,387 fold-0 test perturbations and passed both the prediction contract and
+artifact-checksum validation. A 200-epoch production run is therefore expected
+to take roughly 50--60 minutes per fold/seed on that workstation class.
 
 ## 5. Baselines that need no training
 
