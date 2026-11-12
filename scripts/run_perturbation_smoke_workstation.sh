@@ -13,6 +13,14 @@ GPU_ZERO="${GPU_ZERO:-0}"
 GPU_ONE="${GPU_ONE:-1}"
 SERIAL="${SERIAL:-0}"
 FETCH_ASSETS="${FETCH_ASSETS:-1}"
+NVIDIA_DRIVER_LIBRARY_PATH="${NVIDIA_DRIVER_LIBRARY_PATH:-}"
+
+# NixOS exposes the host NVIDIA driver here, but does not add it to the
+# library search path of ordinary shells.  Conda/Pixi CUDA runtimes still
+# need the host's libcuda.so in order to initialize a GPU.
+if [[ -z "${NVIDIA_DRIVER_LIBRARY_PATH}" && -d /run/opengl-driver/lib ]]; then
+    NVIDIA_DRIVER_LIBRARY_PATH=/run/opengl-driver/lib
+fi
 
 if [[ ! -x "${PIXI_BIN}" ]]; then
     echo "Pixi is not executable at ${PIXI_BIN}." >&2
@@ -39,7 +47,8 @@ run_model() {
     local model="$2"
     shift 2
     echo "[$(date -Is)] Starting ${model} on GPU ${gpu}"
-    CUDA_VISIBLE_DEVICES="${gpu}" "${PIXI_BIN}" run -e "${model}" \
+    LD_LIBRARY_PATH="${NVIDIA_DRIVER_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
+        CUDA_VISIBLE_DEVICES="${gpu}" "${PIXI_BIN}" run -e "${model}" \
         python "${model}/train_predict.py" \
         --dataset "${DATASET}" \
         --fold 0 \
