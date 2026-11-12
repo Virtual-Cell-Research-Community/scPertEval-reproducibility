@@ -13,6 +13,10 @@ import scipy.sparse as sp
 from anndata import AnnData
 
 from models.baselines.context_baselines import predict_context_baselines
+from models.baselines.perturbation_baselines import (
+    predict_perturbation_baseline,
+    validate_fold_conversion,
+)
 from models.biolord.context_config import (
     assign_biolord_splits,
     relabel_biolord_predictions,
@@ -223,6 +227,53 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
         "n_targets_measured_at_least_50_cells"
     ]
     assert validation["status"] == "valid"
+
+
+def test_perturbation_baselines_validate_native_fold_and_predict_test_conditions() -> None:
+    fold = {
+        "train": ["ctrl", "G1+ctrl", "G2+ctrl"],
+        "val": ["G3+ctrl"],
+        "test": ["G4+ctrl"],
+    }
+    validate_fold_conversion(
+        fold,
+        {"train": ["G1", "G2"], "val": ["G3"], "test": ["G4"]},
+    )
+    with pytest.raises(ValueError, match="test split differs"):
+        validate_fold_conversion(
+            fold,
+            {"train": ["G1", "G2"], "val": ["G3"], "test": ["G5"]},
+        )
+
+    perturbations = [
+        "control",
+        "control",
+        "G1",
+        "G1",
+        "G2",
+        "G2",
+        "G3",
+        "G3",
+        "G4",
+        "G4",
+    ]
+    data = AnnData(
+        X=np.arange(1, 41, dtype=np.float32).reshape(10, 4),
+        obs=pd.DataFrame(
+            {"perturbation": perturbations},
+            index=[f"cell-{index}" for index in range(10)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2", "G3", "G4"]),
+    )
+    for model in ["no-change", "fold-mean", "linear"]:
+        prediction = predict_perturbation_baseline(model, data, fold, pca_dim=2)
+        assert prediction.shape == (1, 4)
+        assert prediction.obs["perturbation"].tolist() == ["G4"]
+        assert prediction.var_names.tolist() == data.var_names.tolist()
+        assert np.isfinite(prediction.X).all()
+
+    with pytest.raises(ValueError, match="halves are required"):
+        predict_perturbation_baseline("interpolated-technical-duplicate", data, fold)
 
 
 def test_tabicl_initializes_with_frozen_validation_before_using_merged_pool(

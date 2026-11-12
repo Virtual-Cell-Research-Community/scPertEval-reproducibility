@@ -111,21 +111,34 @@ submits only fold 0 at seed 42 with model-specific truncated budgets.
 ## 5. Baselines that need no training
 
 ```bash
-pixi run -e gears python baselines/baselines.py --dataset replogle22k562
+uv run --frozen python -m models.baselines.perturbation_baselines \
+  --dataset replogle-weissman-2022-k562-gwps
 ```
 
-Predicts `no_change`, `mean`, `linear`, and `interpolated` in one process (reads `raw.h5ad` once,
-loops every fold). Runs from any model's environment, same as `prepare_data.py`/`prepare_split.py`
-above.
-Writes `baselines/<name>/predictions/<dataset>/fold_<i>.h5ad` per baseline — same per-fold shape
-as `models/*/train_predict.py`, just nested under `baselines/` instead of sitting alongside
-`gears/`, `scgpt/`, ... since these aren't trained models.
+Predicts the ranked `no-change`, `fold-mean`, and bilinear-PCA `linear` baselines in one process
+(reads `raw.h5ad` once, loops every fold). Each prediction is validated against the frozen fold
+and gene universe, then written to the same checksum-addressed `runs/<dataset>/<model>/fold-<n>/`
+layout as the substantive models. Re-running skips only checksum-valid completed bundles.
+
+The privileged `interpolated-technical-duplicate` oracle is deliberately excluded from the
+ranked defaults. Materialize it separately when the positive control is needed:
+
+```bash
+uv run --frozen python -m models.baselines.perturbation_baselines \
+  --dataset replogle-weissman-2022-k562-gwps \
+  --models interpolated-technical-duplicate
+```
+
+All baselines are deterministic and therefore have one archival artifact per fold at seed 42;
+downstream comparisons may broadcast their fixed scores across seed strata but must not treat
+those values as independent replicates.
 
 ```bash
 cd models && sbatch --export=ALL,MODELS_DIR="$(pwd)" slurm/baselines.sbatch
 ```
 
-One non-array CPU job (`models/slurm/baselines.sbatch`).
+One non-array CPU job (`models/slurm/baselines.sbatch`); it materializes only the three ranked
+baselines and uses the shared uv lockfile.
 
 ## 6. Context-transfer model views and STATE
 
