@@ -34,7 +34,7 @@ cd "${PROJECT_ROOT}"
 mkdir -p logs results/protocol_behavior/pilots/gwps-de
 
 export UV_PYTHON="3.11"
-export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-py311"
+export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-de-pilot-py311"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
