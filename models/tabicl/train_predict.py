@@ -76,6 +76,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from models.tabicl.split_compat import initialize_with_nonempty_validation
 from workflows.model_runs import add_point_run_arguments, begin_point_model_run
 
 DATA_DIR = HERE.parent / "data"
@@ -128,7 +129,9 @@ def main() -> None:
     torch.cuda.manual_seed_all(args.seed)
 
     raw = run.raw_path
-    split_json_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}_tabicl.json"
+    split_dir = DATA_DIR / args.dataset / "folds"
+    split_json_path = split_dir / f"fold_{args.fold}_tabicl.json"
+    validation_split_json_path = split_dir / f"fold_{args.fold}_presage.json"
     # Namespaced by dataset too — otherwise a smoke run and a full run at the same fold
     # index would silently overwrite each other's artifact.
     run_dir = run.checkpoint_dir / "tabicl"
@@ -136,9 +139,14 @@ def main() -> None:
     datamodule = PresageAnnDataDataModule(
         dataset=args.dataset,
         data_file_path=str(raw),
-        split_json_path=str(split_json_path),
+        split_json_path=str(validation_split_json_path),
         perturbation_col="perturbation",
         control_label=CONTROL_LABEL,
+    )
+    initialize_with_nonempty_validation(
+        datamodule,
+        validation_split_path=validation_split_json_path,
+        model_split_path=split_json_path,
     )
 
     model = TabICLMultiviewModel(

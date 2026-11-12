@@ -42,6 +42,7 @@ from models.state.context_config import (
     relabel_context_predictions,
     sample_heldout_controls,
 )
+from models.tabicl.split_compat import initialize_with_nonempty_validation
 from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
 from models.trvae.context_config import densify_expression as densify_trvae_expression
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
@@ -222,6 +223,38 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
         "n_targets_measured_at_least_50_cells"
     ]
     assert validation["status"] == "valid"
+
+
+def test_tabicl_initializes_with_frozen_validation_before_using_merged_pool(
+    tmp_path: Path,
+) -> None:
+    validation_split = tmp_path / "fold_presage.json"
+    model_split = tmp_path / "fold_tabicl.json"
+    validation_split.write_text(
+        json.dumps({"train": ["G1", "control"], "val": ["G2"], "test": ["G3"]})
+    )
+    model_split.write_text(
+        json.dumps({"train": ["G1", "G2", "control"], "val": [], "test": ["G3"]})
+    )
+
+    class FakeDataModule:
+        split_json_path = ""
+        initialized_from: Path | None = None
+
+        def setup(self) -> None:
+            path = Path(self.split_json_path)
+            assert json.loads(path.read_text())["val"]
+            self.initialized_from = path
+
+    datamodule = FakeDataModule()
+    initialize_with_nonempty_validation(
+        datamodule,
+        validation_split_path=validation_split,
+        model_split_path=model_split,
+    )
+
+    assert datamodule.initialized_from == validation_split
+    assert Path(datamodule.split_json_path) == model_split
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:
