@@ -6,6 +6,10 @@
 #   models/slurm/submit_all.sh --test-only
 #   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-gwps gears scgpt
 #   models/slurm/submit_all.sh --smoke --afterok 123456
+#
+# Full arrays default to one concurrent task per model. This bounds simultaneous 48 GiB SDS
+# reads while still allowing the six model families to make progress in parallel. Override
+# deliberately with MAX_CONCURRENT=<n> after measuring storage and node pressure.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -33,6 +37,11 @@ MODELS=("${@:-gears scgpt presage sclambda state tabicl}")
 if [ "${#MODELS[@]}" -eq 1 ]; then
     read -ra MODELS <<< "${MODELS[0]}"
 fi
+MAX_CONCURRENT="${MAX_CONCURRENT:-1}"
+if ! [[ "$MAX_CONCURRENT" =~ ^[1-9][0-9]*$ ]]; then
+    echo "MAX_CONCURRENT must be a positive integer" >&2
+    exit 2
+fi
 
 # cd into models/ before submitting: train.sbatch's #SBATCH --output=slurm/logs/... is a
 # relative path, resolved against the submission-time working directory — not guaranteed to
@@ -47,6 +56,8 @@ for MODEL in "${MODELS[@]}"; do
     fi
     if [[ "$SMOKE" == "1" ]]; then
         ARRAY="0"
+    else
+        ARRAY="${ARRAY}%${MAX_CONCURRENT}"
     fi
     SBATCH_ARGS=(
         --job-name="$MODEL-$DATASET"

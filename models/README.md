@@ -106,7 +106,11 @@ models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/prepara
 
 The stochastic models use 15-task arrays (five folds × seeds 42, 43, and 44). TabICLv2 is
 training-free and deterministic, so it uses one five-fold array at archival seed 42. `--smoke`
-submits only fold 0 at seed 42 with model-specific truncated budgets.
+submits only fold 0 at seed 42 with model-specific truncated budgets. Full arrays default to
+one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several 48 GiB
+SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage and node
+capacity. Full tasks request 192 GiB RAM because the GWPS CSR arrays alone occupy about 47 GiB
+before AnnData and model-specific working copies; the previous 64 GiB request was unsafe.
 
 ## 5. Baselines that need no training
 

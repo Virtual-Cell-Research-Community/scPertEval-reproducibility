@@ -29,8 +29,12 @@
 # different name, re-add an --exclude for them.
 #SBATCH --partition=gpu-single
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-task=64
-#SBATCH --mem=64G
+# The full GWPS CSR expression arrays occupy about 47 GiB before AnnData/model overhead.
+# 192 GiB leaves room for adapter-specific copies and matches the validated context launcher;
+# 64 GiB is not a safe full-view request. Sixteen CPUs avoid monopolizing an entire GPU node
+# for preprocessing that is predominantly I/O- and GPU-bound.
+#SBATCH --cpus-per-task=16
+#SBATCH --mem=192G
 #SBATCH --time=2-00:00:00
 #SBATCH --output=slurm/logs/%x_task%a_%A.out
 #SBATCH --error=slurm/logs/%x_task%a_%A.err
