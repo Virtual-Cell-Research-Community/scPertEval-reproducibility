@@ -9,6 +9,9 @@ DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
 PIXI_BIN="${PIXI_BIN:-${HOME}/.pixi/bin/pixi}"
 RUNS_ROOT="${RUNS_ROOT:-${PROJECT_ROOT}/runs-smoke}"
 LOG_ROOT="${LOG_ROOT:-${PROJECT_ROOT}/logs/perturbation-smoke-workstation}"
+GPU_ZERO="${GPU_ZERO:-0}"
+GPU_ONE="${GPU_ONE:-1}"
+SERIAL="${SERIAL:-0}"
 
 if [[ ! -x "${PIXI_BIN}" ]]; then
     echo "Pixi is not executable at ${PIXI_BIN}." >&2
@@ -47,27 +50,31 @@ run_model() {
 
 run_group_zero() {
     local status=0
-    run_model 0 gears --epochs 2 || status=1
-    run_model 0 presage --epochs 2 --batch-size 4 || status=1
-    run_model 0 sclambda --epochs 10 || status=1
+    run_model "${GPU_ZERO}" gears --epochs 2 || status=1
+    run_model "${GPU_ZERO}" presage --epochs 2 --batch-size 4 || status=1
+    run_model "${GPU_ZERO}" sclambda --epochs 10 || status=1
     return "${status}"
 }
 
 run_group_one() {
     local status=0
-    run_model 1 scgpt --epochs 2 || status=1
-    run_model 1 state --max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0 || status=1
-    run_model 1 tabicl || status=1
+    run_model "${GPU_ONE}" scgpt --epochs 2 || status=1
+    run_model "${GPU_ONE}" state --max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0 || status=1
+    run_model "${GPU_ONE}" tabicl || status=1
     return "${status}"
 }
 
-run_group_zero &
-PID_ZERO=$!
-run_group_one &
-PID_ONE=$!
-
 STATUS=0
-wait "${PID_ZERO}" || STATUS=1
-wait "${PID_ONE}" || STATUS=1
+if [[ "${SERIAL}" == "1" ]]; then
+    run_group_zero || STATUS=1
+    run_group_one || STATUS=1
+else
+    run_group_zero &
+    PID_ZERO=$!
+    run_group_one &
+    PID_ONE=$!
+    wait "${PID_ZERO}" || STATUS=1
+    wait "${PID_ONE}" || STATUS=1
+fi
 echo "[$(date -Is)] GWPS vertical smoke pass completed with status ${STATUS}"
 exit "${STATUS}"
