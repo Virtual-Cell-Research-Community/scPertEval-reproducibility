@@ -27,10 +27,11 @@
 # --exclude naming nodes that don't exist ("Invalid node name specified"), and there's no
 # longer any V100 node for the exclusion to matter for. If V100 nodes ever reappear under a
 # different name, re-add an --exclude for them.
+#SBATCH --partition=gpu-single
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=64G
-#SBATCH --time=24:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm/logs/%x_task%a_%A.out
 #SBATCH --error=slurm/logs/%x_task%a_%A.err
 

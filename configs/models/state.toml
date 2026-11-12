@@ -37,4 +37,4 @@ hidden_dim = 328
 gpus = 1
 cpus = 64
 memory_gb = 64
-time = "24:00:00"
+time = "2-00:00:00"
