@@ -30,7 +30,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=64
 #SBATCH --mem=64G
-#SBATCH --time=2-00:00:00
+#SBATCH --time=24:00:00
 #SBATCH --output=slurm/logs/%x_task%a_%A.out
 #SBATCH --error=slurm/logs/%x_task%a_%A.err
 
