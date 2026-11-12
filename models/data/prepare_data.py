@@ -59,12 +59,20 @@ Usage::
       --input data/derived/replogle-weissman-2022-k562-essential/adata.h5ad \
       --dataset-name replogle-weissman-2022-k562-essential \
       --compatible-models gears state
+    python -m models.data.prepare_data \
+      --input /path/to/replogle-weissman-2022-k562-gwps/adata.h5ad \
+      --perturbation-key target_gene \
+      --control-key control_class \
+      --control-value non-targeting \
+      --experiment-manifest configs/experiments/replogle-weissman-2022-k562-gwps-perturbation-generalization.json \
+      --validate-metadata-only
     python -m models.data.prepare_data --smoke --dataset-name smoke_k562 --n-perts 12 --cells-per-pert 100
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import pickle
 import tempfile
@@ -185,6 +193,155 @@ def sclambda_uncovered_genes(genes: set[str]) -> set[str]:
     return genes - set(genept.keys())
 
 
+def canonical_annotations(
+    obs: pd.DataFrame,
+    *,
+    perturbation_key: str = "perturbation",
+    control_key: str = "is_control",
+    control_value: str | None = None,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Resolve source-specific annotations into canonical labels and a control mask."""
+    required = {perturbation_key, control_key}
+    missing = sorted(required - set(obs.columns))
+    if missing:
+        raise ValueError(f"canonical input is missing obs fields: {', '.join(missing)}")
+
+    perturbations = obs[perturbation_key].astype("string")
+    if perturbations.isna().any():
+        raise ValueError(f"obs[{perturbation_key!r}] contains missing perturbation labels")
+    perturbation_values = perturbations.astype(str).to_numpy()
+
+    controls = obs[control_key]
+    if controls.isna().any():
+        raise ValueError(f"obs[{control_key!r}] contains missing control annotations")
+    if control_value is None:
+        unique = set(controls.unique().tolist())
+        if not unique <= {True, False}:
+            raise ValueError(
+                f"obs[{control_key!r}] is not boolean; provide --control-value explicitly"
+            )
+        control_mask = controls.astype(bool).to_numpy()
+    else:
+        control_mask = (controls.astype(str) == str(control_value)).to_numpy()
+
+    if not control_mask.any():
+        raise ValueError("canonical input has no control cells")
+    if control_mask.all():
+        raise ValueError("canonical input has no perturbed cells")
+    empty = np.isin(perturbation_values, ["", "nan", "<NA>"])
+    if np.any(empty & ~control_mask):
+        raise ValueError("canonical input has perturbed cells without a perturbation label")
+    return np.where(control_mask, "control", perturbation_values), control_mask
+
+
+def validate_frozen_experiment_metadata(
+    adata: ad.AnnData,
+    experiment: dict,
+    *,
+    perturbation_key: str = "perturbation",
+    control_key: str = "is_control",
+    control_value: str | None = None,
+) -> dict:
+    """Validate a large canonical object using only obs/var metadata and frozen declarations."""
+    labels, control_mask = canonical_annotations(
+        adata.obs,
+        perturbation_key=perturbation_key,
+        control_key=control_key,
+        control_value=control_value,
+    )
+    canonical = experiment["canonical_input"]
+    declared_fields = {
+        "perturbation_field": perturbation_key,
+        "control_field": control_key,
+        "control_value": control_value,
+    }
+    mismatched_fields = {
+        key: {"declared": canonical.get(key), "requested": value}
+        for key, value in declared_fields.items()
+        if key in canonical and canonical.get(key) != value
+    }
+    if mismatched_fields:
+        raise ValueError(f"source-field mapping disagrees with the experiment: {mismatched_fields}")
+    expected_shape = (int(canonical["n_obs"]), int(canonical["n_vars"]))
+    if adata.shape != expected_shape:
+        raise ValueError(
+            "canonical dimensions do not match the experiment declaration: "
+            f"observed={adata.shape}, expected={expected_shape}"
+        )
+    if not adata.obs_names.is_unique or not adata.var_names.is_unique:
+        raise ValueError("canonical input has duplicate observation or gene identifiers")
+
+    frozen = list(map(str, experiment["perturbations"]))
+    frozen_set = set(frozen)
+    if len(frozen_set) != len(frozen):
+        raise ValueError("experiment declaration contains duplicate perturbations")
+    counts = pd.Series(labels[~control_mask]).value_counts()
+    missing = sorted(frozen_set - set(counts.index))
+    minimum = int(experiment["minimum_treated_cells_per_perturbation"])
+    below = {
+        label: int(counts[label])
+        for label in frozen
+        if label in counts and counts[label] < minimum
+    }
+    unmeasured = sorted(frozen_set - set(map(str, adata.var_names)))
+    if missing or below or unmeasured:
+        raise ValueError(
+            "frozen GWPS cohort does not match canonical metadata: "
+            f"missing={missing[:10]}, below_minimum={dict(list(below.items())[:10])}, "
+            f"unmeasured={unmeasured[:10]}"
+        )
+
+    expected_targeted = experiment.get("eligibility", {}).get("observed_perturbations")
+    eligibility = experiment.get("eligibility", {})
+    n_targeted = int((~control_mask).sum())
+    if expected_targeted is not None and n_targeted != int(expected_targeted):
+        raise ValueError(
+            "targeted-cell count does not match the experiment declaration: "
+            f"observed={n_targeted}, expected={expected_targeted}"
+        )
+    n_targets_at_minimum = int((counts >= minimum).sum())
+    measured_genes = set(map(str, adata.var_names))
+    n_measured_targets_at_minimum = int(
+        sum(label in measured_genes for label in counts[counts >= minimum].index)
+    )
+    declared_counts = {
+        "n_targets_total": int(counts.size),
+        "n_targets_at_least_50_cells": n_targets_at_minimum,
+        "n_targets_measured_at_least_50_cells": n_measured_targets_at_minimum,
+        "n_targets_shared": len(frozen),
+    }
+    count_mismatches = {
+        key: {"declared": int(eligibility[key]), "observed": observed}
+        for key, observed in declared_counts.items()
+        if key in eligibility and int(eligibility[key]) != observed
+    }
+    if count_mismatches:
+        raise ValueError(f"cohort summary disagrees with the experiment: {count_mismatches}")
+    frozen_counts = counts.reindex(frozen)
+    return {
+        "dataset": experiment["dataset"],
+        "shape": [int(adata.n_obs), int(adata.n_vars)],
+        "source_fields": {
+            "perturbation_key": perturbation_key,
+            "control_key": control_key,
+            "control_value": control_value,
+        },
+        "n_control_cells": int(control_mask.sum()),
+        "n_targeted_cells": n_targeted,
+        "n_source_targets": int(counts.size),
+        "n_targets_at_minimum": n_targets_at_minimum,
+        "n_measured_targets_at_minimum": n_measured_targets_at_minimum,
+        "n_frozen_targets": len(frozen),
+        "n_frozen_targeted_cells": int(frozen_counts.sum()),
+        "frozen_cells_minimum": int(frozen_counts.min()),
+        "frozen_cells_median": float(frozen_counts.median()),
+        "frozen_cells_maximum": int(frozen_counts.max()),
+        "all_frozen_targets_measured": True,
+        "minimum_cells_requirement": minimum,
+        "status": "valid",
+    }
+
+
 def prepare_canonical_raw(
     adata: ad.AnnData,
     *,
@@ -192,6 +349,9 @@ def prepare_canonical_raw(
     min_cells: int = 3,
     target_sum: float = 1e4,
     retain_counts_layer: bool = False,
+    perturbation_key: str = "perturbation",
+    control_key: str = "is_control",
+    control_value: str | None = None,
 ) -> ad.AnnData:
     """Create the normalized model-input view from a canonical raw-count object.
 
@@ -200,21 +360,17 @@ def prepare_canonical_raw(
     here, rather than in the dataset preparation workflow, preserves the registry contract
     that canonical ``X`` always contains raw counts.
     """
-    required_obs = {"perturbation", "is_control"}
-    missing = sorted(required_obs - set(adata.obs.columns))
-    if missing:
-        raise ValueError(f"canonical input is missing obs fields: {', '.join(missing)}")
     assert_raw_counts(adata.X)
 
     result = adata.copy()
-    control_mask = result.obs["is_control"].astype(bool).to_numpy()
-    if not control_mask.any():
-        raise ValueError("canonical input has no control cells")
-    if control_mask.all():
-        raise ValueError("canonical input has no perturbed cells")
-
-    perturbation = result.obs["perturbation"].astype(str).to_numpy()
-    result.obs["perturbation"] = np.where(control_mask, "control", perturbation)
+    perturbation, control_mask = canonical_annotations(
+        result.obs,
+        perturbation_key=perturbation_key,
+        control_key=control_key,
+        control_value=control_value,
+    )
+    result.obs["perturbation"] = perturbation
+    result.obs["is_control"] = control_mask
     sc.pp.filter_cells(result, min_genes=min_genes)
     sc.pp.filter_genes(result, min_cells=min_cells)
     if retain_counts_layer:
@@ -359,6 +515,30 @@ def main() -> None:
         help="canonical raw-count H5AD to prepare (preferred; overrides --source)",
     )
     parser.add_argument(
+        "--perturbation-key",
+        default="perturbation",
+        help="source obs field containing perturbation labels (default: perturbation)",
+    )
+    parser.add_argument(
+        "--control-key",
+        default="is_control",
+        help="source obs field identifying controls (default: is_control)",
+    )
+    parser.add_argument(
+        "--control-value",
+        help="value in --control-key that denotes control; omit for a boolean field",
+    )
+    parser.add_argument(
+        "--experiment-manifest",
+        type=Path,
+        help="frozen experiment JSON used to validate cohort metadata",
+    )
+    parser.add_argument(
+        "--validate-metadata-only",
+        action="store_true",
+        help="validate backed obs/var metadata without loading or processing X",
+    )
+    parser.add_argument(
         "--dataset-name", default=None, help="output name under models/data/<name>/ (default: --source's value)"
     )
     parser.add_argument(
@@ -384,9 +564,36 @@ def main() -> None:
     dataset_name = args.dataset_name or args.source
     out_path = HERE / dataset_name / "raw.h5ad"
 
+    experiment = None
+    if args.experiment_manifest is not None:
+        experiment = json.loads(args.experiment_manifest.read_text())
+    if args.validate_metadata_only:
+        if args.input is None:
+            raise ValueError("--validate-metadata-only requires --input")
+        if experiment is None:
+            raise ValueError("--validate-metadata-only requires --experiment-manifest")
+        adata = ad.read_h5ad(source_path, backed="r")
+        try:
+            report = validate_frozen_experiment_metadata(
+                adata,
+                experiment,
+                perturbation_key=args.perturbation_key,
+                control_key=args.control_key,
+                control_value=args.control_value,
+            )
+        finally:
+            adata.file.close()
+        print(json.dumps(report, indent=2, sort_keys=True))
+        return
+
     adata = ad.read_h5ad(source_path)
     if args.input is not None:
-        adata = prepare_canonical_raw(adata)
+        adata = prepare_canonical_raw(
+            adata,
+            perturbation_key=args.perturbation_key,
+            control_key=args.control_key,
+            control_value=args.control_value,
+        )
         print(f"canonical raw-count input normalized for models: {adata.shape}")
     adata = apply_miller_fixes(
         adata,

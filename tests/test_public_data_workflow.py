@@ -20,7 +20,12 @@ from models.biolord.context_config import (
 )
 from models.cpa.context_config import assign_cpa_splits, build_counterfactual_queries
 from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
-from models.data.prepare_data import finalize_model_annotations, prepare_canonical_raw
+from models.data.prepare_data import (
+    canonical_annotations,
+    finalize_model_annotations,
+    prepare_canonical_raw,
+    validate_frozen_experiment_metadata,
+)
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
 from models.scdisinfact.context_config import (
     build_prediction_adata,
@@ -208,6 +213,107 @@ def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None
     assert result.obs["is_control"].tolist() == [True, False]
     assert result.obs["guide_target"].astype(str).tolist() == ["non-targeting", "G1"]
     assert result.obs["n_guides"].tolist() == [1, 1]
+
+
+def test_prepare_canonical_raw_accepts_explicit_source_annotation_fields() -> None:
+    source = AnnData(
+        X=sp.csr_matrix(
+            np.array(
+                [
+                    [1, 1],
+                    [2, 1],
+                    [1, 3],
+                    [4, 1],
+                ],
+                dtype=np.int32,
+            )
+        ),
+        obs=pd.DataFrame(
+            {
+                "target_gene": ["non-targeting", "non-targeting", "G1", "G2"],
+                "control_class": ["non-targeting", "non-targeting", "targeted", "targeted"],
+            },
+            index=["control-1", "control-2", "g1", "g2"],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    labels, controls = canonical_annotations(
+        source.obs,
+        perturbation_key="target_gene",
+        control_key="control_class",
+        control_value="non-targeting",
+    )
+    assert labels.tolist() == ["control", "control", "G1", "G2"]
+    assert controls.tolist() == [True, True, False, False]
+
+    result = prepare_canonical_raw(
+        source,
+        min_genes=1,
+        min_cells=1,
+        perturbation_key="target_gene",
+        control_key="control_class",
+        control_value="non-targeting",
+    )
+    assert result.obs["perturbation"].tolist() == ["control", "control", "G1", "G2"]
+    assert result.obs["is_control"].tolist() == [True, True, False, False]
+    np.testing.assert_allclose(np.expm1(result.X.toarray()).sum(axis=1), 10_000, rtol=1e-5)
+
+
+def test_metadata_only_validation_checks_frozen_cohort_without_reading_expression() -> None:
+    source = AnnData(
+        X=sp.csr_matrix(np.ones((6, 2), dtype=np.int32)),
+        obs=pd.DataFrame(
+            {
+                "target_gene": ["non-targeting", "non-targeting", "G1", "G1", "G2", "G2"],
+                "control_class": [
+                    "non-targeting",
+                    "non-targeting",
+                    "targeted",
+                    "targeted",
+                    "targeted",
+                    "targeted",
+                ],
+            },
+            index=[f"cell-{index}" for index in range(6)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+    experiment = {
+        "dataset": "example",
+        "canonical_input": {"n_obs": 6, "n_vars": 2},
+        "minimum_treated_cells_per_perturbation": 2,
+        "perturbations": ["G1", "G2"],
+        "eligibility": {"observed_perturbations": 4},
+    }
+    report = validate_frozen_experiment_metadata(
+        source,
+        experiment,
+        perturbation_key="target_gene",
+        control_key="control_class",
+        control_value="non-targeting",
+    )
+    assert report == {
+        "dataset": "example",
+        "shape": [6, 2],
+        "source_fields": {
+            "perturbation_key": "target_gene",
+            "control_key": "control_class",
+            "control_value": "non-targeting",
+        },
+        "n_control_cells": 2,
+        "n_targeted_cells": 4,
+        "n_source_targets": 2,
+        "n_targets_at_minimum": 2,
+        "n_measured_targets_at_minimum": 2,
+        "n_frozen_targets": 2,
+        "n_frozen_targeted_cells": 4,
+        "frozen_cells_minimum": 2,
+        "frozen_cells_median": 2.0,
+        "frozen_cells_maximum": 2,
+        "all_frozen_targets_measured": True,
+        "minimum_cells_requirement": 2,
+        "status": "valid",
+    }
 
 
 def test_merge_disambiguated_gene_names_sums_duplicate_symbol_columns() -> None:
