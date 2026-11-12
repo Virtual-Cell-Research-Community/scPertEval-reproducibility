@@ -60,13 +60,14 @@ fi
 
 EXTRA_ARGS=()
 if [[ "${SMOKE:-0}" == "1" ]]; then
+    EXTRA_ARGS=(--runs-root "${MODELS_DIR}/../runs-smoke")
     case "$MODEL" in
-        gears) EXTRA_ARGS=(--epochs 2) ;;
-        presage) EXTRA_ARGS=(--epochs 2 --batch-size 4) ;;
-        scgpt) EXTRA_ARGS=(--epochs 2) ;;
-        sclambda) EXTRA_ARGS=(--epochs 10) ;;
-        state) EXTRA_ARGS=(--max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0) ;;
-        tabicl) EXTRA_ARGS=() ;;
+        gears) EXTRA_ARGS+=(--epochs 2) ;;
+        presage) EXTRA_ARGS+=(--epochs 2 --batch-size 4) ;;
+        scgpt) EXTRA_ARGS+=(--epochs 2) ;;
+        sclambda) EXTRA_ARGS+=(--epochs 10) ;;
+        state) EXTRA_ARGS+=(--max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0) ;;
+        tabicl) ;;
     esac
 fi
 
