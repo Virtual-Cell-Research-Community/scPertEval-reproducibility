@@ -122,7 +122,9 @@ uv run --frozen python -m models.baselines.perturbation_baselines \
 Predicts the ranked `no-change`, `fold-mean`, and bilinear-PCA `linear` baselines in one process
 (reads `raw.h5ad` once, loops every fold). Each prediction is validated against the frozen fold
 and gene universe, then written to the same checksum-addressed `runs/<dataset>/<model>/fold-<n>/`
-layout as the substantive models. Re-running skips only checksum-valid completed bundles.
+layout as the substantive models. Because these methods perform no model selection, fold-mean,
+linear, and the oracle use the complete train-plus-validation development pool, matching the
+frozen development-pool policy. Re-running skips only checksum-valid completed bundles.
 
 The privileged `interpolated-technical-duplicate` oracle is deliberately excluded from the
 ranked defaults. Materialize it separately when the positive control is needed:

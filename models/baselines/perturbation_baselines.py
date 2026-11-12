@@ -49,6 +49,11 @@ def validate_fold_conversion(fold: dict[str, list[str]], manifest_fold: dict) ->
             raise ValueError(f"model-native {split_name} split differs from frozen manifest")
 
 
+def _development_fold(fold: dict[str, list[str]]) -> dict[str, list[str]]:
+    """Expose train plus validation to methods that perform no model selection."""
+    return {**fold, "train": [*fold["train"], *fold["val"]]}
+
+
 def predict_perturbation_baseline(
     model: str,
     data: ad.AnnData,
@@ -59,15 +64,16 @@ def predict_perturbation_baseline(
     ridge: float = 0.1,
     technical_duplicate_halves: dict | None = None,
 ) -> ad.AnnData:
-    """Compute one baseline using the frozen fold and its declared configuration."""
+    """Compute one baseline using the full non-test development pool."""
+    development_fold = _development_fold(fold)
     if model == "no-change":
-        return no_change_baseline(data, fold)
+        return no_change_baseline(data, development_fold)
     if model == "fold-mean":
-        return fold_mean_baseline(data, fold)
+        return fold_mean_baseline(data, development_fold)
     if model == "linear":
         return linear_baseline(
             data,
-            fold,
+            development_fold,
             pca_dim=pca_dim,
             ridge=ridge,
             seed=seed,
@@ -75,7 +81,7 @@ def predict_perturbation_baseline(
     if model == "interpolated-technical-duplicate":
         if technical_duplicate_halves is None:
             raise ValueError("technical-duplicate halves are required for the oracle control")
-        return interpolated_baseline(data, fold, technical_duplicate_halves)
+        return interpolated_baseline(data, development_fold, technical_duplicate_halves)
     raise ValueError(f"unknown perturbation baseline: {model}")
 
 
@@ -130,6 +136,7 @@ def main() -> int:
                 seed=args.seed,
                 configuration={
                     "deterministic": True,
+                    "development_pool": "train-plus-validation",
                     "pca_dim": args.pca_dim if model == "linear" else None,
                     "ridge": args.ridge if model == "linear" else None,
                     "oracle_control": model == "interpolated-technical-duplicate",

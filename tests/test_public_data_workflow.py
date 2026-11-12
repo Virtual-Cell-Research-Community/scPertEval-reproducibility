@@ -271,6 +271,10 @@ def test_perturbation_baselines_validate_native_fold_and_predict_test_conditions
         assert prediction.obs["perturbation"].tolist() == ["G4"]
         assert prediction.var_names.tolist() == data.var_names.tolist()
         assert np.isfinite(prediction.X).all()
+    np.testing.assert_allclose(
+        predict_perturbation_baseline("fold-mean", data, fold).X,
+        np.array([[19.0, 20.0, 21.0, 22.0]], dtype=np.float32),
+    )
 
     with pytest.raises(ValueError, match="halves are required"):
         predict_perturbation_baseline("interpolated-technical-duplicate", data, fold)
