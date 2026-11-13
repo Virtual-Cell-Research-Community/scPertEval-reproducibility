@@ -20,8 +20,13 @@ mkdir -p logs
 
 export UV_PYTHON="3.11"
 export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-protocol-py311"
+export UV_CONCURRENT_BUILDS=1
+export UV_LINK_MODE=copy
 
 echo "[$(date -Is)] synchronizing the locked protocol-behavior environment"
-"${UV_BIN}" sync --frozen
+if ! "${UV_BIN}" sync --frozen; then
+  echo "[$(date -Is)] initial environment synchronization failed; retrying once" >&2
+  "${UV_BIN}" sync --frozen
+fi
 "${UV_BIN}" run --frozen python -c "import geomloss, matplotlib, scperteval, torch; print(scperteval.__version__, torch.__version__)"
 echo "[$(date -Is)] protocol-behavior environment is ready"
