@@ -14,7 +14,7 @@ from analyses.protocol_behavior.cli import (
     run_gwps_de_pilot,
     select_quartile_targets,
 )
-from analyses.protocol_behavior.production import load_manifest, production_stages, run_stage
+from analyses.protocol_behavior.production import _declared_perturbations, load_manifest, production_stages, run_stage
 from analyses.protocol_behavior.render import FIGURE_STEMS, render_and_validate
 
 
@@ -38,6 +38,8 @@ def test_production_manifest_declares_all_analysis_units_and_chunks():
     assert sum(stage.kind == "de" for stage in stages) == 48
     assert sum(stage.kind == "drf-cpu" for stage in stages) == 8
     assert sum(stage.kind == "drf-gpu" for stage in stages) == 8
+    chemical = next(item for item in manifest["datasets"] if item["id"] == "chemical-a549")
+    assert len(_declared_perturbations(chemical)) == 33
 
 
 def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypatch):

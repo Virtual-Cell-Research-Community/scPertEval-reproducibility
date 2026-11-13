@@ -94,7 +94,29 @@ def _dataset_spec(manifest: dict[str, Any], dataset_id: str) -> dict[str, Any]:
     return matches[0]
 
 
-def _load_analysis_unit(spec: dict[str, Any]) -> ad.AnnData:
+def _declared_perturbations(spec: dict[str, Any]) -> list[str] | None:
+    cohort_path = spec.get("cohort_manifest")
+    if cohort_path is None:
+        return None
+    cohort = json.loads(Path(cohort_path).read_text())
+    if "perturbations" in cohort:
+        return list(map(str, cohort["perturbations"]))
+    if {"drugs", "doses", "population_exclusions"} <= set(cohort):
+        canonical = {item["label"]: item["canonical_label"] for item in cohort["drugs"]}
+        excluded = {
+            (canonical[item["drug"]], float(item["dose"]))
+            for item in cohort["population_exclusions"]
+        }
+        return sorted(
+            f"{item['canonical_label']}::{float(dose):g}nM"
+            for item in cohort["drugs"]
+            for dose in cohort["doses"]
+            if (item["canonical_label"], float(dose)) not in excluded
+        )
+    raise ValueError(f"cannot resolve a perturbation cohort from {cohort_path}")
+
+
+def _load_analysis_unit(spec: dict[str, Any], *, minimum_cells: int | None = None) -> ad.AnnData:
     path = Path(spec["path"])
     data_root = os.environ.get("SCPERTEVAL_DATA_ROOT")
     if data_root and not path.is_absolute():
@@ -119,6 +141,23 @@ def _load_analysis_unit(spec: dict[str, Any]) -> ad.AnnData:
         "control",
         data.obs["perturbation"].astype(str),
     )
+    declared = _declared_perturbations(spec)
+    if declared is not None:
+        labels = data.obs["perturbation"].astype(str)
+        controls = data.obs["is_control"].astype(bool)
+        observed = set(labels[~controls])
+        missing = sorted(set(declared) - observed)
+        if missing:
+            raise ValueError(f"{spec['id']} is missing {len(missing)} declared perturbations: {missing[:5]}")
+        data = data[(controls | labels.isin(declared)).to_numpy()].copy()
+        if minimum_cells is not None:
+            counts = data.obs.loc[~data.obs["is_control"].astype(bool), "perturbation"].astype(str).value_counts()
+            below = counts[counts < minimum_cells]
+            if len(below):
+                raise ValueError(
+                    f"{spec['id']} has {len(below)} declared perturbations below {minimum_cells} cells: "
+                    f"{below.index[:5].tolist()}"
+                )
     return data
 
 
@@ -190,7 +229,7 @@ def run_de_stage(
     if not force and _reusable_record(record_path, manifest_digest, [artifact]):
         return record_path
 
-    data = _load_analysis_unit(spec)
+    data = _load_analysis_unit(spec, minimum_cells=int(manifest["minimum_cells"]))
     perturbations = _eligible_perturbations(data, int(manifest["minimum_cells"]))
 
     stage_dir.mkdir(parents=True, exist_ok=True)
@@ -280,7 +319,7 @@ def run_drf_stage(
         return record_path
 
     stage_dir.mkdir(parents=True, exist_ok=True)
-    data = _load_analysis_unit(spec)
+    data = _load_analysis_unit(spec, minimum_cells=int(manifest["minimum_cells"]))
     started = time.perf_counter()
     prepared = spe.prepare(
         data,

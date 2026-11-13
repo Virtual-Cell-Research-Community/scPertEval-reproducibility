@@ -40,12 +40,14 @@
     {
       "id": "gwps-k562",
       "label": "GWPS K562",
-      "path": "models/data/replogle-weissman-2022-k562-gwps/raw.h5ad"
+      "path": "models/data/replogle-weissman-2022-k562-gwps/raw.h5ad",
+      "cohort_manifest": "configs/experiments/replogle-weissman-2022-k562-gwps-perturbation-generalization.json"
     },
     {
       "id": "genetic-k562-essential",
       "label": "Genetic K562 essential",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "replogle-weissman-2022-k562-essential"
     },
@@ -53,6 +55,7 @@
       "id": "genetic-rpe1",
       "label": "Genetic RPE1",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "replogle-weissman-2022-rpe1"
     },
@@ -60,6 +63,7 @@
       "id": "genetic-hepg2",
       "label": "Genetic HepG2",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "nadig-oconner-2024-hepg2"
     },
@@ -67,6 +71,7 @@
       "id": "genetic-jurkat",
       "label": "Genetic Jurkat",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "nadig-oconner-2024-jurkat"
     },
@@ -74,6 +79,7 @@
       "id": "chemical-a549",
       "label": "SciPlex3 A549",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "A549"
     },
@@ -81,6 +87,7 @@
       "id": "chemical-k562",
       "label": "SciPlex3 K562",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "K562"
     },
@@ -88,6 +95,7 @@
       "id": "chemical-mcf7",
       "label": "SciPlex3 MCF7",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "MCF7"
     }
