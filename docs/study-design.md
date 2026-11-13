@@ -17,9 +17,10 @@ uv run reproduce-all
 ```
 
 `reproduce-protocol-behavior` rebuilds the maintained successors to the original
-paper analyses. It is already registered and currently runs the resumable GWPS
-DE cost pilot; production DE, DRF, tables, and figures will be added behind the
-same command. `reproduce-ranking-sensitivity` will evaluate frozen prediction
+paper analyses. It resolves the production stage manifest, resumes checksum-valid
+DE and DRF/timing stages, and renders and validates the seven figure families.
+Helix executes the same stages as a bounded Slurm array; the zero-argument command
+can also run them sequentially. `reproduce-ranking-sensitivity` will evaluate frozen prediction
 bundles over the complete versioned sensitivity grid and render its result
 figures. `reproduce-all` will invoke both workflows after validating their
 shared prepared data and prediction dependencies. The latter two commands are

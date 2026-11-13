@@ -16,6 +16,8 @@ import numpy as np
 import pandas as pd
 import scperteval as spe
 
+from .production import DEFAULT_MANIFEST, DEFAULT_RESULTS, load_manifest, production_stages, run_stage
+
 METHODS = ("t-test", "t-test_overestim_var", "MWU")
 FULL_TARGET = "gt_all_cells"
 SPLIT_TARGET = "gt_half"
@@ -328,8 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pilot",
         choices=["gwps-de"],
-        default="gwps-de",
-        help="implemented protocol-behavior stage (default: %(default)s)",
+        help="run the bounded GWPS cost pilot instead of the production workflow",
     )
     parser.add_argument(
         "--dataset",
@@ -337,7 +338,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_GWPS_DATASET,
         help="prepared GWPS model view (default: %(default)s)",
     )
-    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
+    parser.add_argument("--output-dir", type=Path)
+    parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--stage", help=argparse.SUPPRESS)
+    parser.add_argument("--list-stages", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--stage-class", choices=["all", "cpu", "gpu"], default="all", help=argparse.SUPPRESS)
+    parser.add_argument("--finalize", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--targets-per-quartile", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subsample", type=int, default=8192)
@@ -348,14 +354,51 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    summary = run_gwps_de_pilot(
-        args.dataset,
-        args.output_dir,
-        n_per_quartile=args.targets_per_quartile,
-        seed=args.seed,
-        subsample=args.subsample,
-        workers=args.workers,
-        force=args.force,
-    )
-    print(f"completed GWPS DE pilot: {summary}")
+    if args.pilot:
+        output = args.output_dir or DEFAULT_OUTPUT_DIR
+        summary = run_gwps_de_pilot(
+            args.dataset,
+            output,
+            n_per_quartile=args.targets_per_quartile,
+            seed=args.seed,
+            subsample=args.subsample,
+            workers=args.workers,
+            force=args.force,
+        )
+        print(f"completed GWPS DE pilot: {summary}")
+        return 0
+
+    output = args.output_dir or DEFAULT_RESULTS
+    manifest = load_manifest(args.manifest)
+    stages = production_stages(manifest)
+    if args.list_stages:
+        if args.stage_class == "cpu":
+            stages = [stage for stage in stages if stage.kind != "drf-gpu"]
+        elif args.stage_class == "gpu":
+            stages = [stage for stage in stages if stage.kind == "drf-gpu"]
+        print("\n".join(stage.id for stage in stages))
+        return 0
+    if args.stage:
+        record = run_stage(
+            args.manifest,
+            args.stage,
+            output,
+            workers=args.workers,
+            force=args.force,
+        )
+        print(f"completed production stage {args.stage}: {record}")
+        return 0
+    if args.finalize:
+        from .render import render_and_validate
+
+        completion = render_and_validate(args.manifest, output)
+        print(f"rendered and validated protocol-behavior production results: {completion}")
+        return 0
+
+    for stage in stages:
+        run_stage(args.manifest, stage.id, output, workers=args.workers, force=args.force)
+    from .render import render_and_validate
+
+    completion = render_and_validate(args.manifest, output)
+    print(f"completed protocol-behavior production workflow: {completion}")
     return 0

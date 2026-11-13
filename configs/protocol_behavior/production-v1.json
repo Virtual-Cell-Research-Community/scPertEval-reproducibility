@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "id": "protocol-behavior-production-v1",
+  "seed": 42,
+  "minimum_cells": 50,
+  "reference_subsample": 8192,
+  "workers": 16,
+  "protocols": [
+    "pearson",
+    "pearson_ctrl",
+    "pearson_pert",
+    "pearson_pert_degs_padj=0.05",
+    "pearson_pert_top_k=50",
+    "mse",
+    "mse_degs_padj=0.05",
+    "mse_top_k=50",
+    "wmse_exp1",
+    "wmse_exp2",
+    "wmse_exp4",
+    "transpose_rank",
+    "rank",
+    "de_overlap_k=50",
+    "de_auprc",
+    "de_auroc",
+    "unbiased_mmd_median_top_k=50",
+    "unbiased_mmd_median_pca_k=50",
+    "energy_distance_top_k=50",
+    "energy_distance_pca_k=50"
+  ],
+  "gpu_protocols": [
+    "sinkhorn_w2_top_k=50",
+    "sinkhorn_w2_pca_k=50"
+  ],
+  "de": {
+    "target": "gt_all_cells",
+    "references": ["all_perturbed", "control"],
+    "methods": ["t-test", "t-test_overestim_var", "MWU"]
+  },
+  "datasets": [
+    {
+      "id": "gwps-k562",
+      "label": "GWPS K562",
+      "path": "models/data/replogle-weissman-2022-k562-gwps/raw.h5ad"
+    },
+    {
+      "id": "genetic-k562-essential",
+      "label": "Genetic K562 essential",
+      "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "context_key": "context",
+      "context_value": "replogle-weissman-2022-k562-essential"
+    },
+    {
+      "id": "genetic-rpe1",
+      "label": "Genetic RPE1",
+      "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "context_key": "context",
+      "context_value": "replogle-weissman-2022-rpe1"
+    },
+    {
+      "id": "genetic-hepg2",
+      "label": "Genetic HepG2",
+      "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "context_key": "context",
+      "context_value": "nadig-oconner-2024-hepg2"
+    },
+    {
+      "id": "genetic-jurkat",
+      "label": "Genetic Jurkat",
+      "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "context_key": "context",
+      "context_value": "nadig-oconner-2024-jurkat"
+    },
+    {
+      "id": "chemical-a549",
+      "label": "SciPlex3 A549",
+      "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "context_key": "context",
+      "context_value": "A549"
+    },
+    {
+      "id": "chemical-k562",
+      "label": "SciPlex3 K562",
+      "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "context_key": "context",
+      "context_value": "K562"
+    },
+    {
+      "id": "chemical-mcf7",
+      "label": "SciPlex3 MCF7",
+      "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "context_key": "context",
+      "context_value": "MCF7"
+    }
+  ]
+}

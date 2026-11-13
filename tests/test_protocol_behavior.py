@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import anndata as ad
 import numpy as np
 import pandas as pd
@@ -7,20 +10,34 @@ import pytest
 
 from analyses.protocol_behavior.cli import (
     DEFAULT_GWPS_DATASET,
-    DEFAULT_OUTPUT_DIR,
     build_parser,
     run_gwps_de_pilot,
     select_quartile_targets,
 )
+from analyses.protocol_behavior.production import load_manifest, production_stages, run_stage
+from analyses.protocol_behavior.render import FIGURE_STEMS, render_and_validate
 
 
-def test_protocol_command_defaults_to_the_resumable_gwps_pilot():
+def test_protocol_command_defaults_to_the_production_workflow():
     args = build_parser().parse_args([])
 
-    assert args.pilot == "gwps-de"
+    assert args.pilot is None
     assert args.dataset == DEFAULT_GWPS_DATASET
-    assert args.output_dir == DEFAULT_OUTPUT_DIR
+    assert args.output_dir is None
     assert args.force is False
+
+
+def test_production_manifest_declares_all_analysis_units_and_chunks():
+    manifest = load_manifest(Path("configs/protocol_behavior/production-v1.json"))
+    stages = production_stages(manifest)
+
+    assert len(manifest["datasets"]) == 8
+    assert len(manifest["protocols"]) + len(manifest["gpu_protocols"]) == 22
+    assert len(stages) == 64
+    assert len({stage.id for stage in stages}) == len(stages)
+    assert sum(stage.kind == "de" for stage in stages) == 48
+    assert sum(stage.kind == "drf-cpu" for stage in stages) == 8
+    assert sum(stage.kind == "drf-gpu" for stage in stages) == 8
 
 
 def test_select_quartile_targets_is_balanced_and_deterministic():
@@ -96,3 +113,59 @@ def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path, monkeypatch):
     assert summary.read_text() == measured_summary
     statuses = {stage["status"] for stage in json.loads(summary.read_text())["stages"]}
     assert statuses == {"computed"}
+
+
+def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
+    rng = np.random.default_rng(11)
+    matrices = [rng.normal(size=(30, 12)).astype(np.float32)]
+    labels = ["control"] * 30
+    controls = [True] * 30
+    for index in range(4):
+        matrices.append(rng.normal(loc=index / 2, size=(10, 12)).astype(np.float32))
+        labels.extend([f"g{index}"] * 10)
+        controls.extend([False] * 10)
+    data = ad.AnnData(np.vstack(matrices))
+    data.obs["perturbation"] = labels
+    data.obs["is_control"] = controls
+    data.var_names = [f"gene{index}" for index in range(data.n_vars)]
+    dataset = tmp_path / "tiny.h5ad"
+    data.write_h5ad(dataset)
+
+    manifest_path = tmp_path / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "id": "tiny",
+                "seed": 42,
+                "minimum_cells": 5,
+                "reference_subsample": 20,
+                "workers": 1,
+                "protocols": ["pearson", "mse"],
+                "gpu_protocols": ["sinkhorn_w2_pca_k=2"],
+                "de": {
+                    "target": "gt_all_cells",
+                    "references": ["all_perturbed", "control"],
+                    "methods": ["t-test", "t-test_overestim_var", "MWU"],
+                },
+                "datasets": [{"id": "tiny", "label": "Tiny", "path": str(dataset)}],
+            }
+        )
+    )
+    output = tmp_path / "results"
+    manifest = load_manifest(manifest_path)
+    for stage in production_stages(manifest):
+        assert run_stage(manifest_path, stage.id, output, workers=1).is_file()
+
+    first_stage = production_stages(manifest)[0]
+
+    def unexpected_read(*_args, **_kwargs):
+        raise AssertionError("a checksum-valid production stage must be reused before loading its H5AD")
+
+    monkeypatch.setattr("analyses.protocol_behavior.production.ad.read_h5ad", unexpected_read)
+    assert run_stage(manifest_path, first_stage.id, output, workers=1).is_file()
+
+    completion = render_and_validate(manifest_path, output)
+
+    assert json.loads(completion.read_text())["status"] == "complete"
+    assert all((output / "figures" / f"{stem}.png").stat().st_size > 0 for stem in FIGURE_STEMS)

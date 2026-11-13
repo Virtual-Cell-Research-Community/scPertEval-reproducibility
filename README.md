@@ -54,8 +54,9 @@ uv run reproduce-ranking-sensitivity
 uv run reproduce-all
 ```
 
-The first command is implemented and currently reproduces the resumable GWPS DE
-cost pilot. The ranking-sensitivity and combined commands remain planned until
+The first command implements the manifest-driven production DE, DRF/timing, figure,
+and validation workflow; its bounded cost pilot is available via `--pilot gwps-de`.
+The ranking-sensitivity and combined commands remain planned until
 their production prediction inputs and end-to-end artifact tests are complete.
 See `docs/study-design.md` for the command contract and current scope.
 
