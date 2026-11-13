@@ -29,6 +29,10 @@ It first creates the locked environment once, then submits 56 CPU and eight GPU 
 bounded arrays and a dependent render/validation job. The array tasks call the same command through its internal stage selector;
 there is no separate scientific implementation for cluster runs.
 
+An isolated checkout can reuse an existing prepared-data tree without copying it by setting
+`SCPERTEVAL_DATA_ROOT` to the repository root that contains `models/data/`. The Helix launcher
+defaults this to the shared primary checkout.
+
 The bounded GWPS cost pilot remains available explicitly:
 
 ```bash

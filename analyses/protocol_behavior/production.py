@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import resource
 import shutil
 import time
@@ -95,6 +96,9 @@ def _dataset_spec(manifest: dict[str, Any], dataset_id: str) -> dict[str, Any]:
 
 def _load_analysis_unit(spec: dict[str, Any]) -> ad.AnnData:
     path = Path(spec["path"])
+    data_root = os.environ.get("SCPERTEVAL_DATA_ROOT")
+    if data_root and not path.is_absolute():
+        path = Path(data_root) / path
     if not path.is_file():
         raise FileNotFoundError(path)
     data = ad.read_h5ad(path)

@@ -32,6 +32,7 @@ mkdir -p logs "${OUTPUT}"
 
 export UV_PYTHON="3.11"
 export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-protocol-py311"
+export SCPERTEVAL_DATA_ROOT="${SCPERTEVAL_DATA_ROOT:-/mnt/sds-hd/sd22b002/projects/scPertEval-reproducibility}"
 export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"

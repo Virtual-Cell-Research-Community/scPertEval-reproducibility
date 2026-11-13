@@ -40,6 +40,23 @@ def test_production_manifest_declares_all_analysis_units_and_chunks():
     assert sum(stage.kind == "drf-gpu" for stage in stages) == 8
 
 
+def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypatch):
+    root = tmp_path / "shared"
+    dataset = root / "models/data/example/raw.h5ad"
+    dataset.parent.mkdir(parents=True)
+    data = ad.AnnData(np.ones((2, 2), dtype=np.float32))
+    data.obs["perturbation"] = ["control", "g1"]
+    data.obs["is_control"] = [True, False]
+    data.write_h5ad(dataset)
+    monkeypatch.setenv("SCPERTEVAL_DATA_ROOT", str(root))
+
+    from analyses.protocol_behavior.production import _load_analysis_unit
+
+    observed = _load_analysis_unit({"path": "models/data/example/raw.h5ad"})
+
+    assert observed.shape == (2, 2)
+
+
 def test_select_quartile_targets_is_balanced_and_deterministic():
     rows = []
     for index in range(80):
