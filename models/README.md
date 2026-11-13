@@ -147,6 +147,13 @@ all 1,387 fold-0 test perturbations and passed both the prediction contract and
 artifact-checksum validation. A 200-epoch production run is therefore expected
 to take roughly 50--60 minutes per fold/seed on that workstation class.
 
+The complete production sweep finished on Beauty GPU 0 on 2026-11-13 at code
+revision `0eb13a2`: five folds times seeds 42, 43, and 44, for 15 runs total.
+Each archived prediction has shape 1,387 by 8,248. A final audit revalidated
+every completion record, artifact checksum, frozen test fold, gene universe,
+and numeric prediction bundle; all 15 passed. The persistent launcher exited
+with status 0 after the last run.
+
 ## 5. Baselines that need no training
 
 ```bash

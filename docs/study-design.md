@@ -291,6 +291,15 @@ contract and all completion-record checksums. Production workstation sweeps are
 serialized on one GPU so they neither compete with other users nor issue
 concurrent 48 GiB reads from SDS.
 
+The full scLAMBDA production sweep completed on Beauty GPU 0 on 2026-11-13
+using repository revision `0eb13a2`. All five folds were run at training seeds
+42, 43, and 44, giving 15 independently archived runs. Every run produced one
+point prediction for each of its 1,387 held-out perturbations across the frozen
+8,248-gene universe. A final sweep-wide audit verified all 15 completion
+records and declared artifact checksums, and re-ran the prediction contract for
+every fold and seed. The resumable workstation launcher exited successfully
+after the final run; completed runs remain safe to skip on restart.
+
 ## Reproducibility and storage policy
 
 - Raw datasets are downloaded from authoritative sources and are not
