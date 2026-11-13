@@ -51,7 +51,7 @@ def test_select_quartile_targets_checks_metadata_and_size():
         select_quartile_targets(tiny, n_per_quartile=1)
 
 
-def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path):
+def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path, monkeypatch):
     rng = np.random.default_rng(7)
     matrices = [rng.normal(size=(100, 8)).astype(np.float32)]
     labels = ["control"] * 100
@@ -79,6 +79,10 @@ def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path):
     artifacts = list(output.glob("*__vs__*/*/de.h5"))
     assert len(artifacts) == 8
 
+    def unexpected_prepare(*_args, **_kwargs):
+        raise AssertionError("a complete grid must be reused without loading expression data")
+
+    monkeypatch.setattr("analyses.protocol_behavior.cli.spe.prepare", unexpected_prepare)
     run_gwps_de_pilot(
         dataset_path,
         output,

@@ -24,6 +24,14 @@ DEFAULT_GWPS_DATASET = Path("models/data/replogle-weissman-2022-k562-gwps/raw.h5
 DEFAULT_OUTPUT_DIR = Path("results/protocol_behavior/pilots/gwps-de")
 
 
+def _comparison_grid() -> list[tuple[str, str, str]]:
+    comparisons = [
+        (target, reference, method) for target in (FULL_TARGET,) for reference in REFERENCES for method in METHODS
+    ]
+    comparisons.extend((SPLIT_TARGET, reference, "MWU") for reference in REFERENCES)
+    return comparisons
+
+
 def select_quartile_targets(
     obs: pd.DataFrame,
     *,
@@ -168,6 +176,72 @@ def _run_de_stage(
     return record
 
 
+def _reusable_stages(output_dir: Path, perturbations: list[str]) -> list[dict] | None:
+    """Return validated existing stage records, or ``None`` if any stage needs computation."""
+    stages = []
+    for target, reference, method in _comparison_grid():
+        stage_dir = output_dir / f"{target}__vs__{reference}" / method
+        artifact = stage_dir / "de.h5"
+        stage_record = stage_dir / "stage.json"
+        if not stage_record.is_file() or not _valid_de_artifact(
+            artifact,
+            method=method,
+            target=target,
+            reference=reference,
+            perturbations=perturbations,
+        ):
+            return None
+        record = json.loads(stage_record.read_text())
+        record.update(
+            {
+                "method": method,
+                "target": target,
+                "reference": reference,
+                "artifact": str(artifact),
+                "status": "reused",
+            }
+        )
+        stages.append(record)
+    return stages
+
+
+def _write_summary(
+    path: Path,
+    *,
+    dataset: Path,
+    perturbations: list[str],
+    n_per_quartile: int,
+    seed: int,
+    subsample: int,
+    workers: int,
+    load_seconds: float,
+    stages: list[dict],
+) -> Path:
+    path.write_text(
+        json.dumps(
+            {
+                "dataset": str(dataset.resolve()),
+                "selection": {
+                    "strategy": "16-per-treated-cell-count-quartile" if n_per_quartile == 16 else "per-quartile",
+                    "n_per_quartile": n_per_quartile,
+                    "seed": seed,
+                    "n_perturbations": len(perturbations),
+                },
+                "reference_subsample": subsample,
+                "scperteval_version": spe.__version__,
+                "workers": workers,
+                "load_seconds": load_seconds,
+                "max_rss_gib_after_load": _max_rss_gib(),
+                "stages": stages,
+            },
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
+    return path
+
+
 def run_gwps_de_pilot(
     dataset: Path,
     output_dir: Path,
@@ -194,6 +268,21 @@ def run_gwps_de_pilot(
     selected.to_csv(output_dir / "selected-perturbations.csv", index=False)
     perturbations = selected["perturbation"].tolist()
 
+    if not force:
+        reusable = _reusable_stages(output_dir, perturbations)
+        if reusable is not None:
+            return _write_summary(
+                output_dir / "summary.json",
+                dataset=dataset,
+                perturbations=perturbations,
+                n_per_quartile=n_per_quartile,
+                seed=seed,
+                subsample=subsample,
+                workers=workers,
+                load_seconds=0.0,
+                stages=reusable,
+            )
+
     load_started = time.perf_counter()
     prepared = spe.prepare(
         dataset,
@@ -206,11 +295,6 @@ def run_gwps_de_pilot(
     )
     load_seconds = time.perf_counter() - load_started
 
-    comparisons = [
-        (target, reference, method) for target in (FULL_TARGET,) for reference in REFERENCES for method in METHODS
-    ]
-    # The two split-half MWU repeats measure the cost contribution of using all target cells.
-    comparisons.extend((SPLIT_TARGET, reference, "MWU") for reference in REFERENCES)
     stages = [
         _run_de_stage(
             prepared,
@@ -221,32 +305,19 @@ def run_gwps_de_pilot(
             output_dir=output_dir,
             force=force,
         )
-        for target, reference, method in comparisons
+        for target, reference, method in _comparison_grid()
     ]
-    summary = output_dir / "summary.json"
-    summary.write_text(
-        json.dumps(
-            {
-                "dataset": str(dataset.resolve()),
-                "selection": {
-                    "strategy": "16-per-treated-cell-count-quartile" if n_per_quartile == 16 else "per-quartile",
-                    "n_per_quartile": n_per_quartile,
-                    "seed": seed,
-                    "n_perturbations": len(perturbations),
-                },
-                "reference_subsample": subsample,
-                "scperteval_version": spe.__version__,
-                "workers": workers,
-                "load_seconds": load_seconds,
-                "max_rss_gib_after_load": _max_rss_gib(),
-                "stages": stages,
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n"
+    return _write_summary(
+        output_dir / "summary.json",
+        dataset=dataset,
+        perturbations=perturbations,
+        n_per_quartile=n_per_quartile,
+        seed=seed,
+        subsample=subsample,
+        workers=workers,
+        load_seconds=load_seconds,
+        stages=stages,
     )
-    return summary
 
 
 def build_parser() -> argparse.ArgumentParser:
