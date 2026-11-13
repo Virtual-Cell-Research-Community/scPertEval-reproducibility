@@ -40,6 +40,7 @@ from models.scdisinfact.context_config import (
 )
 from models.scdisinfact.context_config import select_heldout_controls as select_scdisinfact_controls
 from models.scdisinfact.joint_patch import choose_present_reference, coerce_reference_id
+from models.scgpt.anndata_compat import register_null_encoding_reader
 from models.sclambda.scalability_patch import (
     build_condition_embedding_table,
     selected_centered_condition_means,
@@ -385,6 +386,22 @@ def test_tabicl_prediction_only_fit_skips_and_restores_upstream_evaluation() -> 
     assert result == {"output_dir": "checkpoint-dir", "datamodule": "datamodule"}
     assert upstream.compute_or_load_presage_degs is forbidden_degs
     assert upstream._build_presage_evaluator is forbidden_evaluator
+
+
+def test_scgpt_registers_newer_anndata_null_encoding_for_its_pinned_reader() -> None:
+    import h5py
+    from anndata._io import specs
+
+    key = (h5py.Dataset, specs.IOSpec("null", "0.1.0"), frozenset())
+    previous = specs._REGISTRY.read.pop(key, None)
+    try:
+        assert register_null_encoding_reader()
+        assert specs._REGISTRY.read[key](object(), _reader=object()) is None
+        assert not register_null_encoding_reader()
+    finally:
+        specs._REGISTRY.read.pop(key, None)
+        if previous is not None:
+            specs._REGISTRY.read[key] = previous
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:

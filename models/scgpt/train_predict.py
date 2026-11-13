@@ -42,6 +42,7 @@ import torch
 ad.settings.allow_write_nullable_strings = True
 
 import patch as _patch
+from anndata_compat import register_null_encoding_reader
 from gears import PertData
 from gears.utils import create_cell_graph_dataset_for_prediction
 from torch_geometric.loader import DataLoader
@@ -134,6 +135,7 @@ def main() -> None:
         print(f"skipping verified completed run: {run.handle.directory}")
         return
     set_seed(args.seed)
+    register_null_encoding_reader()
 
     raw = run.raw_path
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
