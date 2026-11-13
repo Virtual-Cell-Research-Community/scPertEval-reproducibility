@@ -25,8 +25,8 @@ On Helix, use the chunked and resumable Slurm submission wrapper:
 bash scripts/submit_protocol_behavior_helix.sh
 ```
 
-It submits 56 CPU and eight GPU compute stages as bounded arrays and a dependent
-render/validation job. The array tasks call the same command through its internal stage selector;
+It first creates the locked environment once, then submits 56 CPU and eight GPU compute stages as
+bounded arrays and a dependent render/validation job. The array tasks call the same command through its internal stage selector;
 there is no separate scientific implementation for cluster runs.
 
 The bounded GWPS cost pilot remains available explicitly:
