@@ -6,6 +6,26 @@ splits, model configurations, and prediction artifacts are frozen before model
 ranks are inspected; the evaluation grid is versioned and may be extended
 without retraining, provided the complete grid is reported.
 
+## Reproduction interface
+
+The finished repository exposes three commands from its root:
+
+```bash
+uv run reproduce-protocol-behavior
+uv run reproduce-ranking-sensitivity
+uv run reproduce-all
+```
+
+`reproduce-protocol-behavior` rebuilds the maintained successors to the original
+paper analyses. It is already registered and currently runs the resumable GWPS
+DE cost pilot; production DE, DRF, tables, and figures will be added behind the
+same command. `reproduce-ranking-sensitivity` will evaluate frozen prediction
+bundles over the complete versioned sensitivity grid and render its result
+figures. `reproduce-all` will invoke both workflows after validating their
+shared prepared data and prediction dependencies. The latter two commands are
+planned interfaces, not yet registered executables; documentation must not
+present them as complete until their end-to-end artifact tests pass.
+
 ## Scientific question
 
 Can reasonable post-training evaluation choices change model rankings when the

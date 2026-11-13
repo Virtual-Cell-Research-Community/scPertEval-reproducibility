@@ -5,7 +5,22 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from analyses.protocol_behavior.cli import run_gwps_de_pilot, select_quartile_targets
+from analyses.protocol_behavior.cli import (
+    DEFAULT_GWPS_DATASET,
+    DEFAULT_OUTPUT_DIR,
+    build_parser,
+    run_gwps_de_pilot,
+    select_quartile_targets,
+)
+
+
+def test_protocol_command_defaults_to_the_resumable_gwps_pilot():
+    args = build_parser().parse_args([])
+
+    assert args.pilot == "gwps-de"
+    assert args.dataset == DEFAULT_GWPS_DATASET
+    assert args.output_dir == DEFAULT_OUTPUT_DIR
+    assert args.force is False
 
 
 def test_select_quartile_targets_is_balanced_and_deterministic():

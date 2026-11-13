@@ -44,6 +44,21 @@ research artifacts.
 - Generated datasets, checkpoints, predictions, caches, and cluster logs are not
   committed.
 
+## Reproduction commands
+
+The stable user-facing interface is intentionally small:
+
+```bash
+uv run reproduce-protocol-behavior
+uv run reproduce-ranking-sensitivity
+uv run reproduce-all
+```
+
+The first command is implemented and currently reproduces the resumable GWPS DE
+cost pilot. The ranking-sensitivity and combined commands remain planned until
+their production prediction inputs and end-to-end artifact tests are complete.
+See `docs/study-design.md` for the command contract and current scope.
+
 ## Licensing
 
 This repository is not covered by a single repository-wide license. The pinned

@@ -20,6 +20,8 @@ METHODS = ("t-test", "t-test_overestim_var", "MWU")
 FULL_TARGET = "gt_all_cells"
 SPLIT_TARGET = "gt_half"
 REFERENCES = ("all_perturbed", "control")
+DEFAULT_GWPS_DATASET = Path("models/data/replogle-weissman-2022-k562-gwps/raw.h5ad")
+DEFAULT_OUTPUT_DIR = Path("results/protocol_behavior/pilots/gwps-de")
 
 
 def select_quartile_targets(
@@ -249,9 +251,19 @@ def run_gwps_de_pilot(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pilot", choices=["gwps-de"], required=True)
-    parser.add_argument("--dataset", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, default=Path("results/protocol_behavior/pilots/gwps-de"))
+    parser.add_argument(
+        "--pilot",
+        choices=["gwps-de"],
+        default="gwps-de",
+        help="implemented protocol-behavior stage (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        default=DEFAULT_GWPS_DATASET,
+        help="prepared GWPS model view (default: %(default)s)",
+    )
+    parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--targets-per-quartile", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--subsample", type=int, default=8192)
