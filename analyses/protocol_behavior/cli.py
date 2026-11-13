@@ -271,8 +271,11 @@ def run_gwps_de_pilot(
     if not force:
         reusable = _reusable_stages(output_dir, perturbations)
         if reusable is not None:
+            summary = output_dir / "summary.json"
+            if summary.is_file():
+                return summary
             return _write_summary(
-                output_dir / "summary.json",
+                summary,
                 dataset=dataset,
                 perturbations=perturbations,
                 n_per_quartile=n_per_quartile,

@@ -78,6 +78,7 @@ def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path, monkeypatch):
     assert summary.is_file()
     artifacts = list(output.glob("*__vs__*/*/de.h5"))
     assert len(artifacts) == 8
+    measured_summary = summary.read_text()
 
     def unexpected_prepare(*_args, **_kwargs):
         raise AssertionError("a complete grid must be reused without loading expression data")
@@ -92,5 +93,6 @@ def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path, monkeypatch):
     )
     import json
 
+    assert summary.read_text() == measured_summary
     statuses = {stage["status"] for stage in json.loads(summary.read_text())["stages"]}
-    assert statuses == {"reused"}
+    assert statuses == {"computed"}
