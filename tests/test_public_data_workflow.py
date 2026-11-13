@@ -4,6 +4,7 @@ import hashlib
 import json
 import tomllib
 from pathlib import Path
+from types import SimpleNamespace
 
 import anndata as ad
 import numpy as np
@@ -50,6 +51,7 @@ from models.state.context_config import (
     relabel_context_predictions,
     sample_heldout_controls,
 )
+from models.tabicl.prediction_only import fit_prediction_only
 from models.tabicl.split_compat import initialize_with_nonempty_validation
 from models.trvae.context_config import build_prediction_adata as build_trvae_prediction_adata
 from models.trvae.context_config import densify_expression as densify_trvae_expression
@@ -350,6 +352,39 @@ def test_tabicl_initializes_with_frozen_validation_before_using_merged_pool(
 
     assert datamodule.initialized_from == validation_split
     assert Path(datamodule.split_json_path) == model_split
+
+
+def test_tabicl_prediction_only_fit_skips_and_restores_upstream_evaluation() -> None:
+    def forbidden_degs(**_kwargs):
+        raise AssertionError("TabICLv2 prediction-only runs must not compute PRESAGE DEGs")
+
+    def forbidden_evaluator(**_kwargs):
+        raise AssertionError("TabICLv2 prediction-only runs must not build the PRESAGE evaluator")
+
+    upstream = SimpleNamespace(
+        compute_or_load_presage_degs=forbidden_degs,
+        _build_presage_evaluator=forbidden_evaluator,
+    )
+
+    class FakeModel:
+        def fit(self, **kwargs):
+            assert upstream.compute_or_load_presage_degs(adata=object()) == {}
+            evaluator, train_keys, train_targets = upstream._build_presage_evaluator(adata=object())
+            assert evaluator.evaluate_split(object(), test=True) == ({}, {})
+            assert train_keys is None
+            assert train_targets is None
+            return kwargs
+
+    result = fit_prediction_only(
+        FakeModel(),
+        upstream_module=upstream,
+        output_dir="checkpoint-dir",
+        datamodule="datamodule",
+    )
+
+    assert result == {"output_dir": "checkpoint-dir", "datamodule": "datamodule"}
+    assert upstream.compute_or_load_presage_degs is forbidden_degs
+    assert upstream._build_presage_evaluator is forbidden_evaluator
 
 
 def test_harmonize_scperturb_preserves_raw_counts_and_standardizes_obs() -> None:

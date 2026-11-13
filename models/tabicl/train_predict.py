@@ -47,6 +47,12 @@ perturbation-cluster/ncells files) — optional inputs their own code already tr
 absent; scPertEval scores the raw predictions.h5ad itself downstream, same reasoning as PRESAGE's
 own ``training.eval_test=False`` and STATE's ``--predict-only``.
 
+The pinned upstream ``TabICLMultiviewModel.fit`` nevertheless performs a single-cell Wilcoxon
+DEG calculation and PRESAGE-style metric evaluation before it serializes its artifact. That work
+is deliberately bypassed here through ``fit_prediction_only``: it is not part of model fitting,
+does not change the fused predictions, scales pathologically on the full GWPS object, and would
+duplicate the shared scPertEval evaluation applied to every model after predictions are frozen.
+
 No PCA-component or TabICL-regressor overrides are set — ``x_pca_n_components``/
 ``y_pca_n_components`` default to 128 but the model itself caps them to
 ``min(requested, n_train_perturbations, n_features)`` (our fold's train context is only ~7-8
@@ -60,6 +66,7 @@ import argparse
 import pickle
 import random
 import sys
+import time
 from pathlib import Path
 
 import anndata as ad
@@ -76,6 +83,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
+from models.tabicl.prediction_only import fit_prediction_only
 from models.tabicl.split_compat import initialize_with_nonempty_validation
 from workflows.model_runs import add_point_run_arguments, begin_point_model_run
 
@@ -96,6 +104,10 @@ MODALITY_PICKLE_PATHS = {
 }
 
 
+def _report_timing(stage: str, seconds: float) -> None:
+    print(f"[TabICLv2][timing] {stage}={seconds:.3f}s", flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -106,6 +118,7 @@ def main() -> None:
     parser.add_argument("--fold", type=int, default=0, help="which fold in <dataset>_folds/ to train/predict on")
     add_point_run_arguments(parser, deterministic=True)
     args = parser.parse_args()
+    total_start = time.perf_counter()
 
     run = begin_point_model_run(
         args,
@@ -116,6 +129,8 @@ def main() -> None:
             "training_mode": "in_context",
             "fusion_weighting_mode": "none",
             "validation_filtering": False,
+            "upstream_evaluation": "skipped_prediction_only",
+            "stage_timing": True,
         },
         deterministic=True,
     )
@@ -143,11 +158,14 @@ def main() -> None:
         perturbation_col="perturbation",
         control_label=CONTROL_LABEL,
     )
+    setup_start = time.perf_counter()
     initialize_with_nonempty_validation(
         datamodule,
         validation_split_path=validation_split_json_path,
         model_split_path=split_json_path,
     )
+    datamodule_setup_seconds = time.perf_counter() - setup_start
+    _report_timing("datamodule_setup", datamodule_setup_seconds)
 
     model = TabICLMultiviewModel(
         split_json_path=str(split_json_path),
@@ -165,8 +183,12 @@ def main() -> None:
         degs_cache_dir=str(run_dir / "degs"),
     )
 
-    model.fit(output_dir=run_dir, datamodule=datamodule)
+    prediction_fit_start = time.perf_counter()
+    fit_prediction_only(model, output_dir=run_dir, datamodule=datamodule)
+    prediction_fit_seconds = time.perf_counter() - prediction_fit_start
+    _report_timing("prediction_fit", prediction_fit_seconds)
 
+    serialization_start = time.perf_counter()
     with open(run_dir / "tabicl_multiview_artifact.pkl", "rb") as f:
         artifact = pickle.load(f)
     test = artifact["fused"]["test"]
@@ -195,12 +217,20 @@ def main() -> None:
     out_path = run.prediction_path
     out_path.parent.mkdir(parents=True, exist_ok=True)
     pred_adata.write_h5ad(out_path, compression="gzip")
+    prediction_serialization_seconds = time.perf_counter() - serialization_start
+    _report_timing("prediction_serialization", prediction_serialization_seconds)
+    elapsed_before_completion_seconds = time.perf_counter() - total_start
     pd.DataFrame(
         [
             {
                 "training_mode": "in_context",
                 "gradient_updates": 0,
                 "modalities": len(MODALITY_PICKLE_PATHS),
+                "upstream_evaluation": "skipped_prediction_only",
+                "datamodule_setup_seconds": datamodule_setup_seconds,
+                "prediction_fit_seconds": prediction_fit_seconds,
+                "prediction_serialization_seconds": prediction_serialization_seconds,
+                "elapsed_before_completion_seconds": elapsed_before_completion_seconds,
             }
         ]
     ).to_csv(run.metrics_path, index=False)
@@ -208,6 +238,7 @@ def main() -> None:
         implementation_revision="royerlab/tfm-perturbation@c7b2786c2aee946db1da442c39ad1d9bdb303d14",
         extra_artifacts={"in_context_artifact": run_dir / "tabicl_multiview_artifact.pkl"},
     )
+    _report_timing("elapsed_before_completion", elapsed_before_completion_seconds)
     print(f"wrote {pred_adata.shape} predictions to {out_path}")
 
 
