@@ -4,7 +4,7 @@ title = "fMLP-ESM2"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-generator-and-exact-model-smoke-complete-full-asset-and-fold-pending"
+implementation_status = "adapter-generator-full-asset-and-synthetic-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -17,6 +17,16 @@ revision = "5fbca39631164edc1d402a5aa369f982f72ee282"
 pooling = "mean over last hidden state including special tokens, matching Miller's generator"
 maximum_protein_residues = 1024
 weight_serialization = "pytorch-bin (the pinned revision has no safetensors; weights are otherwise identical)"
+
+[implementation.esm2.asset]
+path = "models/fmlp/cache/esm2-15b/esm2_t48_15B_UR50D_mean.pickle"
+manifest = "models/fmlp/cache/esm2-15b/esm2_t48_15B_UR50D_mean.manifest.json"
+sha256 = "1b1484dc5a49c3ab4c72f708092f49f5f4d91b4091d9189d56adc84e0a76254a"
+size_bytes = 27738190
+target_count = 1352
+dimensions = 5120
+target_sha256 = "9dadbd13e68c4401b0c8055f116dce35ad94daf835b50cccff3fde569ce8a216"
+validation = "all vectors finite and common-dimensional"
 
 [adapter]
 path = "models/fmlp/train_predict.py"

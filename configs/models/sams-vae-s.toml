@@ -4,7 +4,7 @@ title = "SAMS-VAE(S)"
 capability = "population"
 modalities = ["chemical"]
 tasks = ["leave-one-context-out"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-environment-and-full-architecture-synthetic-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/altoslabs/perturbench"
@@ -29,5 +29,30 @@ prediction = "native population predictions"
 
 [training]
 seeds = [42]
+maximum_epochs = 500
+minimum_epochs = 5
+batch_size = 256
+early_stopping_patience = 50
+checkpoint_selection = "minimum validation loss"
+disable_sparsity = true
+disable_perturbation_effect_distribution = true
+generative_counterfactual = true
+hidden_dim_x = 2560
+hidden_dim_cond = 329
+latent_dim = 32
+dropout = 0.4
+inject_covariates_encoder = true
+inject_covariates_decoder = true
+n_layers_encoder_x = 4
+n_layers_encoder_e = 2
+n_layers_decoder = 3
+learning_rate = 0.000341765289234546
+weight_decay = 6.943657713062555e-08
 hyperparameter_policy = "PerturBench published best-parameter SciPlex3 configuration; no new HPO"
+
+[validation]
+synthetic_gpu_smoke = "passed with the complete published architecture and one training epoch"
+checkpoint_reload = "best validation checkpoint was reloaded before prediction"
+restart_safety = "verified completed run is skipped"
+representative_full_fold = "pending"
 

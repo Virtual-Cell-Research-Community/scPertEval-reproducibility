@@ -51,6 +51,7 @@ from models.genepert.train_predict import (
     grouped_expression_means,
     l2_normalized_embeddings,
 )
+from models.sams_vae_s.train_predict import context_split_masks, encoded_arrays
 from models.scdisinfact.context_config import (
     build_prediction_adata,
     select_scdisinfact_training_data,
@@ -244,6 +245,37 @@ def test_cellflow_embeddings_annotations_and_frozen_split(tmp_path: Path) -> Non
     assert validation.obs["condition"].value_counts().to_dict() == {"B": 2, "control": 1}
     assert test_controls.n_obs == 3
     assert test_controls.obs["is_control"].all()
+
+
+def test_sams_vae_s_uses_joint_conditions_and_frozen_context_partitions() -> None:
+    data = AnnData(
+        X=sp.csr_matrix(np.arange(24, dtype=np.float32).reshape(6, 4)),
+        obs={
+            "model_perturbation": ["control", "A", "B", "control", "A", "B"],
+            "context": ["train", "train", "train", "test", "test", "test"],
+        },
+        var=pd.DataFrame(index=["g1", "g2", "g3", "g4"]),
+    )
+    split = {
+        "contexts": ["train", "test"],
+        "validation_conditions": ["B"],
+        "folds": [{"test_context": "test", "train_contexts": ["train"]}],
+    }
+    development, validation = context_split_masks(data, split, 0)
+    assert development.tolist() == [True, True, False, True, False, False]
+    assert validation.tolist() == [False, False, True, False, False, False]
+
+    expression, perturbations, covariates = encoded_arrays(
+        data,
+        development,
+        conditions=["A", "B"],
+        contexts=["test", "train"],
+        perturbation_key="model_perturbation",
+        context_key="context",
+    )
+    assert expression.shape == (3, 4)
+    np.testing.assert_array_equal(perturbations, [[0, 0], [1, 0], [0, 0]])
+    np.testing.assert_array_equal(covariates, [[0, 1], [0, 1], [1, 0]])
 
 
 def test_dataset_manifests_pin_sources_and_reference_outputs() -> None:

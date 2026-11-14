@@ -1,0 +1,36 @@
+context:
+  version: "0.1.0"
+  rev: "c84038bc1ea409aa54f3832cfa6f34f5059adf0c"
+
+package:
+  name: perturbench-src
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/altoslabs/perturbench.git
+    rev: ${{ rev }}
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    - rm -rf "$PREFIX/lib/python3.11/site-packages/perturbench"
+    - mkdir -p "$PREFIX/lib/python3.11/site-packages"
+    - cp -r src/perturbench "$PREFIX/lib/python3.11/site-packages/"
+    - mkdir -p "$PREFIX/lib/python3.11/site-packages/perturbench_src-0.1.0.dist-info"
+    - |
+      printf 'Metadata-Version: 2.1\nName: perturbench-src\nVersion: 0.1.0\n' > "$PREFIX/lib/python3.11/site-packages/perturbench_src-0.1.0.dist-info/METADATA"
+
+requirements:
+  run:
+    - python 3.11.*
+
+tests:
+  - python:
+      imports:
+        - perturbench
+        - perturbench.modelcore.models.sams_vae
+
+about:
+  license: BSD-3-Clause
+  summary: Pinned PerturBench source for the published SciPlex3 SAMS-VAE(S) configuration.

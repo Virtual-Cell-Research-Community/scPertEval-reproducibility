@@ -7,20 +7,19 @@ below is run via `pixi run -e <model> ...` from this directory (`models/`).
 
 The revised perturbation panel additionally includes TxPert-public, GenePert,
 fMLP-GenePT, fMLP-ESM2, and CellFlow; the chemical context panel adds
-SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert's
-GenePert, TxPert-public, and the shared fMLP adapter have pinned Pixi environments and have
-passed complete synthetic archival smoke tests. Their representative full-fold
-smokes remain pending until the frozen model view is materialized. fMLP-ESM2's exact pinned
-15B checkpoint additionally passed a one-target load-and-embedding smoke; its complete durable
-target embedding asset is not yet complete. Its restart-safe generator
+SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert,
+TxPert-public, the shared fMLP adapter, CellFlow, and SAMS-VAE(S) have pinned
+Pixi environments and have passed complete synthetic archival smoke tests.
+Their representative full-fold smokes remain pending. fMLP-ESM2's exact pinned
+15B checkpoint additionally produced the complete 1,352-target, 5,120-dimensional
+durable embedding asset. Its restart-safe generator
 is `models/fmlp/generate_esm2_embeddings.py`: cache Hugging Face model weights on local NVMe,
 cache each completed target embedding atomically, and write only the compact final dictionary
 plus its provenance manifest to durable storage. Miller's generator requests safetensors,
 but the pinned 15B revision publishes only sharded PyTorch `.bin` weights; the local generator
 uses those identical pinned weights and records the serialization correction. Asset generation
 runs in the isolated `esm2-assets` environment (Torch 2.6, required by Transformers' CVE guard),
-while fMLP training remains on Miller's exact Torch 2.5.1 environment. CellFlow and
-SAMS-VAE(S) still need adapters and are not yet launchable from the legacy scripts below.
+while fMLP training remains on Miller's exact Torch 2.5.1 environment.
 
 This doesn't cover `compare.py`/`plots.py` — those are being folded into the project's
 notebooks and are still in flux.
@@ -275,8 +274,9 @@ scaling smoke exceeded the prespecified compute threshold. STATE, CPA, bioLORD,
 and trVAE consume `raw.h5ad`;
 scDisInFact consumes `counts.h5ad`. Each adapter records its native prediction
 space and the deterministic transform into the shared log1p evaluation space.
-SAMS-VAE(S) is part of the frozen chemical panel but is not launchable until its
-declared adapter and Pixi environment have been implemented and smoke-tested.
+SAMS-VAE(S) is part of the frozen chemical panel. Its pinned adapter and Pixi
+environment passed the complete synthetic archival contract; the representative
+full-fold runtime smoke remains the final inclusion gate.
 STATE retains its native per-cell predictions. No-change and fold-mean context
 baselines emit populations matched to each observed treated-cell count so they participate in both profile
 and distributional sensitivity analyses. The context linear baseline is a

@@ -361,11 +361,10 @@ after the final run; completed runs remain safe to skip on restart.
 2. Regenerate the genetic context model view at the 50-cell rule.
 3. Materialize the now-frozen 1,352-target essential model view and record its
    checksum and metadata-validation record.
-4. Implement and pin SAMS-VAE(S). TxPert-public and CellFlow now have pinned
-   environments and complete synthetic archival smokes; GenePert and both fMLP
-   variants are implemented and synthetically smoke-tested. Representative
-   full-fold smokes wait on item 3. The full 1,352-target ESM2 asset is being
-   generated once on Beast with a restart-safe per-gene cache.
+4. Run representative full-fold smokes for the new model panel. TxPert-public,
+   CellFlow, SAMS-VAE(S), GenePert, and both fMLP variants now have pinned
+   environments and complete synthetic archival smokes. The validated
+   1,352-target, 5,120-dimensional ESM2 asset is materialized on SDS.
 5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
    digests, then reconstruct their Pixi environments.
 6. Smoke-test every context adapter on one genetic and one chemical fold;
@@ -386,7 +385,7 @@ benchmark results and do not authorize the full launch.
 | bioLORD | passed | passed | pinned official revision | ready |
 | scDisInFact | passed | passed | source tree and core dependencies match the pinned scArchon image | ready |
 | trVAE | passed | excluded by the prespecified scaling rule | matched to pinned scArchon image, using its corresponding stable pandas release | ready |
-| SAMS-VAE(S) | pending | not included | pinned PerturBench revision; adapter not implemented | pending |
+| SAMS-VAE(S) | synthetic full-architecture smoke passed; representative fold pending | not included | pinned PerturBench revision and Pixi environment | pending representative runtime gate |
 | No-change, fold-mean, and linear baselines | passed | passed | completion records validated | ready |
 | Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
 
@@ -400,3 +399,9 @@ was skipped on restart. Its native full-architecture checkpoint is about
 1.7 GB, so five retained fold checkpoints are expected to consume roughly
 8.5 GB before filesystem compression. Representative full-fold runtime remains
 the inclusion gate.
+
+SAMS-VAE(S) also passed the full synthetic archival contract using the published
+SciPlex3 hyperparameters: validation-selected checkpointing, fresh checkpoint
+reload before prediction, exact population sizes, checksums, and restart-safe
+skipping. Its checkpoint is about 871 MB, or roughly 2.6 GB across the three
+chemical folds.
