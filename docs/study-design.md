@@ -11,10 +11,16 @@ without retraining, provided the complete grid is reported.
 The finished repository exposes three commands from its root:
 
 ```bash
+uv run prepare-protocol-data
 uv run reproduce-protocol-behavior
 uv run reproduce-ranking-sensitivity
 uv run reproduce-all
 ```
+
+`prepare-protocol-data` is the public source-to-analysis-view entry point shared by the maintained
+paper analyses and ranking-sensitivity benchmark. It validates the six pinned source manifests,
+builds canonical raw-count objects, materializes the three frozen model/evaluation views, and
+writes one checksummed preparation record. It never modifies a canonical input in place.
 
 `reproduce-protocol-behavior` rebuilds the maintained successors to the original
 paper analyses. It resolves the production stage manifest, resumes checksum-valid

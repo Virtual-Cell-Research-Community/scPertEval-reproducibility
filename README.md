@@ -49,13 +49,16 @@ research artifacts.
 The stable user-facing interface is intentionally small:
 
 ```bash
+uv run prepare-protocol-data
 uv run reproduce-protocol-behavior
 uv run reproduce-ranking-sensitivity
 uv run reproduce-all
 ```
 
-The first command implements the manifest-driven production DE, DRF/timing, figure,
-and validation workflow; its bounded cost pilot is available via `--pilot gwps-de`.
+The first command validates the six public source declarations and prepares the three frozen
+analysis views, recording exact output checksums. Add `--plan` to inspect every resolved step
+without downloading or processing data. `reproduce-protocol-behavior` implements the
+manifest-driven production DE, DRF/timing, figure, and validation workflow.
 The ranking-sensitivity and combined commands remain planned until
 their production prediction inputs and end-to-end artifact tests are complete.
 See `docs/study-design.md` for the command contract and current scope.

@@ -8,16 +8,11 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from analyses.protocol_behavior.cli import (
-    DEFAULT_GWPS_DATASET,
-    build_parser,
-    main,
-    run_gwps_de_pilot,
-    select_quartile_targets,
-)
+from analyses.protocol_behavior.cli import build_parser, main
 from analyses.protocol_behavior.production import (
     _declared_perturbations,
     _reusable_record,
+    _valid_drf,
     file_sha256,
     load_manifest,
     production_stages,
@@ -25,6 +20,8 @@ from analyses.protocol_behavior.production import (
 )
 from analyses.protocol_behavior.render import (
     FIGURE_STEMS,
+    _concordance_rows,
+    _k_grid,
     _table_text_color,
     _wrap_table_label,
     render_and_validate,
@@ -34,8 +31,6 @@ from analyses.protocol_behavior.render import (
 def test_protocol_command_defaults_to_the_production_workflow():
     args = build_parser().parse_args([])
 
-    assert args.pilot is None
-    assert args.dataset == DEFAULT_GWPS_DATASET
     assert args.output_dir is None
     assert args.force is False
 
@@ -77,6 +72,25 @@ def test_production_stage_classes_are_independently_listable(stage_class, expect
     assert all(stage.startswith(expected_prefix) for stage in stages)
 
 
+def test_stage_listing_can_exclude_gwps_by_id(capsys):
+    assert (
+        main(
+            [
+                "--list-stages",
+                "--stage-class",
+                "drf-cpu",
+                "--exclude-stage",
+                "drf.cpu.gwps-k562",
+            ]
+        )
+        == 0
+    )
+
+    stages = capsys.readouterr().out.splitlines()
+    assert len(stages) == 7
+    assert "drf.cpu.gwps-k562" not in stages
+
+
 def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypatch):
     root = tmp_path / "shared"
     dataset = root / "models/data/example/raw.h5ad"
@@ -112,79 +126,58 @@ def test_stage_record_reuse_normalizes_absolute_and_relative_artifact_paths(tmp_
     assert _reusable_record(record, "manifest", [artifact])
 
 
-def test_select_quartile_targets_is_balanced_and_deterministic():
-    rows = []
-    for index in range(80):
-        rows.extend({"perturbation": f"g{index:02d}", "is_control": False} for _ in range(index + 10))
-    rows.extend({"perturbation": "control", "is_control": True} for _ in range(200))
-    obs = pd.DataFrame(rows)
-
-    first = select_quartile_targets(obs, n_per_quartile=3, seed=42)
-    second = select_quartile_targets(obs, n_per_quartile=3, seed=42)
-    pd.testing.assert_frame_equal(first, second)
-    assert first.groupby("quartile").size().to_dict() == {0: 3, 1: 3, 2: 3, 3: 3}
-    assert first["perturbation"].is_unique
-    assert "control" not in set(first["perturbation"])
-
-
-def test_select_quartile_targets_checks_metadata_and_size():
-    with pytest.raises(ValueError, match="metadata"):
-        select_quartile_targets(pd.DataFrame({"perturbation": ["a"]}), n_per_quartile=1)
-    tiny = pd.DataFrame(
-        {
-            "perturbation": ["a", "b", "control"],
-            "is_control": [False, False, True],
-        }
+def test_stage_record_reuse_is_independent_of_the_original_mount_path(tmp_path):
+    stage = tmp_path / "results" / "stages" / "example"
+    stage.mkdir(parents=True)
+    artifact = stage / "artifact.csv"
+    artifact.write_text("complete\n")
+    record = stage / "stage.json"
+    record.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "manifest_sha256": "manifest",
+                "artifact_sha256": {
+                    "/home/another-user/mount/results/stages/example/artifact.csv": file_sha256(artifact)
+                },
+            }
+        )
     )
-    with pytest.raises(ValueError, match="at least 4"):
-        select_quartile_targets(tiny, n_per_quartile=1)
+
+    assert _reusable_record(record, "manifest", [artifact])
 
 
-def test_gwps_de_pilot_writes_and_reuses_complete_grid(tmp_path, monkeypatch):
-    rng = np.random.default_rng(7)
-    matrices = [rng.normal(size=(100, 8)).astype(np.float32)]
-    labels = ["control"] * 100
-    controls = [True] * 100
-    for index, n_cells in enumerate((50, 60, 70, 80)):
-        matrices.append(rng.normal(loc=index + 1, size=(n_cells, 8)).astype(np.float32))
-        labels.extend([f"g{index}"] * n_cells)
-        controls.extend([False] * n_cells)
-    dataset = ad.AnnData(np.vstack(matrices))
-    dataset.obs["perturbation"] = labels
-    dataset.obs["is_control"] = controls
-    dataset.var_names = [f"gene{index}" for index in range(dataset.n_vars)]
-    dataset_path = tmp_path / "dataset.h5ad"
-    dataset.write_h5ad(dataset_path)
+def test_drf_validation_requires_every_protocol_perturbation_pair_once(tmp_path):
+    drf_path = tmp_path / "drf.csv"
+    timing_path = tmp_path / "timing.csv"
+    protocols = ["pearson", "mse"]
+    perturbations = ["g1", "g2"]
+    pd.DataFrame(
+        [
+            {"protocol": protocol, "perturbation": perturbation, "drf": 1.0}
+            for protocol in protocols
+            for perturbation in perturbations
+        ]
+    ).to_csv(drf_path, index=False)
+    pd.DataFrame([{"protocol": protocol, "seconds": 1.0} for protocol in protocols]).to_csv(timing_path, index=False)
 
-    output = tmp_path / "pilot"
-    summary = run_gwps_de_pilot(
-        dataset_path,
-        output,
-        n_per_quartile=1,
-        subsample=40,
-        workers=1,
-    )
-    assert summary.is_file()
-    artifacts = list(output.glob("*__vs__*/*/de.h5"))
-    assert len(artifacts) == 8
-    measured_summary = summary.read_text()
+    assert _valid_drf(drf_path, timing_path, protocols, perturbations)
+    truncated = pd.read_csv(drf_path).iloc[:-1]
+    truncated.to_csv(drf_path, index=False)
+    assert not _valid_drf(drf_path, timing_path, protocols, perturbations)
 
-    def unexpected_prepare(*_args, **_kwargs):
-        raise AssertionError("a complete grid must be reused without loading expression data")
 
-    monkeypatch.setattr("analyses.protocol_behavior.cli.spe.prepare", unexpected_prepare)
-    run_gwps_de_pilot(
-        dataset_path,
-        output,
-        n_per_quartile=1,
-        subsample=40,
-        workers=1,
-    )
-    import json
+def test_concordance_uses_legacy_grid_and_reports_aucc():
+    assert _k_grid(1000).tolist() == [1, 2, 4, 8, 16, 32, 50, 64, 125, 128, 250, 256, 375, 500]
+    perturbations = ["g1", "g2"]
+    statistic = np.arange(1000, dtype=float)[None, :].repeat(2, axis=0)
+    padj = np.linspace(1e-8, 1.0, 1000)[None, :].repeat(2, axis=0)
 
-    assert summary.read_text() == measured_summary
-    statuses = {stage["status"] for stage in json.loads(summary.read_text())["stages"]}
-    assert statuses == {"computed"}
+    rows = _concordance_rows("example", perturbations, statistic, padj, statistic, padj)
+
+    assert [row["k"] for row in rows] == _k_grid(1000).tolist()
+    assert all(row["median"] == pytest.approx(1.0) for row in rows)
+    assert all(row["median_aucc"] == pytest.approx(1.0) for row in rows)
 
 
 def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
@@ -239,5 +232,11 @@ def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
 
     completion = render_and_validate(manifest_path, output)
 
-    assert json.loads(completion.read_text())["status"] == "complete"
+    completion_payload = json.loads(completion.read_text())
+    assert completion_payload["status"] == "complete"
+    assert all(not Path(artifact["path"]).is_absolute() for artifact in completion_payload["artifacts"])
+    first_record = json.loads((output / "stages" / first_stage.id / "stage.json").read_text())
+    assert all(not Path(name).is_absolute() for name in first_record["artifact_sha256"])
+    source = pd.read_csv(output / "figures" / "deg_jaccard_with_counts.csv")
+    assert set(source["record_type"]) == {"jaccard", "set_size", "spearman"}
     assert all((output / "figures" / f"{stem}.png").stat().st_size > 0 for stem in FIGURE_STEMS)

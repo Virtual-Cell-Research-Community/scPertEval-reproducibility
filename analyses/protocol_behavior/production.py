@@ -69,8 +69,30 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _artifact_key(path: Path) -> str:
-    return str(path.resolve())
+def _artifact_key(path: Path, record_path: Path) -> str:
+    """Store an artifact relative to its stage record so mount aliases remain irrelevant."""
+    return str(path.resolve().relative_to(record_path.parent.resolve()))
+
+
+def resolve_record_artifact(record_path: Path, name: str) -> Path:
+    """Resolve current relative records and legacy repository/absolute path records.
+
+    Older production records used either repository-relative paths or the producing host's
+    absolute SDS mount. The artifact basename in the stage directory is authoritative when those
+    paths are unavailable on the current host.
+    """
+    stored = Path(name)
+    candidates = []
+    if not stored.is_absolute():
+        candidates.extend((record_path.parent / stored, stored))
+    else:
+        candidates.append(stored)
+    candidates.append(record_path.parent / stored.name)
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved.is_file():
+            return resolved
+    return (record_path.parent / stored.name).resolve()
 
 
 def production_stages(manifest: dict[str, Any]) -> list[Stage]:
@@ -107,10 +129,7 @@ def _declared_perturbations(spec: dict[str, Any]) -> list[str] | None:
         return list(map(str, cohort["perturbations"]))
     if {"drugs", "doses", "population_exclusions"} <= set(cohort):
         canonical = {item["label"]: item["canonical_label"] for item in cohort["drugs"]}
-        excluded = {
-            (canonical[item["drug"]], float(item["dose"]))
-            for item in cohort["population_exclusions"]
-        }
+        excluded = {(canonical[item["drug"]], float(item["dose"])) for item in cohort["population_exclusions"]}
         return sorted(
             f"{item['canonical_label']}::{float(dose):g}nM"
             for item in cohort["drugs"]
@@ -206,7 +225,9 @@ def _reusable_record(record_path: Path, manifest_digest: str, artifacts: list[Pa
         record = json.loads(record_path.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    expected = {Path(name).resolve(): digest for name, digest in record.get("artifact_sha256", {}).items()}
+    expected = {
+        resolve_record_artifact(record_path, name): digest for name, digest in record.get("artifact_sha256", {}).items()
+    }
     resolved = {artifact.resolve(): artifact for artifact in artifacts}
     return (
         record.get("status") == "complete"
@@ -267,7 +288,7 @@ def run_de_stage(
     temporary.rmdir()
     if not _valid_de(artifact, stage, perturbations):
         raise RuntimeError(f"invalid completed DE artifact: {artifact}")
-    artifact_key = _artifact_key(artifact)
+    artifact_key = _artifact_key(artifact, record_path)
     return _write_record(
         record_path,
         {
@@ -286,7 +307,12 @@ def run_de_stage(
     )
 
 
-def _valid_drf(drf_path: Path, timing_path: Path, protocols: list[str]) -> bool:
+def _valid_drf(
+    drf_path: Path,
+    timing_path: Path,
+    protocols: list[str],
+    perturbations: list[str] | None = None,
+) -> bool:
     if not drf_path.is_file() or not timing_path.is_file():
         return False
     try:
@@ -294,12 +320,25 @@ def _valid_drf(drf_path: Path, timing_path: Path, protocols: list[str]) -> bool:
         timing = pd.read_csv(timing_path)
     except (OSError, pd.errors.ParserError):
         return False
-    return (
-        {"protocol", "perturbation", "drf"} <= set(drf)
-        and set(protocols) == set(drf["protocol"].astype(str))
-        and set(protocols) == set(timing["protocol"].astype(str))
-        and np.isfinite(timing["seconds"].to_numpy(dtype=float)).all()
-    )
+    if not {"protocol", "perturbation", "drf"} <= set(drf) or not {"protocol", "seconds"} <= set(timing):
+        return False
+    expected_protocols = set(protocols)
+    if set(drf["protocol"].astype(str)) != expected_protocols:
+        return False
+    if set(timing["protocol"].astype(str)) != expected_protocols or timing["protocol"].duplicated().any():
+        return False
+    if not np.isfinite(timing["seconds"].to_numpy(dtype=float)).all():
+        return False
+    pairs = drf[["protocol", "perturbation"]].astype(str)
+    if pairs.duplicated().any():
+        return False
+    if perturbations is None:
+        return True
+    expected_perturbations = set(perturbations)
+    if set(pairs["perturbation"]) != expected_perturbations:
+        return False
+    expected_pairs = {(protocol, perturbation) for protocol in protocols for perturbation in perturbations}
+    return set(pairs.itertuples(index=False, name=None)) == expected_pairs
 
 
 def run_drf_stage(
@@ -319,13 +358,17 @@ def run_drf_stage(
     timing_path = stage_dir / "timing.csv"
     record_path = stage_dir / "stage.json"
     protocols = list(manifest["gpu_protocols"] if gpu else manifest["protocols"])
-    if not force and _reusable_record(record_path, manifest_digest, [drf_path, timing_path]) and _valid_drf(
-        drf_path, timing_path, protocols
+    declared_perturbations = _declared_perturbations(spec)
+    if (
+        not force
+        and _reusable_record(record_path, manifest_digest, [drf_path, timing_path])
+        and _valid_drf(drf_path, timing_path, protocols, declared_perturbations)
     ):
         return record_path
 
     stage_dir.mkdir(parents=True, exist_ok=True)
     data = _load_analysis_unit(spec, minimum_cells=int(manifest["minimum_cells"]))
+    perturbations = _eligible_perturbations(data, int(manifest["minimum_cells"]))
     started = time.perf_counter()
     prepared = spe.prepare(
         data,
@@ -346,9 +389,9 @@ def run_drf_stage(
         timings.append({"dataset": stage.dataset, "protocol": protocol, "seconds": elapsed})
     pd.concat(frames, ignore_index=True).to_csv(drf_path, index=False)
     pd.DataFrame(timings).to_csv(timing_path, index=False)
-    if not _valid_drf(drf_path, timing_path, protocols):
+    if not _valid_drf(drf_path, timing_path, protocols, perturbations):
         raise RuntimeError(f"invalid completed DRF artifacts for {stage.dataset}")
-    artifact_keys = {_artifact_key(path): path for path in (drf_path, timing_path)}
+    artifact_keys = {_artifact_key(path, record_path): path for path in (drf_path, timing_path)}
     return _write_record(
         record_path,
         {
@@ -359,7 +402,7 @@ def run_drf_stage(
             "artifact_sha256": {key: file_sha256(path) for key, path in artifact_keys.items()},
             "n_cells": data.n_obs,
             "n_genes": data.n_vars,
-            "n_perturbations": int(pd.concat(frames)["perturbation"].nunique()),
+            "n_perturbations": len(perturbations),
             "seconds": time.perf_counter() - started,
             "max_rss_gib": _max_rss_gib(),
         },

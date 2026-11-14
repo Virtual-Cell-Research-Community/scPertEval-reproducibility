@@ -12,7 +12,6 @@ mkdir -p logs
 N_DATASETS="$(python3 -c "import json; print(len(json.load(open('${MANIFEST}'))['datasets']))")"
 N_DE_PER_DATASET="$(python3 -c "import json; m=json.load(open('${MANIFEST}')); print(len(m['de']['references']) * len(m['de']['methods']))")"
 N_GPU_PROTOCOLS="$(python3 -c "import json; print(len(json.load(open('${MANIFEST}'))['gpu_protocols']))")"
-FIRST_DATASET="$(python3 -c "import json; print(json.load(open('${MANIFEST}'))['datasets'][0]['id'])")"
 N_DE="$((N_DATASETS * N_DE_PER_DATASET))"
 N_STANDARD_DRF="$((N_DATASETS - 1))"
 N_GPU="$((N_DATASETS * (N_GPU_PROTOCOLS > 0 ? 1 : 0)))"
@@ -20,10 +19,7 @@ if [[ "${N_DE}" -lt 1 || "${N_STANDARD_DRF}" -lt 1 || "${N_GPU}" -lt 1 ]]; then
   echo "The production manifest must contain both CPU and GPU compute stages." >&2
   exit 2
 fi
-if [[ "${FIRST_DATASET}" != "gwps-k562" ]]; then
-  echo "The Helix resource split expects gwps-k562 to be the first manifest dataset." >&2
-  exit 2
-fi
+GWPS_STAGE="drf.cpu.gwps-k562"
 
 ENV_JOB="$(sbatch --parsable scripts/protocol_behavior_environment_helix.sbatch)"
 DE_JOB="$(sbatch --parsable \
@@ -33,15 +29,15 @@ DE_JOB="$(sbatch --parsable \
   scripts/protocol_behavior_stage_helix.sbatch)"
 STANDARD_DRF_JOB="$(sbatch --parsable \
   --dependency="afterok:${ENV_JOB}" \
-  --array="1-$((N_DATASETS - 1))%4" \
+  --array="0-$((N_STANDARD_DRF - 1))%4" \
   --mem=64gb \
   --time=01:00:00 \
-  --export=ALL,STAGE_CLASS=drf-cpu \
+  --export=ALL,STAGE_CLASS=drf-cpu,EXCLUDE_STAGE="${GWPS_STAGE}" \
   scripts/protocol_behavior_stage_helix.sbatch)"
 GWPS_DRF_JOB="$(sbatch --parsable \
   --dependency="afterok:${ENV_JOB}" \
   --array=0 \
-  --export=ALL,STAGE_CLASS=drf-cpu \
+  --export=ALL,STAGE_ID="${GWPS_STAGE}" \
   scripts/protocol_behavior_stage_helix.sbatch)"
 GPU_JOB="$(sbatch --parsable \
   --dependency="afterok:${ENV_JOB}" \
