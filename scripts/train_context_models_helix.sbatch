@@ -52,6 +52,13 @@ export PYTHONUNBUFFERED=1
 export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
+# Some locked model environments require a newer C++ runtime than Helix exposes through
+# /lib64.  Prefer the environment's own runtime libraries so compiled packages such as
+# pandas do not accidentally bind against the host libstdc++ before Pixi starts Python.
+ENVIRONMENT_LIBRARY_PATH="${PROJECT_ROOT}/models/.pixi/envs/${ENVIRONMENT}/lib"
+if [[ -d "${ENVIRONMENT_LIBRARY_PATH}" ]]; then
+  export LD_LIBRARY_PATH="${ENVIRONMENT_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+fi
 # Beast and Beauty expose the NVIDIA driver through NixOS' OpenGL-driver path. This is a
 # no-op on conventional Helix nodes, but keeps the same launcher usable on all three hosts.
 if [[ -d /run/opengl-driver/lib ]]; then
