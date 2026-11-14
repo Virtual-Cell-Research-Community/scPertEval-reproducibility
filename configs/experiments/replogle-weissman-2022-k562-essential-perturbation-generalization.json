@@ -1694,5 +1694,9 @@
     "minimum_final_target_cells": 50,
     "median_final_target_cells": 118.0,
     "maximum_final_target_cells": 766
+  },
+  "metadata_validation": {
+    "path": "configs/experiments/replogle-weissman-2022-k562-essential-metadata-validation.json",
+    "sha256": "9bdfd7de9f53d4a69db652accc39e0177fb5d6c7bd072f58dca87052e07157c7"
   }
 }

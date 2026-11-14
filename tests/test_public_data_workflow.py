@@ -289,6 +289,17 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     assert audit["final_targets"] == experiment["perturbations"]
     assert audit["retention_fraction_of_preliminary"] > 0.98
 
+    validation_path = ROOT / experiment["metadata_validation"]["path"]
+    validation = json.loads(validation_path.read_text())
+    assert file_checksum(validation_path) == experiment["metadata_validation"]["sha256"]
+    assert validation["input_sha256"] == experiment["canonical_input"]["sha256"]
+    assert validation["n_frozen_targets"] == experiment["n_perturbations"]
+    assert validation["n_frozen_targeted_cells"] == experiment["eligibility"][
+        "final_targeted_cells"
+    ]
+    assert validation["all_frozen_targets_measured"]
+    assert validation["status"] == "valid"
+
     state = tomllib.loads((ROOT / "configs" / "models" / "state.toml").read_text())
     assert state["tasks"] == ["leave-one-context-out"]
 
