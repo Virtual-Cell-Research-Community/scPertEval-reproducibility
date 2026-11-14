@@ -391,9 +391,15 @@ benchmark results and do not authorize the full launch.
 | trVAE | passed | excluded by the prespecified scaling rule | matched to pinned scArchon image, using its corresponding stable pandas release | ready |
 | SAMS-VAE(S) | 26-second one-epoch training probe; 3.76-hour conservative 500-epoch projection | not included | pinned PerturBench revision and Pixi environment | ready |
 | No-change, fold-mean, and linear baselines | passed | passed | completion records validated | ready |
-| Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
+| Helix launch scripts | staged production submitted | staged production submitted | `sbatch --test-only` passed; family-local canary dependencies | queued across planned cluster maintenance |
 
-The full benchmark remains deliberately unlaunched until every row is ready.
+The staged production launch began on 2026-11-14. Each Helix model family has a
+full-budget canary plus an `afterok` remainder array; a failed canary cancels
+only its own dependent jobs. Deterministic CPU baselines were submitted without
+canary dependencies. Helix was drained for planned maintenance at submission,
+so queued state does not indicate a benchmark failure. Workstation model
+families use the equivalent persistent canary guards and checksum-validating
+atomic SDS promotion.
 
 The added perturbation-generalization models also passed their representative
 fold-0 scaling gates on the frozen 198,346-cell × 8,563-gene K562-essential
