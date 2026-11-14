@@ -5,7 +5,7 @@ import json
 import pickle
 import tomllib
 from pathlib import Path
-from types import SimpleNamespace
+from types import ModuleType, SimpleNamespace
 
 import anndata as ad
 import numpy as np
@@ -26,6 +26,7 @@ from models.biolord.context_config import (
 )
 from models.cellflow.train_predict import (
     annotate_cellflow,
+    predict_populations,
     split_cellflow_data,
 )
 from models.cellflow.train_predict import load_embeddings as load_cellflow_embeddings
@@ -235,6 +236,49 @@ def test_txpert_caches_exact_batch_matched_average_controls() -> None:
     np.testing.assert_array_equal(first, [2.0, 4.0])
     np.testing.assert_array_equal(second_batch, [7.0, 9.0])
     assert len(dataset._matched_average_control_cache) == 2
+
+
+def test_cellflow_prediction_uses_one_fixed_batch_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    preprocessing = ModuleType("cellflow.preprocessing")
+    preprocessing.project_pca = lambda adata, ref_adata: adata.obsm.__setitem__(  # type: ignore[attr-defined]
+        "X_pca", np.asarray(adata.X)
+    )
+    cellflow = ModuleType("cellflow")
+    cellflow.preprocessing = preprocessing  # type: ignore[attr-defined]
+    monkeypatch.setitem(__import__("sys").modules, "cellflow", cellflow)
+    monkeypatch.setitem(__import__("sys").modules, "cellflow.preprocessing", preprocessing)
+
+    controls = AnnData(
+        X=np.ones((4, 2), dtype=np.float32),
+        obs=pd.DataFrame(index=[f"control-{index}" for index in range(4)]),
+        var=pd.DataFrame(index=["g1", "g2"]),
+    )
+    truth = AnnData(
+        X=np.ones((5, 2), dtype=np.float32),
+        obs=pd.DataFrame(
+            {"perturbation": ["G1", "G1", "G2", "G2", "G2"]},
+            index=[f"truth-{index}" for index in range(5)],
+        ),
+        var=controls.var.copy(),
+    )
+    reference = controls.copy()
+    reference.varm["PCs"] = np.eye(2, dtype=np.float32)
+    reference.varm["X_mean"] = np.zeros((2, 1), dtype=np.float32)
+
+    class FakeModel:
+        def __init__(self) -> None:
+            self.batch_sizes: list[int] = []
+
+        def predict(self, *, adata, sample_rep, condition_id_key, covariate_data):
+            self.batch_sizes.append(adata.n_obs)
+            target = str(covariate_data.iloc[0]["condition"])
+            return {target: np.zeros((adata.n_obs, 2), dtype=np.float32)}
+
+    model = FakeModel()
+    result = predict_populations(model, controls, truth, ["G1", "G2"], reference, seed=42)
+
+    assert model.batch_sizes == [3, 3]
+    assert result.obs["perturbation"].value_counts().to_dict() == {"G2": 3, "G1": 2}
 
 
 def test_cellflow_embeddings_annotations_and_frozen_split(tmp_path: Path) -> None:
