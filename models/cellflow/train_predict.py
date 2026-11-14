@@ -189,12 +189,18 @@ def predict_populations(
     rng = np.random.default_rng(seed)
     pcs = np.asarray(reference.varm["PCs"], dtype=np.float32)
     means = np.asarray(reference.varm["X_mean"], dtype=np.float32).reshape(1, -1)
+    population_sizes = {target: int((test_labels == target).sum()) for target in test_targets}
+    prediction_batch_size = max(population_sizes.values())
+    replace = prediction_batch_size > controls.n_obs
     arrays: list[np.ndarray] = []
     labels: list[str] = []
     for target in test_targets:
-        population_size = int((test_labels == target).sum())
-        replace = population_size > controls.n_obs
-        indices = rng.choice(controls.n_obs, size=population_size, replace=replace)
+        population_size = population_sizes[target]
+        # Keep one input shape across conditions. JAX otherwise recompiles the prediction
+        # graph for every distinct observed population size. Drawing the largest required
+        # batch and retaining its first ``population_size`` rows has the same sampling
+        # distribution as drawing that smaller population directly.
+        indices = rng.choice(controls.n_obs, size=prediction_batch_size, replace=replace)
         source = controls[indices].copy()
         project_pca(source, ref_adata=reference)
         covariate_data = pd.DataFrame(
@@ -213,7 +219,7 @@ def predict_populations(
         )
         pca_values = np.asarray(prediction[target], dtype=np.float32).squeeze()
         pca_values = np.atleast_2d(pca_values)
-        arrays.append((pca_values @ pcs.T + means).astype(np.float32))
+        arrays.append((pca_values[:population_size] @ pcs.T + means).astype(np.float32))
         labels.extend([target] * population_size)
     values = np.concatenate(arrays)
     obs = pd.DataFrame(
