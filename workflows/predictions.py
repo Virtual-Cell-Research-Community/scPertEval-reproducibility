@@ -32,6 +32,31 @@ def _finite_matrix(matrix, block_rows: int = 4096) -> bool:
     return True
 
 
+def cap_population_predictions(
+    prediction: ad.AnnData,
+    *,
+    condition_key: str = "perturbation",
+    maximum_cells_per_condition: int = 100,
+    seed: int = 42,
+) -> ad.AnnData:
+    """Retain a deterministic random sample of at most ``maximum`` rows per condition."""
+    if maximum_cells_per_condition < 1:
+        raise ValueError("maximum_cells_per_condition must be positive")
+    if condition_key not in prediction.obs:
+        raise ValueError(f"prediction H5AD is missing obs[{condition_key!r}]")
+
+    rng = np.random.default_rng(seed)
+    selected: list[int] = []
+    groups = prediction.obs.groupby(condition_key, sort=False, observed=True).indices
+    for indices in groups.values():
+        indices = np.asarray(indices, dtype=np.int64)
+        if len(indices) > maximum_cells_per_condition:
+            indices = rng.choice(indices, size=maximum_cells_per_condition, replace=False)
+        selected.extend(indices.tolist())
+    selected.sort()
+    return prediction[selected].copy()
+
+
 def _fold(split: dict, fold: int | str) -> dict:
     folds = split["folds"]
     if isinstance(fold, int):

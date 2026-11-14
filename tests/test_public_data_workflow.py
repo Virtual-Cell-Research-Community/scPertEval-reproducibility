@@ -71,7 +71,12 @@ from workflows.evaluate import (
     summarize_evaluations,
     validate_matched_population_sizes,
 )
-from workflows.predictions import build_prediction_manifest, expected_test_conditions, validate_prediction_h5ad
+from workflows.predictions import (
+    build_prediction_manifest,
+    cap_population_predictions,
+    expected_test_conditions,
+    validate_prediction_h5ad,
+)
 from workflows.preparation import harmonize_scperturb, merge_disambiguated_gene_names
 from workflows.preparation_utils import CELL_CYCLE_SHA256, assert_raw_counts, file_checksum
 from workflows.run_contract import (
@@ -954,6 +959,25 @@ def test_population_prediction_archive_rejects_more_than_100_cells(tmp_path: Pat
             "population",
             minimum_cells_per_condition=50,
         )
+
+
+def test_population_predictions_are_capped_deterministically_per_condition() -> None:
+    prediction = AnnData(
+        X=np.arange(212, dtype=np.float32).reshape(106, 2),
+        obs=pd.DataFrame(
+            {"perturbation": ["G1"] * 103 + ["G2"] * 3},
+            index=[f"prediction-{index}" for index in range(106)],
+        ),
+        var=pd.DataFrame(index=["G1", "G2"]),
+    )
+
+    first = cap_population_predictions(prediction, maximum_cells_per_condition=100, seed=42)
+    second = cap_population_predictions(prediction, maximum_cells_per_condition=100, seed=42)
+
+    assert first.obs["perturbation"].value_counts().to_dict() == {"G1": 100, "G2": 3}
+    assert first.obs_names.is_unique
+    assert first.obs_names.tolist() == second.obs_names.tolist()
+    assert set(first.obs_names) <= set(prediction.obs_names)
 
 
 def test_population_prediction_archive_matches_observed_counts(tmp_path: Path) -> None:
