@@ -8,8 +8,29 @@ def eligible_mmd_groups(groups):
     return [group for group in groups if len(group) >= 2]
 
 
+def scalarize_validation_metrics(metrics):
+    """Return trvaep validation metrics as Python scalars.
+
+    trvaep 0.1.0 accidentally returns its MMD validation metric as a one-element
+    tensor. Recent PyTorch versions reject the numeric format specification used
+    by ``Trainer.train_trvae`` for such tensors. The public API documents scalar
+    floats, so normalize only scalar-like tensor values and fail loudly if a
+    genuinely vector-valued metric ever reaches this compatibility boundary.
+    """
+    scalar_metrics = []
+    for metric in metrics:
+        numel = getattr(metric, "numel", None)
+        if not callable(numel):
+            scalar_metrics.append(metric)
+            continue
+        if numel() != 1:
+            raise ValueError("trvaep validation metrics must be scalar")
+        scalar_metrics.append(metric.item())
+    return tuple(scalar_metrics)
+
+
 def apply_scarchon_patches() -> None:
-    """Apply the two material fixes between official trvaep 0.1.0 and scArchon."""
+    """Apply the material fixes between official trvaep 0.1.0 and scArchon."""
     import torch
     import trvaep.model._losses as losses
     import trvaep.model.train as training
@@ -85,8 +106,14 @@ def apply_scarchon_patches() -> None:
         self.model.label_encoder = dataset_train.get_label_ecnoder()
         return dataset_train, dataset_valid
 
+    original_validate = training.Trainer.validate
+
+    def scalar_validation_metrics(self, *args, **kwargs):
+        return scalarize_validation_metrics(original_validate(self, *args, **kwargs))
+
     helper_module.Decoder.forward = decoder_forward
     losses.mmd = corrected_mmd
     # Trainer imported this name directly at module import time.
     training.mmd = corrected_mmd
     training.Trainer.make_dataset = materialized_make_dataset
+    training.Trainer.validate = scalar_validation_metrics
