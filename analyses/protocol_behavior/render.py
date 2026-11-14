@@ -220,7 +220,13 @@ def _concordance_rows(dataset: str, perturbations: list[str], tstat: np.ndarray,
 def _plot_jaccard(matrices: list[tuple[str, np.ndarray]], labels: list[str], path: Path, title: str) -> None:
     columns = min(4, len(matrices))
     rows = int(np.ceil(len(matrices) / columns))
-    fig, axes = plt.subplots(rows, columns, figsize=(4.0 * columns, 4.0 * rows), squeeze=False)
+    fig, axes = plt.subplots(
+        rows,
+        columns,
+        figsize=(4.5 * columns, 5.5 * rows),
+        squeeze=False,
+        layout="constrained",
+    )
     image = None
     for ax, (dataset, matrix) in zip(axes.flat, matrices):
         image = ax.imshow(matrix, vmin=0, vmax=1, cmap="YlOrRd")
