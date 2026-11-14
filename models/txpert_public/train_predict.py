@@ -15,6 +15,7 @@ import copy
 import json
 import random
 import sys
+import types
 from pathlib import Path
 
 import anndata as ad
@@ -124,6 +125,34 @@ def _condition_ids(data: ad.AnnData, pert2id: dict[str, int]) -> pd.Series:
     return pd.Series([[pert2id[label]] for label in data.obs["perturbation"].astype(str)], index=data.obs_names)
 
 
+def cache_matched_average_controls(dataset) -> None:
+    """Cache TxPert's exact batch-matched average control tensors.
+
+    Upstream recomputes the same mean over every control cell for every treated-cell
+    ``__getitem__`` call when both ``match_cntr`` and ``avg_cntr`` are enabled. A K562 fold
+    therefore performs the identical large GPU reduction hundreds of thousands of times.
+    Cache one tensor per ``(cell type, batch)`` pair without changing which controls enter
+    the mean or any downstream arithmetic.
+    """
+    if not (dataset.match_cntr and dataset.avg_cntr):
+        return
+    cache: dict[tuple[object, object], object] = {}
+
+    def cached_control(self, idx: int):
+        cell_type = self.treatment_cell_types.iloc[idx]
+        batch = self.treatment_cell_batches.iloc[idx]
+        key = (cell_type, batch)
+        if key not in cache:
+            indices = self.control_ct_batch_indices[cell_type][batch]
+            if not len(indices):
+                raise ValueError(f"no TxPert controls for cell_type={cell_type!r}, batch={batch!r}")
+            cache[key] = self.control_data[indices, :].mean(0)
+        return cache[key]
+
+    dataset._get_control_data = types.MethodType(cached_control, dataset)
+    dataset._matched_average_control_cache = cache
+
+
 def _make_dataset(data, controls, pert2id, *, device, include_controls):
     from gspp.constants import ObsmKey
     from gspp.data.datamodule import XcelltypePerturbDataset
@@ -150,6 +179,7 @@ def _make_dataset(data, controls, pert2id, *, device, include_controls):
             list(dataset.pert_conditions.iloc[: data.n_obs])
             + [[pert2id["ctrl"]]] * controls.n_obs
         )
+    cache_matched_average_controls(dataset)
     return dataset
 
 
@@ -254,6 +284,7 @@ def main() -> None:
         },
         "native_input": "normalize_total_4000_log1p",
         "training_entry_point": "reconstructed from released checkpoint metadata",
+        "matched_average_controls": "exact-per-cell-type-batch-cache",
     }
     run = begin_population_model_run(
         args,

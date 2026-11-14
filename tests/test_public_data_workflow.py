@@ -77,7 +77,11 @@ from models.trvae.context_config import densify_expression as densify_trvae_expr
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
 from models.trvae.context_config import select_trvae_training_data
 from models.trvae.scarchon_patch import eligible_mmd_groups
-from models.txpert_public.train_predict import to_txpert_log1p_4000, txpert_annotations
+from models.txpert_public.train_predict import (
+    cache_matched_average_controls,
+    to_txpert_log1p_4000,
+    txpert_annotations,
+)
 from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
@@ -205,6 +209,32 @@ def test_txpert_native_scale_and_annotations_round_trip_to_shared_view() -> None
     assert annotated.obs["condition"].tolist() == ["A+ctrl", "ctrl"]
     assert annotated.obs["condition_name"].tolist() == ["K562_A+ctrl_1+1", "K562_ctrl_1+1"]
     assert annotated.obs["control"].tolist() == [0, 1]
+
+
+def test_txpert_caches_exact_batch_matched_average_controls() -> None:
+    dataset = SimpleNamespace(
+        match_cntr=True,
+        avg_cntr=True,
+        treatment_cell_types=pd.Series(["K562", "K562", "K562"]),
+        treatment_cell_batches=pd.Series(["batch-1", "batch-1", "batch-2"]),
+        control_ct_batch_indices={
+            "K562": {
+                "batch-1": np.asarray([0, 1]),
+                "batch-2": np.asarray([2]),
+            }
+        },
+        control_data=np.asarray([[1.0, 3.0], [3.0, 5.0], [7.0, 9.0]]),
+    )
+
+    cache_matched_average_controls(dataset)
+    first = dataset._get_control_data(0)
+    repeated = dataset._get_control_data(1)
+    second_batch = dataset._get_control_data(2)
+
+    assert first is repeated
+    np.testing.assert_array_equal(first, [2.0, 4.0])
+    np.testing.assert_array_equal(second_batch, [7.0, 9.0])
+    assert len(dataset._matched_average_control_cache) == 2
 
 
 def test_cellflow_embeddings_annotations_and_frozen_split(tmp_path: Path) -> None:
