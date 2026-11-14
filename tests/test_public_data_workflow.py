@@ -431,7 +431,7 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
         ).read_text()
     )
     assert experiment["role"] == "primary"
-    assert experiment["status"] == "cohort-frozen-adapters-pending"
+    assert experiment["status"] == "inputs-materialized-runtime-gates-pending"
     assert experiment["training_seeds"] == [42]
     assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8563}
     assert experiment["models"] == [
@@ -449,6 +449,18 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 1352
     assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
     assert all(experiment["cohort_freeze_requirements"].values())
+    assert experiment["model_view_artifact"] == {
+        "path": "models/data/replogle-weissman-2022-k562-essential/raw.h5ad",
+        "sha256": "673ed91b5ad7bd04b16422a1273ed2e095d5670acefa130c414df9efdc97b70a",
+        "size_bytes": 5728456037,
+        "n_obs": 198346,
+        "n_vars": 8563,
+        "n_control_cells": 10688,
+        "n_treated_cells": 187658,
+        "n_perturbations": 1352,
+        "expression_space": "normalize-total-10000-log1p",
+        "materialized_at": "2026-11-14T15:20:56+01:00",
+    }
 
     folds = kfold_gene_splits(experiment["perturbations"], n_folds=5, seed=42)
     payload = json.dumps(folds, sort_keys=True, separators=(",", ":")).encode()

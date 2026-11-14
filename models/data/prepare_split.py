@@ -187,8 +187,13 @@ def main() -> None:
     out_manifest = raw_path.parent / "split_manifest.json"
     fold_dir = raw_path.parent / "folds"
 
-    adata = ad.read_h5ad(raw_path)
-    genes = sorted({c.split("+")[0] for c in adata.obs["condition"].unique() if c != "ctrl"})
+    adata = ad.read_h5ad(raw_path, backed="r")
+    try:
+        genes = sorted({c.split("+")[0] for c in adata.obs["condition"].unique() if c != "ctrl"})
+        n_obs = adata.n_obs
+        n_vars = adata.n_vars
+    finally:
+        adata.file.close()
     folds = kfold_gene_splits(genes, n_folds=args.n_folds, seed=args.seed)
 
     out_json.write_text(json.dumps(folds, indent=2) + "\n")
@@ -201,8 +206,8 @@ def main() -> None:
         dataset_id=dataset_id,
         raw_path=raw_path,
         raw_sha256=file_checksum(raw_path),
-        n_obs=adata.n_obs,
-        n_vars=adata.n_vars,
+        n_obs=n_obs,
+        n_vars=n_vars,
         genes=genes,
         folds=folds,
         seed=args.seed,

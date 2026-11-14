@@ -357,10 +357,12 @@ after the final run; completed runs remain safe to skip on restart.
 
 ## Checks required before full training
 
-1. Materialize and record the exact sci-Plex3 gene panel.
-2. Regenerate the genetic context model view at the 50-cell rule.
-3. Materialize the now-frozen 1,352-target essential model view and record its
-   checksum and metadata-validation record.
+1. **Complete:** the exact sci-Plex3 gene panel is materialized and recorded.
+2. **Complete:** the genetic context model view uses the 50-cell rule.
+3. **Complete:** the 1,352-target essential model view contains 198,346 cells ×
+   8,563 genes. Its SHA-256 is
+   `673ed91b5ad7bd04b16422a1273ed2e095d5670acefa130c414df9efdc97b70a`;
+   the regenerated fold assignment exactly matches the frozen fold hash.
 4. Run representative full-fold smokes for the new model panel. TxPert-public,
    CellFlow, SAMS-VAE(S), GenePert, and both fMLP variants now have pinned
    environments and complete synthetic archival smokes. The validated

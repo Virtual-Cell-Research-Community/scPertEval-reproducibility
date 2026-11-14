@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "replogle-weissman-2022-k562-essential-perturbation-generalization",
   "role": "primary",
-  "status": "cohort-frozen-adapters-pending",
+  "status": "inputs-materialized-runtime-gates-pending",
   "dataset": "replogle-weissman-2022-k562-essential",
   "task": "unseen-perturbation",
   "models": [
@@ -48,6 +48,18 @@
     "n_vars": 8563,
     "perturbation_field": "perturbation",
     "control_field": "is_control"
+  },
+  "model_view_artifact": {
+    "path": "models/data/replogle-weissman-2022-k562-essential/raw.h5ad",
+    "sha256": "673ed91b5ad7bd04b16422a1273ed2e095d5670acefa130c414df9efdc97b70a",
+    "size_bytes": 5728456037,
+    "n_obs": 198346,
+    "n_vars": 8563,
+    "n_control_cells": 10688,
+    "n_treated_cells": 187658,
+    "n_perturbations": 1352,
+    "expression_space": "normalize-total-10000-log1p",
+    "materialized_at": "2026-11-14T15:20:56+01:00"
   },
   "cohort_freeze_requirements": {
     "minimum_cell_count": true,
