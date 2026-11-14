@@ -20,8 +20,16 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODELS_DIR="${PROJECT_ROOT}/models"
 DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 PIXI_BIN="${PIXI_BIN:-${HOME}/.pixi/bin/pixi}"
-RUNS_ROOT="${RUNS_ROOT:-${PROJECT_ROOT}/runs}"
-LOG_ROOT="${LOG_ROOT:-${PROJECT_ROOT}/logs/perturbation-production-workstation}"
+SHARED_PROJECT_ROOT="${SHARED_PROJECT_ROOT:-/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility}"
+if [[ -d "${SHARED_PROJECT_ROOT}" ]]; then
+    DEFAULT_RUNS_ROOT="${SHARED_PROJECT_ROOT}/runs"
+    DEFAULT_LOG_ROOT="${SHARED_PROJECT_ROOT}/logs/perturbation-production-workstation"
+else
+    DEFAULT_RUNS_ROOT="${PROJECT_ROOT}/runs"
+    DEFAULT_LOG_ROOT="${PROJECT_ROOT}/logs/perturbation-production-workstation"
+fi
+RUNS_ROOT="${RUNS_ROOT:-${DEFAULT_RUNS_ROOT}}"
+LOG_ROOT="${LOG_ROOT:-${DEFAULT_LOG_ROOT}}"
 GPU="${GPU:-0}"
 FOLDS="${FOLDS:-0 1 2 3 4}"
 SEEDS="${SEEDS:-42}"
@@ -53,6 +61,7 @@ fi
 
 mkdir -p "${LOG_ROOT}" "${RUNS_ROOT}"
 cd "${MODELS_DIR}"
+echo "[$(date -Is)] host=$(hostname) dataset=${DATASET} model=${MODEL} runs_root=${RUNS_ROOT} logs_root=${LOG_ROOT}"
 
 read -ra FOLD_VALUES <<< "${FOLDS}"
 if [[ "${MODEL}" == "tabicl" || "${MODEL}" == "genepert" ]]; then

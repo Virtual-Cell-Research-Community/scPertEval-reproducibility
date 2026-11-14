@@ -130,10 +130,17 @@ launcher preserves one append-only log per fold/seed, stops on the first
 failure, and relies on the shared run contract to skip checksum-valid results:
 
 ```bash
+# On Beast/Beauty, replace the SDS input symlink with a checksum-verified,
+# disposable NVMe cache before launching. Authoritative data remain on SDS.
+scripts/cache_perturbation_input_workstation.sh
+
 GPU=0 \
-RUNS_ROOT=/path/on/shared-storage/runs \
 scripts/run_perturbation_model_workstation.sh sclambda
 ```
+
+When the standard SDS project is mounted, the launcher defaults both run
+bundles and logs to that shared project. Override `RUNS_ROOT` and `LOG_ROOT`
+explicitly only for a deliberate non-production run.
 
 Run it inside tmux or another persistent session. `FOLDS` and `SEEDS` can
 restrict a scaling trial. `FORCE_INCOMPLETE=1` only adds `--force` when a run
@@ -145,18 +152,25 @@ On Slurm, submit the same frozen grid as arrays:
 ```bash
 models/slurm/submit_all.sh                 # five folds at seed 42
 models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
+models/slurm/submit_all.sh --canary        # full-budget fold 0 retained as production
 models/slurm/submit_all.sh --smoke         # fold 0, seed 42, reduced training budgets
 models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/preparation job
 ```
 
 Every model uses one five-fold array at seed 42. TabICLv2 is training-free and
-deterministic. `--smoke`
-submits only fold 0 at seed 42 with model-specific truncated budgets. Full arrays default to
+deterministic. `--smoke` submits only fold 0 at seed 42 with model-specific
+truncated budgets; `--canary` submits the same fold at its complete frozen
+budget. Full arrays default to
 one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several large
 SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage and node
 capacity. Full tasks retain conservative 192 GiB requests until essential-screen
 adapter-specific memory measurements justify lowering them; scLAMBDA receives a
 256 GiB override for its dense training tensors.
+
+The Helix launcher covers GEARS, scGPT, PRESAGE, scLAMBDA, and TabICLv2. The
+added perturbation models use the persistent workstation launcher; CellFlow is
+restricted to Beauty's 98 GB GPUs because its measured peak was approximately
+74 GB.
 
 A full-data scLAMBDA scaling run on a 96 GiB RTX PRO 6000 validated the
 categorical-embedding initialization end to end: 1,333,016 cells and 8,248
@@ -298,6 +312,19 @@ runs/<experiment>/<model>/<fold-id>/seed-<seed>/
 `completion.json` is written last and checksums every required artifact. A
 matching rerun is skipped only when its resolved configuration and all artifact
 checksums still validate; an interrupted run remains resumable.
+
+From the repository root, validate or launch the context grid through the
+wrapper rather than submitting the array script directly:
+
+```bash
+scripts/submit_context_models_helix.sh --test-only --canary
+scripts/submit_context_models_helix.sh --canary
+scripts/submit_context_models_helix.sh  # remaining/full seven-fold arrays
+```
+
+For shared models, the canary contains the first genetic and first chemical
+fold; chemical-only models receive the first chemical fold. The final command
+is restart-safe because completed bundles validate and skip.
 
 If scDisInFact has already written its checkpoint, losses, and predictions but
 was interrupted during manifest or completion-record creation, rerun the same

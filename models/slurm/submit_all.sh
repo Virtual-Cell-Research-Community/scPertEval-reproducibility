@@ -1,9 +1,10 @@
 #!/bin/bash
 # Submit the frozen five-fold, single-seed essential-screen grid for implemented adapters.
 #
-# Usage: models/slurm/submit_all.sh [--test-only] [--smoke] [--afterok JOB_ID] [dataset] [model ...]
+# Usage: models/slurm/submit_all.sh [--test-only] [--canary|--smoke] [--afterok JOB_ID] [dataset] [model ...]
 #   models/slurm/submit_all.sh
 #   models/slurm/submit_all.sh --test-only
+#   models/slurm/submit_all.sh --canary
 #   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-essential gears scgpt
 #   models/slurm/submit_all.sh --smoke --afterok 123456
 #
@@ -15,11 +16,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_ONLY=0
+CANARY=0
 SMOKE=0
 AFTEROK=""
 while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --test-only) TEST_ONLY=1 ;;
+        --canary) CANARY=1 ;;
         --smoke) SMOKE=1 ;;
         --afterok)
             [[ -n "${2:-}" ]] || { echo "--afterok requires a job id" >&2; exit 2; }
@@ -30,6 +33,10 @@ while [[ "${1:-}" == --* ]]; do
     esac
     shift
 done
+if [[ "$CANARY" == "1" && "$SMOKE" == "1" ]]; then
+    echo "--canary and --smoke are mutually exclusive" >&2
+    exit 2
+fi
 DATASET="${1:-replogle-weissman-2022-k562-essential}"
 if [[ $# -gt 0 ]]; then shift; fi
 MODELS=("${@:-gears scgpt presage sclambda tabicl}")
@@ -37,6 +44,15 @@ MODELS=("${@:-gears scgpt presage sclambda tabicl}")
 if [ "${#MODELS[@]}" -eq 1 ]; then
     read -ra MODELS <<< "${MODELS[0]}"
 fi
+for MODEL in "${MODELS[@]}"; do
+    case "$MODEL" in
+        gears|scgpt|presage|sclambda|tabicl) ;;
+        *)
+            echo "unsupported Helix model: $MODEL (use scripts/run_perturbation_model_workstation.sh for added models)" >&2
+            exit 2
+            ;;
+    esac
+done
 MAX_CONCURRENT="${MAX_CONCURRENT:-1}"
 if ! [[ "$MAX_CONCURRENT" =~ ^[1-9][0-9]*$ ]]; then
     echo "MAX_CONCURRENT must be a positive integer" >&2
@@ -50,7 +66,7 @@ cd "$MODELS_DIR"
 mkdir -p slurm/logs
 for MODEL in "${MODELS[@]}"; do
     ARRAY="0-4"
-    if [[ "$SMOKE" == "1" ]]; then
+    if [[ "$SMOKE" == "1" || "$CANARY" == "1" ]]; then
         ARRAY="0"
     else
         ARRAY="${ARRAY}%${MAX_CONCURRENT}"

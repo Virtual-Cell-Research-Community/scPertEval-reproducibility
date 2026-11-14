@@ -3,6 +3,13 @@
   "id": "replogle-nadig-four-context-50-cell",
   "dataset": "replogle-nadig-four-context-50-cell",
   "task": "leave-one-context-out",
+  "training_seeds": [42],
+  "prediction_population_policy": {
+    "mode": "match-observed",
+    "control_sampling": "with-replacement-if-needed"
+  },
+  "model_fit_scope": "one-joint-model-across-all-perturbations-per-fold",
+  "hyperparameter_policy": "published-or-established-config-no-hpo",
   "models": [
     "state",
     "cpa",
