@@ -147,6 +147,16 @@ restrict a scaling trial. `FORCE_INCOMPLETE=1` only adds `--force` when a run
 directory has an old resolved configuration but no completion record; it does
 not force already completed runs.
 
+For staged production, a separate persistent guard can release folds 1--4 only
+after the canary tmux pane exits successfully:
+
+```bash
+scripts/release_workstation_remainder_after_canary.sh \
+  scperteval-canary-cellflow cellflow 0
+```
+
+The guard exits without launching anything when the canary fails.
+
 On Slurm, submit the same frozen grid as arrays:
 
 ```bash
