@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import functools
 import json
+import os
 import pickle
 import random
 import sys
@@ -242,6 +243,16 @@ def _training_metrics(model, num_iterations: int) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def _atomic_write_h5ad(data: ad.AnnData, path: Path) -> None:
+    """Write a large H5AD without leaving a corrupt destination after interruption."""
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        data.write_h5ad(temporary)
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", default="replogle22k562-essential")
@@ -339,7 +350,7 @@ def main() -> None:
     model.save(str(run.checkpoint_dir), file_prefix="cellflow", overwrite=True)
     model_path = run.checkpoint_dir / "cellflow_CellFlow.pkl"
     reference_path = run.checkpoint_dir / "pca_reference.h5ad"
-    train.write_h5ad(reference_path)
+    _atomic_write_h5ad(train, reference_path)
     prediction = predict_populations(
         model,
         test_controls,
@@ -349,7 +360,7 @@ def main() -> None:
         seed=args.seed,
     )
     run.prediction_path.parent.mkdir(parents=True, exist_ok=True)
-    prediction.write_h5ad(run.prediction_path)
+    _atomic_write_h5ad(prediction, run.prediction_path)
     run.metrics_path.parent.mkdir(parents=True, exist_ok=True)
     _training_metrics(model, args.num_iterations).to_csv(run.metrics_path, index=False)
     run.complete(
