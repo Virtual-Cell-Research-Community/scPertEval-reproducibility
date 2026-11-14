@@ -69,6 +69,10 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _artifact_key(path: Path) -> str:
+    return str(path.resolve())
+
+
 def production_stages(manifest: dict[str, Any]) -> list[Stage]:
     stages: list[Stage] = []
     for dataset in manifest["datasets"]:
@@ -202,12 +206,13 @@ def _reusable_record(record_path: Path, manifest_digest: str, artifacts: list[Pa
         record = json.loads(record_path.read_text())
     except (OSError, json.JSONDecodeError):
         return False
-    expected = record.get("artifact_sha256", {})
+    expected = {Path(name).resolve(): digest for name, digest in record.get("artifact_sha256", {}).items()}
+    resolved = {artifact.resolve(): artifact for artifact in artifacts}
     return (
         record.get("status") == "complete"
         and record.get("manifest_sha256") == manifest_digest
-        and set(expected) == {str(artifact) for artifact in artifacts}
-        and all(expected[str(artifact)] == file_sha256(artifact) for artifact in artifacts)
+        and set(expected) == set(resolved)
+        and all(expected[path] == file_sha256(artifact) for path, artifact in resolved.items())
     )
 
 
@@ -262,14 +267,15 @@ def run_de_stage(
     temporary.rmdir()
     if not _valid_de(artifact, stage, perturbations):
         raise RuntimeError(f"invalid completed DE artifact: {artifact}")
+    artifact_key = _artifact_key(artifact)
     return _write_record(
         record_path,
         {
             "stage": stage.id,
             "status": "complete",
             "manifest_sha256": manifest_digest,
-            "artifact": str(artifact),
-            "artifact_sha256": {str(artifact): file_sha256(artifact)},
+            "artifact": artifact_key,
+            "artifact_sha256": {artifact_key: file_sha256(artifact)},
             "n_cells": data.n_obs,
             "n_genes": data.n_vars,
             "n_perturbations": len(perturbations),
@@ -342,17 +348,15 @@ def run_drf_stage(
     pd.DataFrame(timings).to_csv(timing_path, index=False)
     if not _valid_drf(drf_path, timing_path, protocols):
         raise RuntimeError(f"invalid completed DRF artifacts for {stage.dataset}")
+    artifact_keys = {_artifact_key(path): path for path in (drf_path, timing_path)}
     return _write_record(
         record_path,
         {
             "stage": stage.id,
             "status": "complete",
             "manifest_sha256": manifest_digest,
-            "artifacts": [str(drf_path), str(timing_path)],
-            "artifact_sha256": {
-                str(drf_path): file_sha256(drf_path),
-                str(timing_path): file_sha256(timing_path),
-            },
+            "artifacts": list(artifact_keys),
+            "artifact_sha256": {key: file_sha256(path) for key, path in artifact_keys.items()},
             "n_cells": data.n_obs,
             "n_genes": data.n_vars,
             "n_perturbations": int(pd.concat(frames)["perturbation"].nunique()),

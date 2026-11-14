@@ -15,7 +15,14 @@ from analyses.protocol_behavior.cli import (
     run_gwps_de_pilot,
     select_quartile_targets,
 )
-from analyses.protocol_behavior.production import _declared_perturbations, load_manifest, production_stages, run_stage
+from analyses.protocol_behavior.production import (
+    _declared_perturbations,
+    _reusable_record,
+    file_sha256,
+    load_manifest,
+    production_stages,
+    run_stage,
+)
 from analyses.protocol_behavior.render import (
     FIGURE_STEMS,
     _table_text_color,
@@ -85,6 +92,24 @@ def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypa
     observed = _load_analysis_unit({"path": "models/data/example/raw.h5ad"})
 
     assert observed.shape == (2, 2)
+
+
+def test_stage_record_reuse_normalizes_absolute_and_relative_artifact_paths(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    artifact = Path("artifact.csv")
+    artifact.write_text("complete\n")
+    record = Path("stage.json")
+    record.write_text(
+        json.dumps(
+            {
+                "status": "complete",
+                "manifest_sha256": "manifest",
+                "artifact_sha256": {str(artifact.resolve()): file_sha256(artifact)},
+            }
+        )
+    )
+
+    assert _reusable_record(record, "manifest", [artifact])
 
 
 def test_select_quartile_targets_is_balanced_and_deterministic():

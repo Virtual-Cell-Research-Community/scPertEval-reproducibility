@@ -337,7 +337,7 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
                 "manifest_sha256": manifest_sha256(manifest_path),
                 "n_compute_stages": len(production_stages(manifest)),
                 "artifacts": [
-                    {"path": str(path), "sha256": _sha256(path), "size_bytes": path.stat().st_size}
+                    {"path": str(path.resolve()), "sha256": _sha256(path), "size_bytes": path.stat().st_size}
                     for path in artifacts
                 ],
             },
