@@ -16,9 +16,9 @@
 set -euo pipefail
 
 PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
-: "${MODEL:?submit with MODEL=<state|cpa|biolord|scdisinfact|trvae>}"
+: "${MODEL:?submit with MODEL=<state|cpa|biolord|scdisinfact|trvae|sams-vae-s>}"
 case "${MODEL}" in
-  state|cpa|biolord|scdisinfact|trvae) ;;
+  state|cpa|biolord|scdisinfact|trvae|sams-vae-s) ;;
   *) echo "Unsupported context model: ${MODEL}" >&2; exit 2 ;;
 esac
 if [[ ! -f "${PROJECT_ROOT}/models/pixi.lock" ]]; then
@@ -29,8 +29,8 @@ fi
 SEED=42
 TASK_INDEX="${SLURM_ARRAY_TASK_ID}"
 if [[ "${TASK_INDEX}" -lt 4 ]]; then
-  if [[ "${MODEL}" == "trvae" ]]; then
-    echo "trVAE is excluded from the genetic track." >&2
+  if [[ "${MODEL}" == "trvae" || "${MODEL}" == "sams-vae-s" ]]; then
+    echo "${MODEL} is excluded from the genetic track." >&2
     exit 2
   fi
   EXPERIMENT="replogle-nadig-four-context-50-cell"
@@ -38,6 +38,12 @@ if [[ "${TASK_INDEX}" -lt 4 ]]; then
 else
   EXPERIMENT="sciplex3-nine-drug-context-transfer"
   FOLD="$((TASK_INDEX - 4))"
+fi
+
+ENVIRONMENT="${MODEL}"
+ADAPTER="${MODEL}/train_predict.py"
+if [[ "${MODEL}" == "sams-vae-s" ]]; then
+  ADAPTER="sams_vae_s/train_predict.py"
 fi
 
 cd "${PROJECT_ROOT}/models"
@@ -53,7 +59,7 @@ if [[ -d /run/opengl-driver/lib ]]; then
 fi
 
 echo "[$(date -Is)] model=${MODEL} experiment=${EXPERIMENT} fold=${FOLD} seed=${SEED} node=${SLURM_JOB_NODELIST} gpu=${CUDA_VISIBLE_DEVICES}"
-pixi run --locked -e "${MODEL}" python "${MODEL}/train_predict.py" \
+pixi run --locked -e "${ENVIRONMENT}" python "${ADAPTER}" \
   --dataset "${EXPERIMENT}" \
   --split-manifest "../configs/experiments/${EXPERIMENT}.json" \
   --fold "${FOLD}" \

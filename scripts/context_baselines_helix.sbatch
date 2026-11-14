@@ -43,7 +43,6 @@ echo "[$(date -Is)] experiment=${EXPERIMENT} fold=${FOLD}"
   --split "configs/experiments/${EXPERIMENT}.json" \
   --fold "${FOLD}" \
   --capability population \
-  --population-size 100 \
   --models no-change fold-mean \
   --runs-root runs
 

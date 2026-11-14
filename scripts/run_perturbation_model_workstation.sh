@@ -4,14 +4,15 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $0 <gears|presage|scgpt|sclambda|tabicl> [adapter arguments ...]" >&2
+    echo "usage: $0 <model> [adapter arguments ...]" >&2
+    echo "models: gears presage scgpt sclambda tabicl txpert-public genepert fmlp-genept fmlp-esm2 cellflow" >&2
     exit 2
 fi
 
 MODEL="$1"
 shift
 case "${MODEL}" in
-    gears|presage|scgpt|sclambda|tabicl) ;;
+    gears|presage|scgpt|sclambda|tabicl|txpert-public|genepert|fmlp-genept|fmlp-esm2|cellflow) ;;
     *) echo "unsupported model: ${MODEL}" >&2; exit 2 ;;
 esac
 
@@ -54,7 +55,7 @@ mkdir -p "${LOG_ROOT}" "${RUNS_ROOT}"
 cd "${MODELS_DIR}"
 
 read -ra FOLD_VALUES <<< "${FOLDS}"
-if [[ "${MODEL}" == "tabicl" ]]; then
+if [[ "${MODEL}" == "tabicl" || "${MODEL}" == "genepert" ]]; then
     SEED_VALUES=(42)
 else
     read -ra SEED_VALUES <<< "${SEEDS}"
@@ -68,6 +69,23 @@ STATUS_LOG="${LOG_ROOT}/${MODEL}-status.tsv"
 if [[ ! -f "${STATUS_LOG}" ]]; then
     printf 'timestamp\tmodel\tfold\tseed\tstatus\texit_code\n' >"${STATUS_LOG}"
 fi
+
+ENVIRONMENT="${MODEL}"
+ADAPTER="${MODEL}/train_predict.py"
+MODEL_ARGS=()
+case "${MODEL}" in
+    txpert-public)
+        ADAPTER="txpert_public/train_predict.py"
+        ;;
+    fmlp-genept|fmlp-esm2)
+        ENVIRONMENT="fmlp"
+        ADAPTER="fmlp/train_predict.py"
+        MODEL_ARGS+=(--model "${MODEL}")
+        ;;
+    cellflow)
+        MODEL_ARGS+=(--embedding-path "fmlp/cache/esm2-15b/esm2_t48_15B_UR50D_mean.pickle")
+        ;;
+esac
 
 for seed in "${SEED_VALUES[@]}"; do
     for fold in "${FOLD_VALUES[@]}"; do
@@ -86,8 +104,9 @@ for seed in "${SEED_VALUES[@]}"; do
         echo "[$(date -Is)] Starting ${MODEL} fold=${fold} seed=${seed} on GPU ${GPU}" | tee -a "${log_path}"
         set +e
         LD_LIBRARY_PATH="${NVIDIA_DRIVER_LIBRARY_PATH}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}" \
-            CUDA_VISIBLE_DEVICES="${GPU}" "${PIXI_BIN}" run -e "${MODEL}" \
-            python "${MODEL}/train_predict.py" \
+            CUDA_VISIBLE_DEVICES="${GPU}" "${PIXI_BIN}" run -e "${ENVIRONMENT}" \
+            python "${ADAPTER}" \
+            "${MODEL_ARGS[@]}" \
             --dataset "${DATASET}" \
             --fold "${fold}" \
             --seed "${seed}" \
