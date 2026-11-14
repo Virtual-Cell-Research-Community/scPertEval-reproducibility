@@ -14,10 +14,16 @@ set -euo pipefail
 PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 DATASET="replogle-weissman-2022-k562-essential"
 EXPERIMENT="configs/experiments/replogle-weissman-2022-k562-essential-perturbation-generalization.json"
+CANONICAL_DEFAULT="/mnt/sds-hd/sd22b002/projects/PerturbationData/derived/${DATASET}/adata.h5ad"
+CANONICAL="${SCPERTEVAL_CANONICAL_H5AD:-${CANONICAL_DEFAULT}}"
 UV_BIN="${UV_BIN:-${HOME}/.local/bin/uv}"
 
-if [[ -z "${SCPERTEVAL_CANONICAL_H5AD:-}" || ! -f "${SCPERTEVAL_CANONICAL_H5AD}" ]]; then
-  echo "Set SCPERTEVAL_CANONICAL_H5AD to the validated canonical raw-count H5AD." >&2
+if [[ ! -f "${PROJECT_ROOT}/${EXPERIMENT}" ]]; then
+  echo "Submit this job from the scPertEval-reproducibility repository root." >&2
+  exit 2
+fi
+if [[ ! -f "${CANONICAL}" ]]; then
+  echo "Canonical K562 Essential H5AD does not exist: ${CANONICAL}" >&2
   exit 2
 fi
 if [[ ! -x "${UV_BIN}" ]]; then
@@ -40,10 +46,19 @@ export OMP_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export MKL_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 export NUMEXPR_NUM_THREADS="${SLURM_CPUS_PER_TASK:-1}"
 
+COMMON_ARGS=(
+  --input "${CANONICAL}"
+  --experiment-manifest "${EXPERIMENT}"
+)
+
+echo "[$(date -Is)] Validating frozen K562 Essential metadata"
+"${UV_BIN}" run --frozen python -m models.data.prepare_data \
+  "${COMMON_ARGS[@]}" \
+  --validate-metadata-only
+
 echo "[$(date -Is)] Creating selected-model view from canonical raw counts"
 "${UV_BIN}" run --frozen python -m models.data.prepare_data \
-  --input "${SCPERTEVAL_CANONICAL_H5AD}" \
-  --experiment-manifest "${EXPERIMENT}" \
+  "${COMMON_ARGS[@]}" \
   --dataset-name "${DATASET}" \
   --cell-type K562
 
