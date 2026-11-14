@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import textwrap
 from pathlib import Path
 from typing import Any
 
@@ -39,10 +40,27 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _wrap_table_label(label: object, *, width: int = 15) -> str:
+    return "\n".join(
+        textwrap.wrap(
+            str(label),
+            width=width,
+            break_long_words=False,
+            break_on_hyphens=False,
+        )
+    )
+
+
+def _table_text_color(background: np.ndarray) -> str:
+    red, green, blue = background[:3]
+    luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+    return "white" if luminance < 0.45 else "black"
+
+
 def _save_table(frame: pd.DataFrame, path: Path, *, title: str, cmap: str = "RdBu_r") -> None:
     numeric = frame.apply(pd.to_numeric, errors="coerce")
-    width = max(7.0, 1.0 + 1.15 * len(frame.columns))
-    height = max(3.0, 1.3 + 0.34 * len(frame))
+    width = max(8.0, 3.0 + 1.35 * len(frame.columns))
+    height = max(3.0, 1.5 + 0.34 * len(frame))
     fig, ax = plt.subplots(figsize=(width, height))
     ax.axis("off")
     values = numeric.to_numpy(dtype=float)
@@ -60,7 +78,7 @@ def _save_table(frame: pd.DataFrame, path: Path, *, title: str, cmap: str = "RdB
     table = ax.table(
         cellText=text,
         rowLabels=frame.index.astype(str),
-        colLabels=frame.columns.astype(str),
+        colLabels=[_wrap_table_label(label) for label in frame.columns],
         cellColours=colors,
         cellLoc="center",
         loc="center",
@@ -68,6 +86,12 @@ def _save_table(frame: pd.DataFrame, path: Path, *, title: str, cmap: str = "RdB
     table.auto_set_font_size(False)
     table.set_fontsize(8)
     table.scale(1.0, 1.35)
+    for column in range(len(frame.columns)):
+        header = table[(0, column)]
+        header.set_height(header.get_height() * 1.55)
+    for row in range(len(frame)):
+        for column in range(len(frame.columns)):
+            table[(row + 1, column)].get_text().set_color(_table_text_color(colors[row, column]))
     ax.set_title(title, fontsize=13, fontweight="bold", pad=16)
     fig.savefig(path, dpi=180, bbox_inches="tight")
     plt.close(fig)

@@ -16,7 +16,12 @@ from analyses.protocol_behavior.cli import (
     select_quartile_targets,
 )
 from analyses.protocol_behavior.production import _declared_perturbations, load_manifest, production_stages, run_stage
-from analyses.protocol_behavior.render import FIGURE_STEMS, render_and_validate
+from analyses.protocol_behavior.render import (
+    FIGURE_STEMS,
+    _table_text_color,
+    _wrap_table_label,
+    render_and_validate,
+)
 
 
 def test_protocol_command_defaults_to_the_production_workflow():
@@ -26,6 +31,12 @@ def test_protocol_command_defaults_to_the_production_workflow():
     assert args.dataset == DEFAULT_GWPS_DATASET
     assert args.output_dir is None
     assert args.force is False
+
+
+def test_table_renderer_wraps_headers_and_contrasts_dark_cells():
+    assert _wrap_table_label("Genetic K562 essential") == "Genetic K562\nessential"
+    assert _table_text_color(np.array([0.0, 0.0, 0.0, 1.0])) == "white"
+    assert _table_text_color(np.array([1.0, 1.0, 1.0, 1.0])) == "black"
 
 
 def test_production_manifest_declares_all_analysis_units_and_chunks():
