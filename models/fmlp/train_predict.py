@@ -46,7 +46,7 @@ GENEPT_PICKLE = (
     / "GenePT_emebdding_v2"
     / "GenePT_gene_protein_embedding_model_3_text.pickle."
 )
-ESM2_PICKLE = HERE / "cache" / "esm2_t48_15B_UR50D_mean.pickle"
+ESM2_PICKLE = HERE / "cache" / "esm2-15b" / "esm2_t48_15B_UR50D_mean.pickle"
 IMPLEMENTATION_REVISION = (
     "shiftbioscience/Perturbation-Models-Outperform-Baselines@"
     "15361aec8392fb45a75c8c9da88ca5e6510fca97"
