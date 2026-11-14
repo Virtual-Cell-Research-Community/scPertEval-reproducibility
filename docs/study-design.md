@@ -198,7 +198,10 @@ validation checkpoint; PRESAGE and scGPT use validation-based early
 stopping; TabICLv2 uses equal modality fusion with no validation-based component
 selection and receives the full development pool as in-context examples.
 The expanded models follow their pinned published selection policies. GenePert
-and the fMLP probes use fixed budgets and may fit the full development pool;
+uses the upstream L2-normalized GenePT-to-mean-expression ridge formulation with
+`alpha = 10` frozen from its K562 example before our fold outcomes are inspected.
+Its adapter passed a full synthetic prediction/checkpoint/manifest/resumption
+smoke test. GenePert and the fMLP probes use fixed budgets and may fit the full development pool;
 TxPert-public and CellFlow must record their exact native validation usage in
 their resolved run manifests before full launch.
 
@@ -351,8 +354,9 @@ after the final run; completed runs remain safe to skip on restart.
 2. Regenerate the genetic context model view at the 50-cell rule.
 3. Materialize the now-frozen 1,546-target essential model view and record its
    checksum and metadata-validation record.
-4. Implement and pin TxPert-public, GenePert, fMLP, CellFlow, and SAMS-VAE(S)
-   adapters and Pixi environments.
+4. Implement and pin TxPert-public, fMLP, CellFlow, and SAMS-VAE(S) adapters and
+   Pixi environments; GenePert is implemented and synthetically smoke-tested,
+   with its representative full-fold smoke waiting on item 3.
 5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
    digests, then reconstruct their Pixi environments.
 6. Smoke-test every context adapter on one genetic and one chemical fold;

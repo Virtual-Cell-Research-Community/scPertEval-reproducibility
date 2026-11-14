@@ -35,6 +35,11 @@ from models.data.prepare_data import (
     validate_frozen_experiment_metadata,
 )
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
+from models.genepert.train_predict import (
+    fit_genepert,
+    grouped_expression_means,
+    l2_normalized_embeddings,
+)
 from models.scdisinfact.context_config import (
     build_prediction_adata,
     select_scdisinfact_training_data,
@@ -99,6 +104,46 @@ DATASET_IDS = {
     "nadig-oconner-2024-jurkat",
     "srivatsan-trapnell-2020-sciplex3",
 }
+
+
+def test_genepert_adapter_uses_normalized_embeddings_and_development_means() -> None:
+    data = AnnData(
+        X=sp.csr_matrix(
+            np.asarray(
+                [
+                    [1.0, 2.0],
+                    [3.0, 4.0],
+                    [8.0, 10.0],
+                    [12.0, 14.0],
+                    [100.0, 200.0],
+                ],
+                dtype=np.float32,
+            )
+        ),
+        obs={"condition": ["A+ctrl", "A+ctrl", "B+ctrl", "B+ctrl", "TEST+ctrl"]},
+        var=pd.DataFrame(index=["g1", "g2"]),
+    )
+    means, counts = grouped_expression_means(data, ["A+ctrl", "B+ctrl"], block_rows=2)
+    np.testing.assert_allclose(means, [[2.0, 3.0], [10.0, 12.0]])
+    np.testing.assert_array_equal(counts, [2, 2])
+
+    embeddings = {
+        "A": np.asarray([3.0, 4.0]),
+        "B": np.asarray([0.0, 2.0]),
+        "TEST": np.asarray([3.0, 0.0]),
+    }
+    normalized = l2_normalized_embeddings(embeddings, ["A", "B", "TEST"])
+    np.testing.assert_allclose(np.linalg.norm(normalized, axis=1), 1.0)
+    model, prediction = fit_genepert(
+        embeddings,
+        ["A", "B"],
+        means,
+        ["TEST"],
+        alpha=10.0,
+    )
+    assert model.alpha == 10.0
+    assert prediction.shape == (1, 2)
+    assert np.isfinite(prediction).all()
 
 
 def test_dataset_manifests_pin_sources_and_reference_outputs() -> None:

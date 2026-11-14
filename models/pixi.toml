@@ -137,6 +137,25 @@ fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl
   "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
 ] }
 
+# --- GenePert (https://github.com/zou-group/GenePert) ----------------------
+# GenePert is a deterministic multi-output ridge over L2-normalized GenePT embeddings. The
+# adapter reproduces that small method directly because the upstream repository is notebook
+# code rather than an installable package. It reuses scLAMBDA's identical pinned GenePT asset.
+[feature.genepert.dependencies]
+python = "3.11.*"
+numpy = "1.26.*"
+scipy = "1.12.*"
+pandas = "2.2.*"
+scikit-learn = "1.5.*"
+anndata = "0.10.*"
+h5py = "3.11.*"
+
+[feature.genepert.tasks]
+smoke-test = "python -c \"import anndata, sklearn; print('anndata', anndata.__version__); print('scikit-learn', sklearn.__version__)\""
+fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl -fsSL -o GenePT_emebdding_v2.zip 'https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1' && unzip -o GenePT_emebdding_v2.zip && rm -f GenePT_emebdding_v2.zip", outputs = [
+  "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
+] }
+
 # --- STATE (https://github.com/ArcInstitute/state) --------------------------
 # Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
 # project (pyproject.toml, hatchling build) — a plain pypi-dependency, no vendoring needed.
@@ -301,6 +320,7 @@ gears = { features = ["gears"], no-default-feature = true }
 scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
+genepert = { features = ["genepert"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }

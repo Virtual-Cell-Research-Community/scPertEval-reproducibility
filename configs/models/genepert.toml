@@ -4,7 +4,7 @@ title = "GenePert"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-and-synthetic-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/zou-group/GenePert"
@@ -16,16 +16,18 @@ environment = "models/pixi.toml#genepert"
 lockfile = "models/pixi.lock"
 
 [input]
-space = "perturbation-level mean log-fold-change"
+space = "perturbation-level mean normalized-log1p expression"
 perturbation_conditioning = "the same pinned GenePT embedding table used by fMLP-GenePT"
 
 [output]
-space = "control-centered log1p delta"
-evaluation_transform = "add_control_mean"
+space = "normalized-log1p expression"
+evaluation_transform = "identity"
 prediction = "one centroid per held-out perturbation"
 
 [training]
 seeds = [42]
 method = "ridge regression"
-hyperparameter_policy = "official GenePert configuration; no dataset-specific tuning"
+development_pool = "train plus validation; the method performs no checkpoint selection"
+alpha = 10.0
+hyperparameter_policy = "fixed from the official K562 example before benchmark outcomes; no dataset-specific tuning"
 

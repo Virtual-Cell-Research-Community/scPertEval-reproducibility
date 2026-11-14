@@ -7,9 +7,11 @@ below is run via `pixi run -e <model> ...` from this directory (`models/`).
 
 The revised perturbation panel additionally includes TxPert-public, GenePert,
 fMLP-GenePT, fMLP-ESM2, and CellFlow; the chemical context panel adds
-SAMS-VAE(S). Their declarations are frozen under `configs/models/`, but their
-adapters and Pixi environments are explicitly marked pending and are not yet
-launchable from the legacy scripts below.
+SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert's
+adapter and pinned Pixi environment are implemented and have passed a complete
+synthetic archival smoke test; its representative full-fold smoke remains
+pending until the frozen model view is materialized. The other new adapters are
+still marked pending and are not yet launchable from the legacy scripts below.
 
 This doesn't cover `compare.py`/`plots.py` — those are being folded into the project's
 notebooks and are still in flux.
@@ -20,6 +22,7 @@ notebooks and are still in flux.
 pixi run -e scgpt fetch-checkpoint      # pretrained scGPT_human checkpoint (~gdown)
 pixi run -e presage fetch-cache         # PRESAGE's gene-embedding cache (~3.4GB, Zenodo)
 pixi run -e sclambda fetch-embeddings   # GenePT gene-embedding pickle (Zenodo)
+pixi run -e genepert fetch-embeddings   # same pinned file; safely reuses the scLAMBDA cache
 ```
 
 On Helix, fetch the currently missing scGPT and PRESAGE/TabICL assets as restart-safe CPU
@@ -82,6 +85,7 @@ pixi run -e scgpt    python scgpt/train_predict.py    --dataset replogle-weissma
 pixi run -e presage  python presage/train_predict.py  --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 pixi run -e sclambda python sclambda/train_predict.py --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e genepert python genepert/train_predict.py --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 ```
 
 All flags beyond `--dataset`/`--fold` default to each model's own full-scale values (see each
