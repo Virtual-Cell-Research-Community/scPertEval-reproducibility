@@ -31,23 +31,22 @@ The study contains both generalization axes; neither is optional.
 - Every eligible model and baseline uses the same cells, genes, folds, and test
   perturbations.
 
-The initial K562-essential eligibility audit yields 1,574 common targets at the 50-cell minimum
+The initial K562-essential eligibility audit yielded 1,574 common targets at the 50-cell minimum
 after requiring a measured target gene and compatibility with the GEARS and
-scLAMBDA references. Five folds therefore contain 314 or 315 test targets each.
+scLAMBDA references.
 The 190 targets absent from the measured gene space are deliberately excluded;
 this study will not add an alias-recovery branch.
 
-Before the exact cohort and five folds are frozen, that target list must also
-pass the public TxPert graph and ESM2 feature-coverage audits required by the
-expanded model panel. This is a factual compatibility check, not a model-selection
-branch. If the common cohort retains at least 80% of the preliminary 1,574
-targets, the smaller cohort is accepted directly. A loss greater than 20%
-reopens whether the coverage-limiting model belongs in the common leaderboard
-or should be reported in a separate coverage stratum; no model-specific test
-cohort is introduced silently. The model view retains every canonical cell
-belonging to the final targets plus every canonical control cell and all 8,563
-measured genes. The generated view changes only annotations and the model
-expression representation
+The expanded-panel audit found TxPert-public support for all 1,574 preliminary
+targets. Miller's pinned ESM2 preparation supports 1,546 of them, retaining
+98.22%; the 28 targets without an eligible canonical protein sequence are
+excluded. The final five-fold cohort therefore contains 1,546 targets, with 310
+test targets in the first fold and 309 in each remaining fold. The exact target
+list, support-key hashes, source revisions, and fold hash are frozen in the
+experiment declarations. The model view retains every canonical cell belonging
+to the final targets plus every canonical control cell and all 8,563 measured
+genes. The generated view changes only annotations and the model expression
+representation
 (`normalize_total(10,000)` then `log1p`); canonical raw counts remain immutable.
 
 ### Context generalization
@@ -281,9 +280,8 @@ constructed. The reference variant is an interpretive anchor, not a privileged
 primary analysis. Additional reasonable evaluation variants may be added from
 the saved predictions without retraining, and the complete versioned grid is
 reported rather than dividing results into primary and exploratory classes.
-The exact grid therefore does not block model training. Its first complete
-version is frozen before inspecting model ranks; later additions remain allowed
-when they are versioned and the entire expanded grid is reported.
+The exact grid does not block model training and can be decided later from the
+saved predictions.
 
 For each variant report model ranks, rank changes relative to the reference,
 Spearman and Kendall agreement, pairwise-order or winner reversals, and paired
@@ -351,8 +349,8 @@ after the final run; completed runs remain safe to skip on restart.
 
 1. Materialize and record the exact sci-Plex3 gene panel.
 2. Regenerate the genetic context model view at the 50-cell rule.
-3. Audit TxPert-public graph coverage and ESM2 coverage, then freeze the exact
-   essential target list, folds, checksums, and metadata-validation record.
+3. Materialize the now-frozen 1,546-target essential model view and record its
+   checksum and metadata-validation record.
 4. Implement and pin TxPert-public, GenePert, fMLP, CellFlow, and SAMS-VAE(S)
    adapters and Pixi environments.
 5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container

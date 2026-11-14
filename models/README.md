@@ -59,8 +59,7 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 `models/data/`; it never changes the canonical file.
 
 ```bash
-# Once the expanded-panel feature audit has frozen the cohort, materialize the
-# exact essential-screen view and its five-fold split.
+# Materialize the frozen 1,546-target essential-screen view and its five-fold split.
 sbatch ../scripts/prepare_k562_essential_model_view_helix.sbatch
 ```
 

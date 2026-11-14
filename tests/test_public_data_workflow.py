@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 import tomllib
 from pathlib import Path
 from types import SimpleNamespace
@@ -71,6 +72,7 @@ from workflows.evaluate import (
     summarize_evaluations,
     validate_matched_population_sizes,
 )
+from workflows.feature_coverage import audit_feature_coverage
 from workflows.predictions import (
     build_prediction_manifest,
     cap_population_predictions,
@@ -242,7 +244,7 @@ def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     assert validation["status"] == "valid"
 
 
-def test_essential_primary_experiment_records_revised_panel_and_pending_cohort_audit() -> None:
+def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     experiment = json.loads(
         (
             ROOT
@@ -252,7 +254,7 @@ def test_essential_primary_experiment_records_revised_panel_and_pending_cohort_a
         ).read_text()
     )
     assert experiment["role"] == "primary"
-    assert experiment["status"] == "pending-cross-model-feature-coverage-audit"
+    assert experiment["status"] == "cohort-frozen-adapters-pending"
     assert experiment["training_seeds"] == [42]
     assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8563}
     assert experiment["models"] == [
@@ -267,12 +269,84 @@ def test_essential_primary_experiment_records_revised_panel_and_pending_cohort_a
         "fmlp-esm2",
         "cellflow",
     ]
-    assert experiment["split"]["status"] == "regenerate-after-final-cohort-freeze"
-    assert experiment["cohort_freeze_requirements"]["txpert_public_graph_support"] == "pending"
-    assert experiment["cohort_freeze_requirements"]["esm2_support"] == "pending"
+    assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 1546
+    assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
+    assert all(experiment["cohort_freeze_requirements"].values())
+
+    folds = kfold_gene_splits(experiment["perturbations"], n_folds=5, seed=42)
+    payload = json.dumps(folds, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(payload).hexdigest() == experiment["split"]["folds_sha256"]
+    assert [len(fold["test"]) for fold in folds] == experiment["split"][
+        "test_targets_per_fold"
+    ]
+
+    audit_path = ROOT / experiment["coverage_audit"]["path"]
+    audit = json.loads(audit_path.read_text())
+    assert file_checksum(audit_path) == experiment["coverage_audit"]["sha256"]
+    assert audit["counts"]["preliminary_gears_genept_common"] == 1574
+    assert audit["counts"]["txpert_public_supported_in_preliminary"] == 1574
+    assert audit["counts"]["final_common_targets"] == 1546
+    assert audit["final_targets"] == experiment["perturbations"]
+    assert audit["retention_fraction_of_preliminary"] > 0.98
 
     state = tomllib.loads((ROOT / "configs" / "models" / "state.toml").read_text())
     assert state["tasks"] == ["leave-one-context-out"]
+
+
+def test_feature_coverage_audit_intersects_every_required_reference(tmp_path: Path) -> None:
+    data = AnnData(
+        X=np.ones((6, 3), dtype=np.float32),
+        obs=pd.DataFrame(
+            {
+                "perturbation": ["control", "A", "A", "B", "B", "C"],
+                "is_control": [True, False, False, False, False, False],
+            },
+            index=[f"cell-{index}" for index in range(6)],
+        ),
+        var=pd.DataFrame(index=["A", "B", "C"]),
+    )
+    input_path = tmp_path / "adata.h5ad"
+    data.write_h5ad(input_path)
+
+    references = {
+        "gene2go": {"A": [1], "B": [1], "C": [1]},
+        "genept": {"A": [1], "B": [1]},
+    }
+    paths = {}
+    for name, value in references.items():
+        path = tmp_path / f"{name}.pkl"
+        path.write_bytes(pickle.dumps(value))
+        paths[name] = path
+    txpert_path = tmp_path / "txpert.csv"
+    pd.DataFrame({"0": ["A", "B", "C"]}).to_csv(txpert_path)
+    esm2_canonical_path = tmp_path / "canonical.tsv"
+    esm2_canonical_path.write_text(
+        "ENSGA\tENSTA\tEnsembl Canonical\n"
+        "ENSGB\tENSTB\tEnsembl Canonical\n"
+        "ENSGC\tENSTC\tEnsembl Canonical\n"
+    )
+    esm2_fasta_path = tmp_path / "proteins.fa"
+    esm2_fasta_path.write_text(
+        ">protein-a transcript:ENSTA gene_symbol:A\nAAAA\n"
+        ">protein-b transcript:ENSTB gene_symbol:B\n" + "A" * 15_001 + "\n"
+        ">protein-c transcript:ENSTC gene_symbol:C\nCCCC\n"
+    )
+
+    report = audit_feature_coverage(
+        input_path=input_path,
+        gene2go_path=paths["gene2go"],
+        genept_path=paths["genept"],
+        esm2_canonical_path=esm2_canonical_path,
+        esm2_peptide_fasta_path=esm2_fasta_path,
+        txpert_gene_set_path=txpert_path,
+        minimum_cells=2,
+    )
+
+    assert report["counts"]["preliminary_gears_genept_common"] == 2
+    assert report["counts"]["final_common_targets"] == 1
+    assert report["missing_from_esm2"] == ["B"]
+    assert report["missing_from_txpert_public"] == []
+    assert report["final_targets"] == ["A"]
 
 
 def test_perturbation_baselines_validate_native_fold_and_predict_test_conditions() -> None:
