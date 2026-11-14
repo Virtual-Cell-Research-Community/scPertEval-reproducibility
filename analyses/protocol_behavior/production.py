@@ -75,24 +75,11 @@ def _artifact_key(path: Path, record_path: Path) -> str:
 
 
 def resolve_record_artifact(record_path: Path, name: str) -> Path:
-    """Resolve current relative records and legacy repository/absolute path records.
-
-    Older production records used either repository-relative paths or the producing host's
-    absolute SDS mount. The artifact basename in the stage directory is authoritative when those
-    paths are unavailable on the current host.
-    """
+    """Resolve one relative artifact path against its stage record."""
     stored = Path(name)
-    candidates = []
-    if not stored.is_absolute():
-        candidates.extend((record_path.parent / stored, stored))
-    else:
-        candidates.append(stored)
-    candidates.append(record_path.parent / stored.name)
-    for candidate in candidates:
-        resolved = candidate.resolve()
-        if resolved.is_file():
-            return resolved
-    return (record_path.parent / stored.name).resolve()
+    if stored.is_absolute() or ".." in stored.parts:
+        raise ValueError(f"stage artifact path must be relative: {name}")
+    return (record_path.parent / stored).resolve()
 
 
 def production_stages(manifest: dict[str, Any]) -> list[Stage]:
@@ -223,11 +210,12 @@ def _reusable_record(record_path: Path, manifest_digest: str, artifacts: list[Pa
         return False
     try:
         record = json.loads(record_path.read_text())
-    except (OSError, json.JSONDecodeError):
+        expected = {
+            resolve_record_artifact(record_path, name): digest
+            for name, digest in record.get("artifact_sha256", {}).items()
+        }
+    except (OSError, ValueError, json.JSONDecodeError):
         return False
-    expected = {
-        resolve_record_artifact(record_path, name): digest for name, digest in record.get("artifact_sha256", {}).items()
-    }
     resolved = {artifact.resolve(): artifact for artifact in artifacts}
     return (
         record.get("status") == "complete"

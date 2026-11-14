@@ -109,7 +109,7 @@ def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypa
     assert observed.shape == (2, 2)
 
 
-def test_stage_record_reuse_normalizes_absolute_and_relative_artifact_paths(tmp_path, monkeypatch):
+def test_stage_record_reuse_resolves_relative_artifact_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     artifact = Path("artifact.csv")
     artifact.write_text("complete\n")
@@ -119,7 +119,7 @@ def test_stage_record_reuse_normalizes_absolute_and_relative_artifact_paths(tmp_
             {
                 "status": "complete",
                 "manifest_sha256": "manifest",
-                "artifact_sha256": {str(artifact.resolve()): file_sha256(artifact)},
+                "artifact_sha256": {artifact.name: file_sha256(artifact)},
             }
         )
     )
@@ -127,7 +127,7 @@ def test_stage_record_reuse_normalizes_absolute_and_relative_artifact_paths(tmp_
     assert _reusable_record(record, "manifest", [artifact])
 
 
-def test_stage_record_reuse_is_independent_of_the_original_mount_path(tmp_path):
+def test_stage_record_reuse_rejects_absolute_artifact_paths(tmp_path):
     stage = tmp_path / "results" / "stages" / "example"
     stage.mkdir(parents=True)
     artifact = stage / "artifact.csv"
@@ -145,7 +145,7 @@ def test_stage_record_reuse_is_independent_of_the_original_mount_path(tmp_path):
         )
     )
 
-    assert _reusable_record(record, "manifest", [artifact])
+    assert not _reusable_record(record, "manifest", [artifact])
 
 
 def test_drf_validation_requires_every_protocol_perturbation_pair_once(tmp_path):

@@ -429,7 +429,11 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
         if not checksums:
             errors.append(f"stage has no artifact checksums: {stage.id}")
         for artifact_name, expected in checksums.items():
-            artifact = resolve_record_artifact(record, artifact_name)
+            try:
+                artifact = resolve_record_artifact(record, artifact_name)
+            except ValueError as error:
+                errors.append(str(error))
+                continue
             if not artifact.is_file():
                 errors.append(f"stage artifact is missing: {artifact}")
             elif file_sha256(artifact) != expected:
