@@ -210,7 +210,9 @@ def generate_embeddings(args: argparse.Namespace) -> dict:
         cache_dir=args.huggingface_cache,
         device_map="auto",
         torch_dtype=torch.float16,
-        use_safetensors=True,
+        # Miller forces safetensors, but the pinned 15B revision publishes only sharded
+        # PyTorch .bin weights. Loading those weights is a serialization-only correction.
+        use_safetensors=False if args.model == PINNED_MODEL else None,
     )
     model.eval()
     dimension = int(model.config.hidden_size)
@@ -261,6 +263,7 @@ def generate_embeddings(args: argparse.Namespace) -> dict:
         "target_sha256": target_sha256(selected_targets),
         "model": args.model,
         "model_revision": args.revision,
+        "weight_serialization": "pytorch-bin" if args.model == PINNED_MODEL else "auto",
         "hidden_size": dimension,
         "max_position_embeddings": max_positions,
         "pooling": "mean over last hidden state including BOS and EOS tokens",

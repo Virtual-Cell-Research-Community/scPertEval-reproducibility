@@ -16,6 +16,7 @@ model = "facebook/esm2_t48_15B_UR50D"
 revision = "5fbca39631164edc1d402a5aa369f982f72ee282"
 pooling = "mean over last hidden state including special tokens, matching Miller's generator"
 maximum_protein_residues = 1024
+weight_serialization = "pytorch-bin (the pinned revision has no safetensors; weights are otherwise identical)"
 
 [adapter]
 path = "models/fmlp/train_predict.py"

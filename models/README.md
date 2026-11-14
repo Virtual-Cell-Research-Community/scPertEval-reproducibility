@@ -14,7 +14,9 @@ smokes remain pending until the frozen model view is materialized; fMLP-ESM2
 also still needs its pinned ESM2-15B embedding artifact generated. Its restart-safe generator
 is `models/fmlp/generate_esm2_embeddings.py`: cache Hugging Face model weights on local NVMe,
 cache each completed target embedding atomically, and write only the compact final dictionary
-plus its provenance manifest to durable storage. The other new
+plus its provenance manifest to durable storage. Miller's generator requests safetensors,
+but the pinned 15B revision publishes only sharded PyTorch `.bin` weights; the local generator
+uses those identical pinned weights and records the serialization correction. The other new
 adapters are still marked pending and are not yet launchable from the legacy
 scripts below.
 
