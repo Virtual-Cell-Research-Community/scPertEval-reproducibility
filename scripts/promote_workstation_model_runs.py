@@ -50,7 +50,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--destination-root", type=Path, required=True)
     parser.add_argument("--experiment", required=True)
     parser.add_argument("--model", required=True)
-    parser.add_argument("--folds", type=int, nargs="+", default=list(range(5)))
+    fold_group = parser.add_mutually_exclusive_group()
+    fold_group.add_argument("--folds", type=int, nargs="+")
+    fold_group.add_argument(
+        "--fold-ids",
+        nargs="+",
+        help="literal run-directory names for context folds (for example holdout-a549)",
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--poll-seconds", type=int, default=60)
     return parser.parse_args()
@@ -61,8 +67,9 @@ def main() -> None:
     if args.poll_seconds < 1:
         raise ValueError("--poll-seconds must be positive")
 
-    for fold in args.folds:
-        relative = Path(args.experiment) / args.model / f"fold-{fold}" / f"seed-{args.seed}"
+    fold_ids = args.fold_ids or [f"fold-{fold}" for fold in (args.folds or range(5))]
+    for fold_id in fold_ids:
+        relative = Path(args.experiment) / args.model / fold_id / f"seed-{args.seed}"
         source = args.source_root / relative
         destination = args.destination_root / relative
 
