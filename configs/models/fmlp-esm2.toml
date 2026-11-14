@@ -4,7 +4,7 @@ title = "fMLP-ESM2"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-and-synthetic-smoke-complete-esm2-asset-and-full-fold-pending"
+implementation_status = "adapter-and-generator-complete-esm2-asset-and-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -19,6 +19,7 @@ maximum_protein_residues = 1024
 
 [adapter]
 path = "models/fmlp/train_predict.py"
+asset_generator = "models/fmlp/generate_esm2_embeddings.py"
 environment = "models/pixi.toml#fmlp"
 lockfile = "models/pixi.lock"
 

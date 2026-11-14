@@ -35,6 +35,12 @@ from models.data.prepare_data import (
     validate_frozen_experiment_metadata,
 )
 from models.data.prepare_split import build_split_manifest, kfold_gene_splits, to_tabicl_custom_split
+from models.fmlp.generate_esm2_embeddings import (
+    _atomic_numpy,
+    _load_cached,
+    select_miller_sequences,
+    target_sha256,
+)
 from models.genepert.train_predict import (
     fit_genepert,
     grouped_expression_means,
@@ -144,6 +150,29 @@ def test_genepert_adapter_uses_normalized_embeddings_and_development_means() -> 
     assert model.alpha == 10.0
     assert prediction.shape == (1, 2)
     assert np.isfinite(prediction).all()
+
+
+def test_esm2_generator_reproduces_longest_canonical_sequence_and_atomic_cache(tmp_path: Path) -> None:
+    canonical = tmp_path / "canonical.tsv"
+    canonical.write_text(
+        "ENSG1\tENST1\tEnsembl Canonical\n"
+        "ENSG2\tENST2\tEnsembl Canonical\n"
+        "ENSG3\tENST3\tnot canonical\n"
+    )
+    peptides = tmp_path / "peptides.fa"
+    peptides.write_text(
+        ">p1 transcript:ENST1 gene_symbol:GENE\nAAA\n"
+        ">p2 transcript:ENST2 gene_symbol:GENE\nAAAAA\n"
+        ">p3 transcript:ENST3 gene_symbol:OTHER\nCCCC\n"
+    )
+    assert select_miller_sequences(canonical, peptides) == {"GENE": "AAAAA"}
+    assert target_sha256(["B", "A"]) == target_sha256(["A", "B"])
+
+    cache = tmp_path / "embedding.npy"
+    expected = np.asarray([1.0, 2.0, 3.0], dtype=np.float32)
+    _atomic_numpy(expected, cache)
+    np.testing.assert_array_equal(_load_cached(cache, expected_dimension=3), expected)
+    assert _load_cached(cache, expected_dimension=2) is None
 
 
 def test_dataset_manifests_pin_sources_and_reference_outputs() -> None:

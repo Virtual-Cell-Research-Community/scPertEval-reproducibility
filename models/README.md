@@ -11,7 +11,10 @@ SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert's
 adapter and the shared fMLP adapter have pinned Pixi environments and have
 passed complete synthetic archival smoke tests. Their representative full-fold
 smokes remain pending until the frozen model view is materialized; fMLP-ESM2
-also still needs its pinned ESM2-15B embedding artifact generated. The other new
+also still needs its pinned ESM2-15B embedding artifact generated. Its restart-safe generator
+is `models/fmlp/generate_esm2_embeddings.py`: cache Hugging Face model weights on local NVMe,
+cache each completed target embedding atomically, and write only the compact final dictionary
+plus its provenance manifest to durable storage. The other new
 adapters are still marked pending and are not yet launchable from the legacy
 scripts below.
 
@@ -25,6 +28,7 @@ pixi run -e scgpt fetch-checkpoint      # pretrained scGPT_human checkpoint (~gd
 pixi run -e presage fetch-cache         # PRESAGE's gene-embedding cache (~3.4GB, Zenodo)
 pixi run -e sclambda fetch-embeddings   # GenePT gene-embedding pickle (Zenodo)
 pixi run -e genepert fetch-embeddings   # same pinned file; safely reuses the scLAMBDA cache
+pixi run -e fmlp fetch-genept-embeddings # same pinned GenePT asset for fMLP-GenePT
 ```
 
 On Helix, fetch the currently missing scGPT and PRESAGE/TabICL assets as restart-safe CPU

@@ -171,6 +171,9 @@ scipy = "1.12.*"
 pandas = "2.2.*"
 anndata = "0.10.*"
 h5py = "3.11.*"
+accelerate = "1.7.*"
+safetensors = "0.5.*"
+transformers = "4.52.*"
 
 [feature.fmlp.tasks]
 smoke-test = "python -c \"import anndata, torch; print('anndata', anndata.__version__); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
