@@ -11,7 +11,7 @@ without retraining, provided the complete grid is reported.
 Can reasonable post-training evaluation choices change model rankings when the
 trained models and their saved predictions are held fixed?
 
-Models are trained once per prespecified split and training seed. Gene subsets
+Models are trained once per prespecified split at the single training seed 42. Gene subsets
 for scoring, representation, controls, metrics, weighting, and aggregation are
 varied only after predictions have been saved.
 
@@ -21,35 +21,29 @@ The study contains both generalization axes; neither is optional.
 
 ### Perturbation generalization
 
-- Replogle K562 essential is an implementation and adapter smoke-test pilot;
-  it is not a second reported benchmark.
-- Replogle K562 GWPS is the sole perturbation-generalization benchmark in the
-  ranking-sensitivity study.
+- Replogle K562 essential is the sole perturbation-generalization benchmark in
+  the ranking-sensitivity study.
+- Replogle K562 GWPS remains a registered dataset with retained exploratory
+  outputs, but it is retired from the revised benchmark.
 - Nadig HepG2 participates in the four-context genetic track rather than a
   separate perturbation-generalization arm.
 - Perturbed genes are divided into seeded, full-coverage five-fold splits.
 - Every eligible model and baseline uses the same cells, genes, folds, and test
   perturbations.
 
-The K562-essential pilot yields 1,574 common targets at the 50-cell minimum
+The initial K562-essential eligibility audit yields 1,574 common targets at the 50-cell minimum
 after requiring a measured target gene and compatibility with the GEARS and
 scLAMBDA references. Five folds therefore contain 314 or 315 test targets each.
 The 190 targets absent from the measured gene space are deliberately excluded;
 this study will not add an alias-recovery branch.
 
-The definitive K562 GWPS cohort contains 6,935 targets after requiring at
-least 50 treated cells, a measured target gene, GEARS GO support, and a GenePT
-embedding. It retains all 8,248 measured genes. Five full-coverage folds each
-hold out 1,387 test targets; the remaining 5,548 targets form the development
-pool in that fold.
-
-The GWPS model view retains every canonical cell belonging to those 6,935
-targets plus every canonical control cell. It does not reapply the historical
-Miller mean-cell downsampling or HVG selection: the cohort and complete 8,248
-gene panel are already frozen, and population predictions must match the
-observed treated-cell count. The generated view changes only annotations and
-the model expression representation (`normalize_total(10,000)` then `log1p`);
-the canonical raw-count object remains immutable.
+Before the exact cohort and five folds are frozen, that target list must also
+pass the public TxPert graph and ESM2 feature-coverage audits required by the
+expanded model panel. This is a factual compatibility check, not a model-selection
+branch. The model view retains every canonical cell belonging to the final
+targets plus every canonical control cell and all 8,563 measured genes. The
+generated view changes only annotations and the model expression representation
+(`normalize_total(10,000)` then `log1p`); canonical raw counts remain immutable.
 
 ### Context generalization
 
@@ -86,11 +80,11 @@ metrics.
   equally sized predicted population. No fixed-size evaluation subsampling is
   applied.
 - Point predictions remain eligible only for profile metrics.
-- Every stochastic trainable model uses training seeds 42, 43, and 44.
+- Every trainable model uses the single training seed 42. The several held-out
+  folds provide the replication needed for this compact evaluation-sensitivity
+  study; the study does not claim to estimate initialization variance.
 - Deterministic and training-free methods produce one prediction artifact per
-  fold. Their fixed scores may be aligned with the three seed-level result
-  tables for comparison, but repeated copies are not treated as independent
-  replicates.
+  fold at archival seed 42.
 - Each prediction artifact is retained separately by model, fold, and seed.
   Predictions are never averaged into an ensemble.
 
@@ -98,9 +92,9 @@ Metrics are calculated at the following grain:
 
 `dataset × track × evaluation_variant × metric × perturbation × model × fold × training_seed × held_out_context`
 
-For a headline summary, perturbations are averaged within a fold, folds within
-a training seed, and then the three training seeds are averaged. All underlying
-perturbation-, fold-, and seed-level results remain available.
+For a headline summary, perturbations are averaged within each fold and folds
+are then averaged. All underlying perturbation- and fold-level results remain
+available.
 
 ## Prediction capabilities
 
@@ -117,10 +111,19 @@ Unsupported results remain missing rather than being imputed.
 
 ### Perturbation generalization
 
-The substantive panel is GEARS, PRESAGE, scGPT, scLAMBDA, STATE, and TabICLv2.
+The substantive panel is GEARS, PRESAGE, scGPT, scLAMBDA, TabICLv2,
+TxPert-public, GenePert, fMLP-GenePT, fMLP-ESM2, and CellFlow. The TxPert name
+refers specifically to the reproducible public STRING+GO configuration, not the
+paper's proprietary-graph headline model. GenePert and fMLP-GenePT use the same
+pinned GenePT table to isolate linear versus nonlinear prediction, while
+fMLP-ESM2 supplies the matched protein-sequence representation comparison.
+CellFlow supplies genuine population predictions for this track.
 No-change, training-fold mean, and the bilinear PCA linear model are ranked
-baselines. The interpolated technical-duplicate predictor is an oracle control
-and is reported separately rather than ranked as a deployable model.
+baselines. Technical-duplicate and interpolated technical-duplicate predictors
+are oracle controls reported separately rather than ranked as deployable models.
+STATE is excluded: its categorical perturbation coordinate is untrained for a
+completely held-out perturbation, so it is valid for context transfer but not
+zero-shot perturbation generalization.
 
 ### Context generalization
 
@@ -131,7 +134,11 @@ The substantive panel for both context tracks is:
 - bioLORD;
 - scDisInFact.
 
-The chemical track additionally includes trVAE. Its joint chemical smoke test
+The chemical track additionally includes trVAE and the simplified SAMS-VAE(S)
+variant from PerturBench. SAMS-VAE(S), rather than vanilla SAMS-VAE, is used
+because the published benchmark found the simplified variant less prone to mode
+collapse. Its joint chemical adapter must pass the same population-prediction
+contract as the other models. trVAE's joint chemical smoke test
 completed readily, while the 480-perturbation genetic fold took about 70 minutes
 for one epoch before an arithmetic-preserving MMD-loop optimization and still
 more than 20 minutes afterward. At the established 200 epochs, that would exceed
@@ -157,7 +164,7 @@ for evaluation never trigger retraining.
 
 ### Replogle K562
 
-Retain all 8,248 measured genes as the shared output panel. This avoids an
+Retain all 8,563 measured genes as the shared output panel. This avoids an
 otherwise unnecessary selection rule at little storage cost.
 
 ## Development-pool and validation policy
@@ -181,9 +188,13 @@ selection. In the context tracks, STATE, CPA, and bioLORD retain validation
 conditions for checkpoint selection, whereas fixed-budget scDisInFact and
 trVAE fit all treated cells from the training contexts. In perturbation
 generalization, GEARS and scLAMBDA run fixed epoch budgets but still select a
-validation checkpoint; PRESAGE, scGPT, and STATE use validation-based early
+validation checkpoint; PRESAGE and scGPT use validation-based early
 stopping; TabICLv2 uses equal modality fusion with no validation-based component
 selection and receives the full development pool as in-context examples.
+The expanded models follow their pinned published selection policies. GenePert
+and the fMLP probes use fixed budgets and may fit the full development pool;
+TxPert-public and CellFlow must record their exact native validation usage in
+their resolved run manifests before full launch.
 
 scLAMBDA uses all training cells. Its adapter vectorizes the upstream
 condition-by-cell embedding construction and omits target-coordinate arrays that
@@ -191,7 +202,7 @@ the selected `use_tg_coord = false` model never reads; upstream training and
 prediction remain unchanged. Validation and mean prediction use scLAMBDA's
 native `ctrl_size = 300` option, matching the fixed validation population in its
 context-model implementation. The frozen run seed is passed into the model
-constructor so the three declared seeds remain distinct.
+constructor so the declared seed is reproducible.
 
 ### sci-Plex3
 
@@ -210,9 +221,10 @@ rather than silently truncating the panel.
 
 GEARS requires the perturbed gene to be measured and covered by its GO
 reference. scGPT's perturbation adapter inherits the measured-target requirement
-through GEARS' `PertData` machinery. scLAMBDA requires a GenePT embedding for
-each target, while PRESAGE, TabICLv2, and STATE do not inherently require the
-target to be an expression output.
+through GEARS' `PertData` machinery. scLAMBDA, GenePert, and fMLP-GenePT require
+a GenePT embedding for each target; fMLP-ESM2 and CellFlow require an ESM2
+feature; and TxPert-public requires its public graph features. PRESAGE and
+TabICLv2 do not inherently require the target to be an expression output.
 
 The shared perturbation-generalization cohort therefore uses only targets
 supported by every participating model. The 190 unmeasured targets are dropped
@@ -237,7 +249,10 @@ conversion rule is recorded in each prediction manifest.
 
 - PerturbationData and evaluation/orchestration code use `uv`.
 - Every model runner uses its own Pixi environment.
-- Hugo's six validated environments remain unchanged.
+- Hugo's validated environments remain unchanged; STATE is reused only for
+  context transfer.
+- TxPert-public, GenePert, the shared fMLP runner, CellFlow, and SAMS-VAE(S)
+  receive separate pinned Pixi environments.
 - For scArchon/scPerturBench-derived models, pin the repository revision and
   container digest, reconstruct a Pixi environment from the reference
   container, and require a small container-versus-Pixi equivalence test.
@@ -274,9 +289,10 @@ perturbation-bootstrap uncertainty.
   be used only after checking current GPU ownership and compatibility.
 - Helix is used for high-memory preprocessing, overflow, and final tracked runs
   when workstation resources are insufficient.
-- Run cheap truncated smoke tests before the 93 full context fits
-  (5 models × 3 chemical folds × 3 seeds plus 4 models × 4 genetic folds × 3
-  seeds).
+- Run cheap truncated smoke tests before the 34 full context fits
+  (6 models × 3 chemical folds plus 4 models × 4 genetic folds), and before the
+  50 perturbation-generalization fits (nine trainable models × five folds plus
+  deterministic TabICLv2 across five folds).
 - Completed runs retain resolved configuration, environment lock and code
   revision, checkpoint, predictions, checksums, and a completion record; reruns
   skip validated completed artifacts.
@@ -291,9 +307,9 @@ contract and all completion-record checksums. Production workstation sweeps are
 serialized on one GPU so they neither compete with other users nor issue
 concurrent 48 GiB reads from SDS.
 
-The full scLAMBDA production sweep completed on Beauty GPU 0 on 2026-11-13
+The retired GWPS scLAMBDA production sweep completed on Beauty GPU 0 on 2026-11-13
 using repository revision `0eb13a2`. All five folds were run at training seeds
-42, 43, and 44, giving 15 independently archived runs. Every run produced one
+42, 43, and 44, giving 15 independently archived exploratory runs. Every run produced one
 point prediction for each of its 1,387 held-out perturbations across the frozen
 8,248-gene universe. A final sweep-wide audit verified all 15 completion
 records and declared artifact checksums, and re-ran the prediction contract for
@@ -308,12 +324,9 @@ after the final run; completed runs remain safe to skip on restart.
   repositories.
 - Full predictions and derived tidy metrics are retained. Population predictions
   match the number of observed treated cells per evaluation population.
-- A measured, uncompressed float32 projection is approximately 194 GB for all
-  population matrices: 41.52 GB per GWPS seed for its one population model,
-  4.55 GB per model/seed across all genetic-context folds, and 0.35 GB per
-  model/seed across all chemical-context folds. Including checkpoints,
-  manifests, point predictions, and overhead, the 500 GB study budget remains
-  conservative; H5AD compression should reduce the realized archive.
+- Storage is re-estimated after the final essential cohort and the CellFlow and
+  SAMS-VAE(S) smoke outputs are materialized. All population outputs continue to
+  match observed treated-cell counts, while point-model outputs remain compact.
 - Exact model and baseline predictions may be published in a versioned Zenodo
   record, partitioned by dataset and model if needed.
 - Figures consume versioned predictions or tidy result tables, never private
@@ -323,11 +336,15 @@ after the final run; completed runs remain safe to skip on restart.
 
 1. Materialize and record the exact sci-Plex3 gene panel.
 2. Regenerate the genetic context model view at the 50-cell rule.
-3. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
+3. Audit TxPert-public graph coverage and ESM2 coverage, then freeze the exact
+   essential target list, folds, checksums, and metadata-validation record.
+4. Implement and pin TxPert-public, GenePert, fMLP, CellFlow, and SAMS-VAE(S)
+   adapters and Pixi environments.
+5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
    digests, then reconstruct their Pixi environments.
-4. Smoke-test every context adapter on one genetic and one chemical fold;
+6. Smoke-test every context adapter on one genetic and one chemical fold;
    explicitly verify that trVAE is jointly perturbation-conditioned.
-5. Verify the declared native input and output conversion for every model.
+7. Verify the declared native input and output conversion for every model.
 
 ## Current launch readiness
 
@@ -343,6 +360,7 @@ benchmark results and do not authorize the full launch.
 | bioLORD | passed | passed | pinned official revision | ready |
 | scDisInFact | passed | passed | source tree and core dependencies match the pinned scArchon image | ready |
 | trVAE | passed | excluded by the prespecified scaling rule | matched to pinned scArchon image, using its corresponding stable pandas release | ready |
+| SAMS-VAE(S) | pending | not included | pinned PerturBench revision; adapter not implemented | pending |
 | No-change, fold-mean, and linear baselines | passed | passed | completion records validated | ready |
 | Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
 

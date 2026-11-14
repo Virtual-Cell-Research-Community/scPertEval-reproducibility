@@ -1,9 +1,15 @@
 # models/
 
 Minimum steps to get each model's environment running and launch training + prediction.
-Each model lives in its own isolated pixi environment (`gears`, `scgpt`, `presage`,
+Each implemented model lives in its own isolated pixi environment (`gears`, `scgpt`, `presage`,
 `sclambda`, `state`, `tabicl`) — there's no shared/default environment, so every command
 below is run via `pixi run -e <model> ...` from this directory (`models/`).
+
+The revised perturbation panel additionally includes TxPert-public, GenePert,
+fMLP-GenePT, fMLP-ESM2, and CellFlow; the chemical context panel adds
+SAMS-VAE(S). Their declarations are frozen under `configs/models/`, but their
+adapters and Pixi environments are explicitly marked pending and are not yet
+launchable from the legacy scripts below.
 
 This doesn't cover `compare.py`/`plots.py` — those are being folded into the project's
 notebooks and are still in flux.
@@ -33,7 +39,7 @@ environment — run the `presage fetch-cache` line above regardless of whether y
 PRESAGE itself.
 
 GEARS' own downloads are the one spot worth knowing about if you're launching multiple folds
-at once (`submit_all.sh` does, via a 15-task fold-by-seed SLURM array): on a cold cache, all
+at once (`submit_all.sh` does, via a five-task fold array): on a cold cache, all
 processes race to fetch the same reference files into the same shared `gears/pert_data/`
 directory. This is patched to be crash-safe in `gears/patch.py` (`_atomic_download`,
 `_atomic_tar_download_and_extract` — downloads land in a private temp file/dir first, only
@@ -53,8 +59,9 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 `models/data/`; it never changes the canonical file.
 
 ```bash
-# Materialize the exact frozen GWPS cohort, then freeze its five-fold split.
-sbatch ../scripts/prepare_k562_gwps_model_view_helix.sbatch
+# Once the expanded-panel feature audit has frozen the cohort, materialize the
+# exact essential-screen view and its five-fold split.
+sbatch ../scripts/prepare_k562_essential_model_view_helix.sbatch
 ```
 
 The older `--source replogle22k562` interface remains available only for reproducing the
@@ -71,12 +78,11 @@ scientific-Python stack, nothing model-specific.
 Every model exposes the same CLI shape:
 
 ```bash
-pixi run -e gears    python gears/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
-pixi run -e scgpt    python scgpt/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
-pixi run -e presage  python presage/train_predict.py  --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
-pixi run -e sclambda python sclambda/train_predict.py --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
-pixi run -e state    python state/train_predict.py    --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
-pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle-weissman-2022-k562-gwps --fold 0 --seed 42
+pixi run -e gears    python gears/train_predict.py    --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e scgpt    python scgpt/train_predict.py    --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e presage  python presage/train_predict.py  --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e sclambda python sclambda/train_predict.py --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 ```
 
 All flags beyond `--dataset`/`--fold` default to each model's own full-scale values (see each
@@ -101,7 +107,7 @@ otherwise scans all cells once per perturbation and allocates two unused full-ce
 arrays when target-coordinate prediction is disabled. Validation and mean prediction use
 scLAMBDA's native `ctrl_size` option with 300 controls, matching the fixed validation population
 in its context-model implementation. The adapter also passes the declared training seed into
-scLAMBDA rather than allowing the library's constructor default to collapse all three seeds.
+scLAMBDA rather than relying on the library's constructor default.
 
 ## 4. Train + predict, the full sweep
 
@@ -123,20 +129,20 @@ not force already completed runs.
 On Slurm, submit the same frozen grid as arrays:
 
 ```bash
-models/slurm/submit_all.sh                 # five folds x three seeds; TabICLv2 once per fold
+models/slurm/submit_all.sh                 # five folds at seed 42
 models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
 models/slurm/submit_all.sh --smoke         # fold 0, seed 42, reduced training budgets
 models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/preparation job
 ```
 
-The stochastic models use 15-task arrays (five folds × seeds 42, 43, and 44). TabICLv2 is
-training-free and deterministic, so it uses one five-fold array at archival seed 42. `--smoke`
+Every model uses one five-fold array at seed 42. TabICLv2 is training-free and
+deterministic. `--smoke`
 submits only fold 0 at seed 42 with model-specific truncated budgets. Full arrays default to
-one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several 48 GiB
+one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several large
 SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage and node
-capacity. Full tasks request 192 GiB RAM because the GWPS CSR arrays alone occupy about 47 GiB
-before AnnData and model-specific working copies; scLAMBDA receives a 256 GiB override for its
-dense training tensors. The previous 64 GiB request was unsafe.
+capacity. Full tasks retain conservative 192 GiB requests until essential-screen
+adapter-specific memory measurements justify lowering them; scLAMBDA receives a
+256 GiB override for its dense training tensors.
 
 A full-data scLAMBDA scaling run on a 96 GiB RTX PRO 6000 validated the
 categorical-embedding initialization end to end: 1,333,016 cells and 8,248
@@ -158,7 +164,7 @@ with status 0 after the last run.
 
 ```bash
 uv run --frozen python -m models.baselines.perturbation_baselines \
-  --dataset replogle-weissman-2022-k562-gwps
+  --dataset replogle-weissman-2022-k562-essential
 ```
 
 Predicts the ranked `no-change`, `fold-mean`, and bilinear-PCA `linear` baselines in one process
@@ -173,13 +179,11 @@ ranked defaults. Materialize it separately when the positive control is needed:
 
 ```bash
 uv run --frozen python -m models.baselines.perturbation_baselines \
-  --dataset replogle-weissman-2022-k562-gwps \
+  --dataset replogle-weissman-2022-k562-essential \
   --models interpolated-technical-duplicate
 ```
 
-All baselines are deterministic and therefore have one archival artifact per fold at seed 42;
-downstream comparisons may broadcast their fixed scores across seed strata but must not treat
-those values as independent replicates.
+All baselines are deterministic and therefore have one archival artifact per fold at seed 42.
 
 ```bash
 cd models && sbatch --export=ALL,MODELS_DIR="$(pwd)" slurm/baselines.sbatch
@@ -256,6 +260,8 @@ scaling smoke exceeded the prespecified compute threshold. STATE, CPA, bioLORD,
 and trVAE consume `raw.h5ad`;
 scDisInFact consumes `counts.h5ad`. Each adapter records its native prediction
 space and the deterministic transform into the shared log1p evaluation space.
+SAMS-VAE(S) is part of the frozen chemical panel but is not launchable until its
+declared adapter and Pixi environment have been implemented and smoke-tested.
 STATE retains its native per-cell predictions. No-change and fold-mean context
 baselines emit populations matched to each observed treated-cell count so they participate in both profile
 and distributional sensitivity analyses. The context linear baseline is a

@@ -39,7 +39,7 @@ checks ran before EarlyStopping's patience - both of those numbers are
 themselves read straight out of the log text, not guessed).
 
 Usage:
-    reports/training_report.py                       # last 2 days, all 6 models
+    reports/training_report.py                       # last 2 days, implemented perturbation models
     reports/training_report.py --since 2026-07-17
     reports/training_report.py --models gears scgpt
     reports/training_report.py --require-log          # only rows with a surviving log file
@@ -56,7 +56,7 @@ from pathlib import Path
 from utils.count_params import count_params as count_model_params
 from utils.count_params import find_checkpoint
 
-DEFAULT_MODELS = ["gears", "presage", "scgpt", "sclambda", "state", "tabicl"]
+DEFAULT_MODELS = ["gears", "presage", "scgpt", "sclambda", "tabicl"]
 FIELDS = ["JobID", "JobIDRaw", "JobName", "State", "Elapsed", "NodeList", "AllocTRES", "MaxRSS", "ReqMem"]
 MODELS_DIR = Path(__file__).resolve().parent.parent  # reports/ -> models/
 LOGS_DIR = MODELS_DIR / "slurm" / "logs"

@@ -24,7 +24,7 @@ evaluation_transform = "add_control_mean"
 prediction = "one centroid per held-out perturbation, archived in absolute log1p expression"
 
 [training]
-seeds = [42, 43, 44]
+seeds = [42]
 max_epochs = 1000
 early_stop_patience = 10
 batch_size = 16

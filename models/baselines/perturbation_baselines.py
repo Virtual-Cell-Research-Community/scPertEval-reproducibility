@@ -89,7 +89,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--dataset",
-        default="replogle-weissman-2022-k562-gwps",
+        default="replogle-weissman-2022-k562-essential",
         help="models/data/<dataset> prepared model view",
     )
     parser.add_argument("--runs-root", type=Path, default=REPOSITORY_ROOT / "runs")

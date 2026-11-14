@@ -2,8 +2,8 @@
   "schema_version": 1,
   "id": "sciplex3-nine-drug-context-transfer",
   "task": "leave-one-context-out",
-  "models": ["state", "cpa", "biolord", "scdisinfact", "trvae", "no-change", "fold-mean", "linear"],
-  "training_seeds": [42, 43, 44],
+  "models": ["state", "cpa", "biolord", "scdisinfact", "trvae", "sams-vae-s", "no-change", "fold-mean", "linear"],
+  "training_seeds": [42],
   "prediction_population_policy": {
     "mode": "match-observed",
     "control_sampling": "with-replacement-if-needed"

@@ -24,7 +24,7 @@ evaluation_transform = "identity"
 prediction = "one centroid per held-out perturbation"
 
 [training]
-seeds = [42, 43, 44]
+seeds = [42]
 max_epochs = 15
 early_stop_patience = 10
 batch_size = 64

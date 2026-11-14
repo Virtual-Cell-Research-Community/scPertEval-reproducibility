@@ -1,7 +1,6 @@
 #!/bin/bash
-# Generic per-model, per-fold, per-seed training job. submit_all.sh supplies a 15-task
-# array for stochastic models (5 folds x 3 seeds) and a five-task array for deterministic
-# TabICLv2. It also sets MODEL/DATASET through --export; this is not meant to be submitted
+# Generic per-model, per-fold training job. submit_all.sh supplies one five-task array
+# at seed 42. It also sets MODEL/DATASET through --export; this is not meant to be submitted
 # directly without those values.
 #
 # Every models/*/train_predict.py already exposes --dataset/--fold with full-scale defaults
@@ -29,10 +28,10 @@
 # different name, re-add an --exclude for them.
 #SBATCH --partition=gpu-single
 #SBATCH --gres=gpu:1
-# The full GWPS CSR expression arrays occupy about 47 GiB before AnnData/model overhead.
-# 192 GiB leaves room for adapter-specific copies and matches the validated context launcher;
-# 64 GiB is not a safe full-view request. Sixteen CPUs avoid monopolizing an entire GPU node
-# for preprocessing that is predominantly I/O- and GPU-bound.
+# Retain a conservative request until every essential-screen adapter has a measured peak.
+# 192 GiB leaves room for adapter-specific copies and matches the validated context launcher.
+# Sixteen CPUs avoid monopolizing an entire GPU node for preprocessing that is predominantly
+# I/O- and GPU-bound.
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=192G
 #SBATCH --time=2-00:00:00
@@ -41,10 +40,10 @@
 
 set -euo pipefail
 
-: "${MODEL:?set via sbatch --export=ALL,MODEL=<gears|scgpt|presage|sclambda|state|tabicl>}"
-DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
+: "${MODEL:?set via sbatch --export=ALL,MODEL=<gears|scgpt|presage|sclambda|tabicl>}"
+DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 FOLD_COUNT="${FOLD_COUNT:-5}"
-SEEDS="${SEEDS:-42:43:44}"
+SEEDS="${SEEDS:-42}"
 # SLURM copies the submitted script to a spool dir before running it, so a
 # ${BASH_SOURCE[0]}-relative path resolves to the wrong place (and $SLURM_SUBMIT_DIR depends
 # on the submitting shell's cwd, which callers of this script aren't guaranteed to control) —
@@ -70,7 +69,6 @@ if [[ "${SMOKE:-0}" == "1" ]]; then
         presage) EXTRA_ARGS+=(--epochs 2 --batch-size 4) ;;
         scgpt) EXTRA_ARGS+=(--epochs 2) ;;
         sclambda) EXTRA_ARGS+=(--epochs 10) ;;
-        state) EXTRA_ARGS+=(--max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0) ;;
         tabicl) ;;
     esac
 fi

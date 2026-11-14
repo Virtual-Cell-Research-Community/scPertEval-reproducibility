@@ -1,0 +1,31 @@
+schema_version = 1
+id = "fmlp-genept"
+title = "fMLP-GenePT"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+implementation_status = "adapter-pending"
+
+[implementation]
+repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
+revision = "15361aec8392fb45a75c8c9da88ca5e6510fca97"
+model_key = "fmlp_genept"
+
+[adapter]
+path = "models/fmlp/train_predict.py"
+environment = "models/pixi.toml#fmlp"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "reference-workflow"
+perturbation_conditioning = "the same pinned GenePT embedding table used by GenePert"
+
+[output]
+space = "reference-native delta"
+evaluation_transform = "reference-workflow-to-shared-log1p"
+prediction = "one centroid per held-out perturbation"
+
+[training]
+seeds = [42]
+hyperparameter_policy = "Miller et al. published fMLP configuration; no dataset-specific tuning"
+

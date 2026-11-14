@@ -26,7 +26,7 @@ validated prediction bundles out.
 
 **Implementation:** each model's native environment, training command,
 checkpoint selection, prediction conversion, and cluster resources. The model
-adapters under `models/` are real seams because the six model implementations have
+adapters under `models/` are real seams because the model implementations have
 genuinely different environments and execution paths.
 
 ### Prediction artifact module

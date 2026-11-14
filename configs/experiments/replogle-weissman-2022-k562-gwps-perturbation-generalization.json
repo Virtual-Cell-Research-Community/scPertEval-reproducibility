@@ -1,7 +1,9 @@
 {
   "schema_version": 1,
   "id": "replogle-weissman-2022-k562-gwps-perturbation-generalization",
-  "role": "primary",
+  "role": "retired-exploratory",
+  "status": "retained-for-provenance-not-part-of-the-revised-benchmark",
+  "retirement_reason": "The revised benchmark uses K562 essential; full-GWPS scGPT is disproportionately expensive and categorical STATE conditioning is invalid for unseen perturbations.",
   "dataset": "replogle-weissman-2022-k562-gwps",
   "task": "unseen-perturbation",
   "models": [

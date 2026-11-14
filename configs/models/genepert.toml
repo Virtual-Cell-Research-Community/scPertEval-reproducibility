@@ -1,0 +1,31 @@
+schema_version = 1
+id = "genepert"
+title = "GenePert"
+capability = "point"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+implementation_status = "adapter-pending"
+
+[implementation]
+repository = "https://github.com/zou-group/GenePert"
+revision = "31c0034211010696ba76dc62cb875af51bfe6f4a"
+
+[adapter]
+path = "models/genepert/train_predict.py"
+environment = "models/pixi.toml#genepert"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "perturbation-level mean log-fold-change"
+perturbation_conditioning = "the same pinned GenePT embedding table used by fMLP-GenePT"
+
+[output]
+space = "control-centered log1p delta"
+evaluation_transform = "add_control_mean"
+prediction = "one centroid per held-out perturbation"
+
+[training]
+seeds = [42]
+method = "ridge regression"
+hyperparameter_policy = "official GenePert configuration; no dataset-specific tuning"
+

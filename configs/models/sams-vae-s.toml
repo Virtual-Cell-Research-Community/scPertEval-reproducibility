@@ -1,0 +1,33 @@
+schema_version = 1
+id = "sams-vae-s"
+title = "SAMS-VAE(S)"
+capability = "population"
+modalities = ["chemical"]
+tasks = ["leave-one-context-out"]
+implementation_status = "adapter-pending"
+
+[implementation]
+repository = "https://github.com/altoslabs/perturbench"
+revision = "c84038bc1ea409aa54f3832cfa6f34f5059adf0c"
+variant = "simplified SAMS-VAE without sparse mask or global perturbation latent"
+reference = "PerturBench Srivatsan20 covariate-transfer configuration"
+
+[adapter]
+path = "models/sams_vae_s/train_predict.py"
+environment = "models/pixi.toml#sams-vae-s"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "normalize_total_10000_log1p"
+perturbation_conditioning = "one joint categorical embedding across every drug-dose condition"
+context_conditioning = "categorical cell-line covariate"
+
+[output]
+space = "normalize_total_10000_log1p"
+evaluation_transform = "identity"
+prediction = "native population predictions"
+
+[training]
+seeds = [42]
+hyperparameter_policy = "PerturBench published best-parameter SciPlex3 configuration; no new HPO"
+

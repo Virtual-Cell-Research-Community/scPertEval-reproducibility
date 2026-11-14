@@ -1,14 +1,14 @@
 #!/bin/bash
-# Submit the frozen five-fold x three-seed GWPS grid.
+# Submit the frozen five-fold, single-seed essential-screen grid for implemented adapters.
 #
 # Usage: models/slurm/submit_all.sh [--test-only] [--smoke] [--afterok JOB_ID] [dataset] [model ...]
 #   models/slurm/submit_all.sh
 #   models/slurm/submit_all.sh --test-only
-#   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-gwps gears scgpt
+#   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-essential gears scgpt
 #   models/slurm/submit_all.sh --smoke --afterok 123456
 #
-# Full arrays default to one concurrent task per model. This bounds simultaneous 48 GiB SDS
-# reads while still allowing the six model families to make progress in parallel. Override
+# Full arrays default to one concurrent task per model. This bounds simultaneous large SDS
+# reads while still allowing the five implemented model families to make progress in parallel. Override
 # deliberately with MAX_CONCURRENT=<n> after measuring storage and node pressure.
 set -euo pipefail
 
@@ -30,9 +30,9 @@ while [[ "${1:-}" == --* ]]; do
     esac
     shift
 done
-DATASET="${1:-replogle-weissman-2022-k562-gwps}"
+DATASET="${1:-replogle-weissman-2022-k562-essential}"
 if [[ $# -gt 0 ]]; then shift; fi
-MODELS=("${@:-gears scgpt presage sclambda state tabicl}")
+MODELS=("${@:-gears scgpt presage sclambda tabicl}")
 # The default above is a single unsplit string when no args are passed; split it properly.
 if [ "${#MODELS[@]}" -eq 1 ]; then
     read -ra MODELS <<< "${MODELS[0]}"
@@ -49,11 +49,7 @@ fi
 cd "$MODELS_DIR"
 mkdir -p slurm/logs
 for MODEL in "${MODELS[@]}"; do
-    if [[ "$MODEL" == "tabicl" || "$SMOKE" == "1" ]]; then
-        ARRAY="0-4"
-    else
-        ARRAY="0-14"
-    fi
+    ARRAY="0-4"
     if [[ "$SMOKE" == "1" ]]; then
         ARRAY="0"
     else
@@ -62,7 +58,7 @@ for MODEL in "${MODELS[@]}"; do
     SBATCH_ARGS=(
         --job-name="$MODEL-$DATASET"
         --array="$ARRAY"
-        --export=ALL,MODEL="$MODEL",DATASET="$DATASET",MODELS_DIR="$MODELS_DIR",FOLD_COUNT=5,SEEDS=42:43:44,SMOKE="$SMOKE"
+        --export=ALL,MODEL="$MODEL",DATASET="$DATASET",MODELS_DIR="$MODELS_DIR",FOLD_COUNT=5,SEEDS=42,SMOKE="$SMOKE"
     )
     if [[ "$MODEL" == "sclambda" && "$SMOKE" != "1" ]]; then
         SBATCH_ARGS+=(--mem=256G)

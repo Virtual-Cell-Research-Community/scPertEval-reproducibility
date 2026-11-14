@@ -330,21 +330,21 @@ def main() -> None:
         "--max-steps",
         type=int,
         default=10000,
-        help="training.max_steps (default: 10000, full-scale — ~36 epochs at 272 steps/epoch for the frozen GWPS view with cell_set_len=64, see module docstring)",
+        help="training.max_steps (default: 10000, full-scale; see module docstring)",
     )
     # training.val_freq is the *actual* checkpoint-cadence knob (every_n_train_steps=
     # val_freq in state's own ModelCheckpoint callback — see --ckpt-every-n-steps below),
     # not just a validation-logging frequency. The Colab uses the library's own default
-    # (2000) as-is; set here to 272 (one full epoch's worth of steps for the frozen 50-cell
-    # GWPS model view at cell_set_len=64, measured from the first production fold) so
+    # (2000) as-is; set here to 272 (one full epoch's worth of steps in the validated pilot
+    # at cell_set_len=64) so
     # EarlyStopping's `patience` means "N epochs with no improvement" the same way it does
     # for PRESAGE/scGPT, not an arbitrary sub-epoch step count — see module docstring.
-    parser.add_argument("--val-freq", type=int, default=272, help="training.val_freq (default: 272, one epoch for the frozen 50-cell GWPS view at cell_set_len=64 — matches PRESAGE/scGPT's per-epoch validation cadence so EarlyStopping's patience is directly comparable, see module docstring)")
+    parser.add_argument("--val-freq", type=int, default=272, help="training.val_freq (default: 272, the validated pilot's one-epoch cadence; see module docstring)")
     parser.add_argument(
         "--early-stop-patience",
         type=int,
         default=10,
-        help="EarlyStopping patience in validation checks (default: 10 epochs at val_freq=272 for the frozen GWPS view, matching PRESAGE's and scGPT's own patience=10 — min_delta left at Lightning's own default, see module docstring and state/patch/sitecustomize.py)",
+        help="EarlyStopping patience in validation checks (default: 10 checks; min_delta uses Lightning's default; see module docstring and state/patch/sitecustomize.py)",
     )
     parser.add_argument(
         "--ckpt-every-n-steps",

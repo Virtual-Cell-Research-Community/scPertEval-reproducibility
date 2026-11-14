@@ -3,7 +3,7 @@ id = "state"
 title = "STATE Transition"
 capability = "population"
 modalities = ["genetic", "chemical"]
-tasks = ["unseen-perturbation", "leave-one-context-out"]
+tasks = ["leave-one-context-out"]
 
 [implementation]
 package = "arc-state"
@@ -17,7 +17,7 @@ lockfile = "models/pixi.lock"
 
 [input]
 space = "normalize_total_10000_log1p"
-perturbation_conditioning = "one joint categorical condition across every perturbation in a fold"
+perturbation_conditioning = "one joint categorical condition learned only for perturbations represented in the training contexts"
 context_conditioning = "held-out-context controls remain available; held-out-context treated cells remain test-only"
 
 [output]
@@ -26,7 +26,7 @@ evaluation_transform = "identity"
 prediction = "native per-cell predictions; no pseudobulk during inference"
 
 [training]
-seeds = [42, 43, 44]
+seeds = [42]
 max_steps = 10000
 val_freq = 272
 early_stop_patience = 10

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "id": "replogle-weissman-2022-k562-essential-perturbation-generalization",
+  "role": "primary",
+  "status": "pending-cross-model-feature-coverage-audit",
+  "dataset": "replogle-weissman-2022-k562-essential",
+  "task": "unseen-perturbation",
+  "models": [
+    "gears",
+    "presage",
+    "scgpt",
+    "sclambda",
+    "tabicl",
+    "txpert-public",
+    "genepert",
+    "fmlp-genept",
+    "fmlp-esm2",
+    "cellflow"
+  ],
+  "baselines": ["no-change", "fold-mean", "linear"],
+  "oracle_controls": ["technical-duplicate", "interpolated-technical-duplicate"],
+  "training_seeds": [42],
+  "minimum_treated_cells_per_perturbation": 50,
+  "expected_targets_before_new_model_coverage_audit": 1574,
+  "prediction_population_policy": {
+    "mode": "match-observed",
+    "control_sampling": "with-replacement-if-needed"
+  },
+  "model_fit_scope": "one-model-per-fold",
+  "hyperparameter_policy": "published-or-established-config-no-hpo",
+  "gene_panel": {
+    "strategy": "all-measured-genes",
+    "n_genes": 8563
+  },
+  "canonical_input": {
+    "dataset_declaration": "configs/datasets/replogle-weissman-2022-k562-essential.toml",
+    "sha256": "7e9a4ab48f60de0b7cacb88224dad0145347f95a86a68db9cddfbb8a9c50c216",
+    "n_obs": 267974,
+    "n_vars": 8563,
+    "perturbation_field": "perturbation",
+    "control_field": "is_control"
+  },
+  "cohort_freeze_requirements": {
+    "minimum_cell_count": true,
+    "measured_target": true,
+    "gears_go_support": true,
+    "genept_support": true,
+    "txpert_public_graph_support": "pending",
+    "esm2_support": "pending"
+  },
+  "split": {
+    "strategy": "seeded-full-coverage-kfold",
+    "seed": 42,
+    "n_folds": 5,
+    "validation_fraction_of_non_test": 0.125,
+    "status": "regenerate-after-final-cohort-freeze"
+  },
+  "development_pool_policy": {
+    "test_targets_never_available_to_models": true,
+    "model_native_validation_use": true,
+    "fixed_budget_and_training_free_methods_may_use_train_plus_validation": true,
+    "early_stopping_methods_use_validation_for_selection": true
+  },
+  "deterministic_method_policy": {
+    "single_prediction_artifact": true,
+    "archival_seed": 42
+  }
+}

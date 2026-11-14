@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Submit through submit_context_models_helix.sh. One model-specific array covers the seven
-# leave-one-context-out folds and three frozen seeds without launching the whole study here.
+# leave-one-context-out folds at seed 42 without launching the whole study here.
 #SBATCH --job-name=scperteval-context-model
 #SBATCH --partition=gpu-single
 #SBATCH --gres=gpu:1
@@ -9,7 +9,7 @@
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --array=0-20
+#SBATCH --array=0-6
 #SBATCH --output=logs/%x_%A_%a.out
 #SBATCH --error=logs/%x_%A_%a.err
 
@@ -26,14 +26,11 @@ if [[ ! -f "${PROJECT_ROOT}/models/pixi.lock" ]]; then
   exit 2
 fi
 
-SEEDS=(42 43 44)
-TASKS_PER_SEED=7
-SEED_INDEX="$((SLURM_ARRAY_TASK_ID / TASKS_PER_SEED))"
-TASK_INDEX="$((SLURM_ARRAY_TASK_ID % TASKS_PER_SEED))"
-SEED="${SEEDS[${SEED_INDEX}]}"
+SEED=42
+TASK_INDEX="${SLURM_ARRAY_TASK_ID}"
 if [[ "${TASK_INDEX}" -lt 4 ]]; then
   if [[ "${MODEL}" == "trvae" ]]; then
-    echo "trVAE is excluded from the genetic track by its joint-scaling smoke test." >&2
+    echo "trVAE is excluded from the genetic track." >&2
     exit 2
   fi
   EXPERIMENT="replogle-nadig-four-context-50-cell"

@@ -31,7 +31,7 @@ space = "normalize_total_10000_log1p"
 evaluation_transform = "identity"
 
 [training]
-seeds = [42, 43, 44]
+seeds = [42]
 max_epochs = 200
 batch_size = 512
 latent_dim = 10

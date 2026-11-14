@@ -1,0 +1,32 @@
+schema_version = 1
+id = "cellflow"
+title = "CellFlow"
+capability = "population"
+modalities = ["genetic"]
+tasks = ["unseen-perturbation"]
+implementation_status = "adapter-pending"
+
+[implementation]
+repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
+revision = "15361aec8392fb45a75c8c9da88ca5e6510fca97"
+model_key = "cellflow"
+reference_implementation = "https://github.com/theislab/cellflow"
+
+[adapter]
+path = "models/cellflow/train_predict.py"
+environment = "models/pixi.toml#cellflow"
+lockfile = "models/pixi.lock"
+
+[input]
+space = "reference-workflow"
+perturbation_conditioning = "pinned ESM2 embeddings permit unseen-target generalization"
+
+[output]
+space = "reference-native"
+evaluation_transform = "reference-workflow-to-shared-log1p"
+prediction = "native flow-matching population predictions"
+
+[training]
+seeds = [42]
+hyperparameter_policy = "Miller et al. published unseen-gene configuration; no dataset-specific tuning"
+

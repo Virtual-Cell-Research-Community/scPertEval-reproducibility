@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
-# Run one model's frozen GWPS fold x seed grid serially on a persistent workstation GPU.
+# Run one implemented model's frozen essential-screen folds on a persistent workstation GPU.
 
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-    echo "usage: $0 <gears|presage|scgpt|sclambda|state|tabicl> [adapter arguments ...]" >&2
+    echo "usage: $0 <gears|presage|scgpt|sclambda|tabicl> [adapter arguments ...]" >&2
     exit 2
 fi
 
 MODEL="$1"
 shift
 case "${MODEL}" in
-    gears|presage|scgpt|sclambda|state|tabicl) ;;
+    gears|presage|scgpt|sclambda|tabicl) ;;
     *) echo "unsupported model: ${MODEL}" >&2; exit 2 ;;
 esac
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODELS_DIR="${PROJECT_ROOT}/models"
-DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
+DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 PIXI_BIN="${PIXI_BIN:-${HOME}/.pixi/bin/pixi}"
 RUNS_ROOT="${RUNS_ROOT:-${PROJECT_ROOT}/runs}"
 LOG_ROOT="${LOG_ROOT:-${PROJECT_ROOT}/logs/perturbation-production-workstation}"
 GPU="${GPU:-0}"
 FOLDS="${FOLDS:-0 1 2 3 4}"
-SEEDS="${SEEDS:-42 43 44}"
+SEEDS="${SEEDS:-42}"
 FORCE_INCOMPLETE="${FORCE_INCOMPLETE:-0}"
 NVIDIA_DRIVER_LIBRARY_PATH="${NVIDIA_DRIVER_LIBRARY_PATH:-}"
 

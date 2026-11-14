@@ -26,7 +26,7 @@ space = "normalize_total_10000_log1p"
 evaluation_transform = "identity"
 
 [training]
-seeds = [42, 43, 44]
+seeds = [42]
 max_epochs = 500
 early_stop_patience = 20
 check_val_every_n_epoch = 10

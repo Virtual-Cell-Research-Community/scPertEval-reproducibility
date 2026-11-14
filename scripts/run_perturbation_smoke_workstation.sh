@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Run the one-fold GWPS vertical smoke pass on a two-GPU workstation.
+# Run the one-fold essential-screen vertical smoke pass for implemented adapters.
 
 set -uo pipefail
 
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODELS_DIR="${PROJECT_ROOT}/models"
-DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
+DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 PIXI_BIN="${PIXI_BIN:-${HOME}/.pixi/bin/pixi}"
 RUNS_ROOT="${RUNS_ROOT:-${PROJECT_ROOT}/runs-smoke}"
 LOG_ROOT="${LOG_ROOT:-${PROJECT_ROOT}/logs/perturbation-smoke-workstation}"
@@ -73,7 +73,6 @@ run_group_zero() {
 run_group_one() {
     local status=0
     run_model "${GPU_ONE}" scgpt --epochs 2 || status=1
-    run_model "${GPU_ONE}" state --max-steps 20 --val-freq 10 --batch-size 4 --num-workers 0 || status=1
     run_model "${GPU_ONE}" tabicl || status=1
     return "${status}"
 }
@@ -90,5 +89,5 @@ else
     wait "${PID_ZERO}" || STATUS=1
     wait "${PID_ONE}" || STATUS=1
 fi
-echo "[$(date -Is)] GWPS vertical smoke pass completed with status ${STATUS}"
+echo "[$(date -Is)] essential-screen vertical smoke pass completed with status ${STATUS}"
 exit "${STATUS}"

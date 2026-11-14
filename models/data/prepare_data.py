@@ -58,7 +58,7 @@ Usage::
     python -m models.data.prepare_data \
       --input data/derived/replogle-weissman-2022-k562-essential/adata.h5ad \
       --dataset-name replogle-weissman-2022-k562-essential \
-      --compatible-models gears state
+      --compatible-models gears sclambda
     python -m models.data.prepare_data \
       --input /path/to/replogle-weissman-2022-k562-gwps/adata.h5ad \
       --perturbation-key target_gene \
@@ -286,7 +286,7 @@ def validate_frozen_experiment_metadata(
     unmeasured = sorted(frozen_set - set(map(str, adata.var_names)))
     if missing or below or unmeasured:
         raise ValueError(
-            "frozen GWPS cohort does not match canonical metadata: "
+            "frozen perturbation cohort does not match canonical metadata: "
             f"missing={missing[:10]}, below_minimum={dict(list(below.items())[:10])}, "
             f"unmeasured={unmeasured[:10]}"
         )
@@ -470,7 +470,7 @@ def apply_miller_fixes(
     rng = np.random.default_rng(seed)
     if compatible_models is None:
         # Preserve the historical six-model scaffold when callers do not opt into a selected
-        # model set. The public ranking study passes ``{"gears", "state"}`` explicitly.
+        # model set. The public ranking study passes ``{"gears", "sclambda"}`` explicitly.
         compatible_models = {"gears", "sclambda"}
 
     pert = adata.obs["perturbation"].to_numpy()

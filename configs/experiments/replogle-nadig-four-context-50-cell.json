@@ -598,9 +598,7 @@
     "ZNHIT3"
   ],
   "training_seeds": [
-    42,
-    43,
-    44
+    42
   ],
   "prediction_population_policy": {
     "mode": "match-observed",

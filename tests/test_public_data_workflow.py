@@ -128,7 +128,7 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert genetic["n_test_populations"] == len(genetic["contexts"]) * genetic["n_perturbations"]
     assert len(genetic["folds"]) == len(genetic["contexts"]) == 4
     assert genetic["minimum_treated_cells_per_context"] == 50
-    assert genetic["training_seeds"] == [42, 43, 44]
+    assert genetic["training_seeds"] == [42]
     assert genetic["prediction_population_policy"] == {
         "mode": "match-observed",
         "control_sampling": "with-replacement-if-needed",
@@ -144,7 +144,8 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert chemical["n_point_conditions"] == len(chemical["drugs"]) * len(chemical["doses"]) == 36
     assert chemical["n_population_conditions"] == 33
     assert chemical["population_minimum_cells_per_context"] == 50
-    assert chemical["training_seeds"] == [42, 43, 44]
+    assert chemical["training_seeds"] == [42]
+    assert "sams-vae-s" in chemical["models"]
     assert chemical["prediction_population_policy"] == {
         "mode": "match-observed",
         "control_sampling": "with-replacement-if-needed",
@@ -158,7 +159,7 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
         assert len(expected_test_conditions(chemical, fold["id"], "population")) == 33
 
 
-def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
+def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     experiment = json.loads(
         (
             ROOT
@@ -167,7 +168,7 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
             / "replogle-weissman-2022-k562-gwps-perturbation-generalization.json"
         ).read_text()
     )
-    assert experiment["role"] == "primary"
+    assert experiment["role"] == "retired-exploratory"
     assert experiment["training_seeds"] == [42, 43, 44]
     assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8248}
     assert experiment["model_view_preparation"] == {
@@ -239,6 +240,39 @@ def test_gwps_primary_experiment_is_frozen_and_reconstructable() -> None:
         "n_targets_measured_at_least_50_cells"
     ]
     assert validation["status"] == "valid"
+
+
+def test_essential_primary_experiment_records_revised_panel_and_pending_cohort_audit() -> None:
+    experiment = json.loads(
+        (
+            ROOT
+            / "configs"
+            / "experiments"
+            / "replogle-weissman-2022-k562-essential-perturbation-generalization.json"
+        ).read_text()
+    )
+    assert experiment["role"] == "primary"
+    assert experiment["status"] == "pending-cross-model-feature-coverage-audit"
+    assert experiment["training_seeds"] == [42]
+    assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8563}
+    assert experiment["models"] == [
+        "gears",
+        "presage",
+        "scgpt",
+        "sclambda",
+        "tabicl",
+        "txpert-public",
+        "genepert",
+        "fmlp-genept",
+        "fmlp-esm2",
+        "cellflow",
+    ]
+    assert experiment["split"]["status"] == "regenerate-after-final-cohort-freeze"
+    assert experiment["cohort_freeze_requirements"]["txpert_public_graph_support"] == "pending"
+    assert experiment["cohort_freeze_requirements"]["esm2_support"] == "pending"
+
+    state = tomllib.loads((ROOT / "configs" / "models" / "state.toml").read_text())
+    assert state["tasks"] == ["leave-one-context-out"]
 
 
 def test_perturbation_baselines_validate_native_fold_and_predict_test_conditions() -> None:

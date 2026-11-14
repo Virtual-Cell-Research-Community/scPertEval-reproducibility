@@ -1,5 +1,5 @@
 #!/bin/bash
-# Computes the three ranked, deterministic GWPS baselines against every fold in one process.
+# Computes the three ranked, deterministic essential-screen baselines against every fold.
 # The runner reads raw.h5ad once and writes validated, checksum-addressed run bundles using the
 # same layout and safe-resumption contract as the substantive models. The technical-duplicate
 # oracle is intentionally opt-in and is not part of this ranked-baseline job.
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-DATASET="${DATASET:-replogle-weissman-2022-k562-gwps}"
+DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 # Same spool-dir caveat as train.sbatch: SLURM copies the submitted script to a spool dir
 # before running it, so a ${BASH_SOURCE[0]}-relative path resolves to the wrong place --
 # MODELS_DIR is set explicitly at submission time instead.

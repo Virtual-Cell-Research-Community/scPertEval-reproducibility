@@ -1,5 +1,10 @@
 # Why the GWPS scGPT run is slow
 
+> Decision recorded 2026-11-14: GWPS is retired from the primary benchmark.
+> The revised unseen-perturbation task uses K562 essential, one training seed,
+> and excludes STATE. The measurements below are retained as the evidence for
+> that decision, not as the current launch plan.
+
 ## Bottom line
 
 The active run is not comparable to Hugo's published scPertEval timing or to the Miller et al.
