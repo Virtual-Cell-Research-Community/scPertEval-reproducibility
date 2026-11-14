@@ -38,11 +38,14 @@ The 190 targets absent from the measured gene space are deliberately excluded;
 this study will not add an alias-recovery branch.
 
 The expanded-panel audit found TxPert-public support for all 1,574 preliminary
-targets. Miller's pinned ESM2 preparation supports 1,546 of them, retaining
-98.22%; the 28 targets without an eligible canonical protein sequence are
-excluded. The final five-fold cohort therefore contains 1,546 targets, with 310
-test targets in the first fold and 309 in each remaining fold. The exact target
-list, support-key hashes, source revisions, and fold hash are frozen in the
+targets. The pinned ESM2-15B checkpoint has 1,026 positional embeddings, leaving
+1,024 residues after its two special tokens; reproducing Miller's longest-canonical-
+protein selection therefore supports 1,352 targets (85.90%). The 222 targets
+without an eligible canonical protein sequence or whose selected protein exceeds
+that limit are excluded. This remains inside the pre-agreed 20% coverage-loss
+gate. The final five-fold cohort contains 1,352 targets, with 271 test targets in
+the first two folds and 270 in each remaining fold. The exact target list,
+support-key hashes, source revisions, and fold hash are frozen in the
 experiment declarations. The model view retains every canonical cell belonging
 to the final targets plus every canonical control cell and all 8,563 measured
 genes. The generated view changes only annotations and the model expression
@@ -201,7 +204,11 @@ The expanded models follow their pinned published selection policies. GenePert
 uses the upstream L2-normalized GenePT-to-mean-expression ridge formulation with
 `alpha = 10` frozen from its K562 example before our fold outcomes are inspected.
 Its adapter passed a full synthetic prediction/checkpoint/manifest/resumption
-smoke test. GenePert and the fMLP probes use fixed budgets and may fit the full development pool;
+smoke test. The shared fMLP adapter reproduces CellSimBench's encoder-decoder,
+cell-level MSE objective, Adam/StepLR schedule, and validation-checkpoint rule;
+both embedding variants passed the same synthetic archival contract. GenePert
+may fit the full development pool, while fMLP retains the frozen validation
+perturbations for checkpoint selection;
 TxPert-public and CellFlow must record their exact native validation usage in
 their resolved run manifests before full launch.
 
@@ -352,11 +359,12 @@ after the final run; completed runs remain safe to skip on restart.
 
 1. Materialize and record the exact sci-Plex3 gene panel.
 2. Regenerate the genetic context model view at the 50-cell rule.
-3. Materialize the now-frozen 1,546-target essential model view and record its
+3. Materialize the now-frozen 1,352-target essential model view and record its
    checksum and metadata-validation record.
-4. Implement and pin TxPert-public, fMLP, CellFlow, and SAMS-VAE(S) adapters and
-   Pixi environments; GenePert is implemented and synthetically smoke-tested,
-   with its representative full-fold smoke waiting on item 3.
+4. Implement and pin TxPert-public, CellFlow, and SAMS-VAE(S) adapters and Pixi
+   environments; GenePert and fMLP are implemented and synthetically
+   smoke-tested, with representative full-fold smokes waiting on item 3 and the
+   fMLP-ESM2 asset still to generate.
 5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
    digests, then reconstruct their Pixi environments.
 6. Smoke-test every context adapter on one genetic and one chemical fold;

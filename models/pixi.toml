@@ -156,6 +156,28 @@ fetch-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl
   "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
 ] }
 
+# --- fMLP-GenePT / fMLP-ESM2 (Miller et al. CellSimBench) -----------------
+# Both variants use the same pinned architecture and training recipe; only the perturbation
+# embedding artifact changes. PyTorch matches the reference Docker image exactly.
+[feature.fmlp.system-requirements]
+cuda = "12"
+
+[feature.fmlp.dependencies]
+python = "3.11.*"
+cuda-version = "12.6.*"
+pytorch-gpu = "2.5.1.*"
+numpy = "1.26.*"
+scipy = "1.12.*"
+pandas = "2.2.*"
+anndata = "0.10.*"
+h5py = "3.11.*"
+
+[feature.fmlp.tasks]
+smoke-test = "python -c \"import anndata, torch; print('anndata', anndata.__version__); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
+fetch-genept-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl -fsSL -o GenePT_emebdding_v2.zip 'https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1' && unzip -o GenePT_emebdding_v2.zip && rm -f GenePT_emebdding_v2.zip", outputs = [
+  "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
+] }
+
 # --- STATE (https://github.com/ArcInstitute/state) --------------------------
 # Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
 # project (pyproject.toml, hatchling build) — a plain pypi-dependency, no vendoring needed.
@@ -321,6 +343,7 @@ scgpt = { features = ["scgpt"], no-default-feature = true }
 presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
 genepert = { features = ["genepert"], no-default-feature = true }
+fmlp = { features = ["fmlp"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }

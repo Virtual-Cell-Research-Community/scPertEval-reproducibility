@@ -8,10 +8,12 @@ below is run via `pixi run -e <model> ...` from this directory (`models/`).
 The revised perturbation panel additionally includes TxPert-public, GenePert,
 fMLP-GenePT, fMLP-ESM2, and CellFlow; the chemical context panel adds
 SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert's
-adapter and pinned Pixi environment are implemented and have passed a complete
-synthetic archival smoke test; its representative full-fold smoke remains
-pending until the frozen model view is materialized. The other new adapters are
-still marked pending and are not yet launchable from the legacy scripts below.
+adapter and the shared fMLP adapter have pinned Pixi environments and have
+passed complete synthetic archival smoke tests. Their representative full-fold
+smokes remain pending until the frozen model view is materialized; fMLP-ESM2
+also still needs its pinned ESM2-15B embedding artifact generated. The other new
+adapters are still marked pending and are not yet launchable from the legacy
+scripts below.
 
 This doesn't cover `compare.py`/`plots.py` — those are being folded into the project's
 notebooks and are still in flux.
@@ -62,7 +64,7 @@ The ranking-sensitivity study starts from the public canonical raw-count objects
 `models/data/`; it never changes the canonical file.
 
 ```bash
-# Materialize the frozen 1,546-target essential-screen view and its five-fold split.
+# Materialize the frozen 1,352-target essential-screen view and its five-fold split.
 sbatch ../scripts/prepare_k562_essential_model_view_helix.sbatch
 ```
 
@@ -86,6 +88,8 @@ pixi run -e presage  python presage/train_predict.py  --dataset replogle-weissma
 pixi run -e sclambda python sclambda/train_predict.py --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 pixi run -e tabicl   python tabicl/train_predict.py   --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 pixi run -e genepert python genepert/train_predict.py --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e fmlp python fmlp/train_predict.py --model fmlp-genept --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
+pixi run -e fmlp python fmlp/train_predict.py --model fmlp-esm2 --dataset replogle-weissman-2022-k562-essential --fold 0 --seed 42
 ```
 
 All flags beyond `--dataset`/`--fold` default to each model's own full-scale values (see each

@@ -24,10 +24,17 @@ SOURCE_PROVENANCE = {
     "ensembl_peptide_url": "https://ftp.ensembl.org/pub/release-113/fasta/homo_sapiens/pep/Homo_sapiens.GRCh38.pep.all.fa.gz",
     "ensembl_peptide_sha256": "c51944dc7e44a72d7370d208a24a038d5a4672f8d2af32b5ea9df039b8e2ffd5",
     "esm2_model": "facebook/esm2_t48_15B_UR50D",
+    "esm2_model_revision": "5fbca39631164edc1d402a5aa369f982f72ee282",
+    "esm2_config_url": "https://huggingface.co/facebook/esm2_t48_15B_UR50D/resolve/5fbca39631164edc1d402a5aa369f982f72ee282/config.json",
+    "esm2_config_sha256": "4e5c41d32d54e79ade1a12acb22cac8b9a189d46676f8fe9674e342432f000ba",
+    "esm2_max_position_embeddings": 1026,
+    "esm2_max_protein_residues": 1024,
     "txpert_repository_revision": "08d82eea86746b044cf7531f4ec8c5f60e1cb73f",
     "txpert_gene_set_path": "data/gears_gene_set.csv",
     "txpert_gene_set_sha256": "7e2be69a204b72349b793cc6723a5f88419f1ca6472ea5e28c5f7d623ee8e23d",
 }
+
+ESM2_MAX_PROTEIN_RESIDUES = 1024  # 1026 positions minus BOS/EOS special tokens
 
 
 def _keyset_sha256(keys: set[str]) -> str:
@@ -72,19 +79,20 @@ def _miller_esm2_keys(canonical_path: Path, peptide_fasta_path: Path) -> set[str
         canonical.loc[canonical["status"] == "Ensembl Canonical", "transcript_id"].astype(str)
     )
 
-    supported: set[str] = set()
+    # Miller sorts canonical sequences by descending length, then drops duplicate gene
+    # symbols while keeping the first row. Reproduce that exactly: a gene is eligible only
+    # when its longest canonical peptide fits ESM2's positional table.
+    maximum_length_by_gene: dict[str, int] = {}
     transcript: str | None = None
     gene_symbol: str | None = None
     sequence_length = 0
 
     def retain_record() -> None:
-        if (
-            transcript in transcripts
-            and gene_symbol
-            and gene_symbol != "nan"
-            and sequence_length <= 15_000
-        ):
-            supported.add(gene_symbol)
+        if transcript in transcripts and gene_symbol and gene_symbol != "nan":
+            maximum_length_by_gene[gene_symbol] = max(
+                sequence_length,
+                maximum_length_by_gene.get(gene_symbol, 0),
+            )
 
     with _open_text(peptide_fasta_path) as handle:
         for line in handle:
@@ -102,7 +110,11 @@ def _miller_esm2_keys(canonical_path: Path, peptide_fasta_path: Path) -> set[str
             else:
                 sequence_length += len(line.strip())
     retain_record()
-    return supported
+    return {
+        gene
+        for gene, sequence_length in maximum_length_by_gene.items()
+        if sequence_length <= ESM2_MAX_PROTEIN_RESIDUES
+    }
 
 
 def audit_feature_coverage(

@@ -4,12 +4,18 @@ title = "fMLP-ESM2"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-and-synthetic-smoke-complete-esm2-asset-and-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
 revision = "15361aec8392fb45a75c8c9da88ca5e6510fca97"
 model_key = "fmlp_esm2"
+
+[implementation.esm2]
+model = "facebook/esm2_t48_15B_UR50D"
+revision = "5fbca39631164edc1d402a5aa369f982f72ee282"
+pooling = "mean over last hidden state including special tokens, matching Miller's generator"
+maximum_protein_residues = 1024
 
 [adapter]
 path = "models/fmlp/train_predict.py"
@@ -17,15 +23,22 @@ environment = "models/pixi.toml#fmlp"
 lockfile = "models/pixi.lock"
 
 [input]
-space = "reference-workflow"
-perturbation_conditioning = "pinned ESM2 protein-sequence embeddings"
+space = "normalized-log1p expression"
+perturbation_conditioning = "mean-pooled facebook/esm2_t48_15B_UR50D embeddings from Ensembl release 113 canonical protein sequences"
 
 [output]
-space = "reference-native delta"
-evaluation_transform = "reference-workflow-to-shared-log1p"
+space = "normalized-log1p expression"
+evaluation_transform = "identity"
 prediction = "one centroid per held-out perturbation"
 
 [training]
 seeds = [42]
+epochs = 100
+batch_size = 256
+learning_rate = 0.001
+latent_dim = 128
+hidden_dim = 512
+validation_every_epochs = 10
+checkpoint_selection = "minimum validation MSE"
 hyperparameter_policy = "Miller et al. published fMLP configuration; no dataset-specific tuning"
 

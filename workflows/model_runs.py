@@ -106,6 +106,7 @@ def begin_point_model_run(
     environment: str,
     configuration: dict,
     deterministic: bool = False,
+    additional_inputs: dict[str, Path] | None = None,
 ) -> PointModelRun:
     """Resolve and begin one unseen-perturbation point-model run."""
     if deterministic and args.seed != 42:
@@ -126,6 +127,11 @@ def begin_point_model_run(
 
     runs_root = args.runs_root or repository_root / "runs"
     command = " ".join([sys.executable, *sys.argv])
+    inputs = {
+        "model_view_manifest": data_manifest_path,
+        "split_manifest": split_manifest_path,
+    }
+    inputs.update(additional_inputs or {})
     handle = begin_run(
         runs_root,
         experiment=args.dataset,
@@ -133,10 +139,7 @@ def begin_point_model_run(
         fold=f"fold-{args.fold}",
         seed=args.seed,
         configuration=configuration,
-        inputs={
-            "model_view_manifest": data_manifest_path,
-            "split_manifest": split_manifest_path,
-        },
+        inputs=inputs,
         command=[sys.executable, *sys.argv],
         repo_root=repository_root,
         force=args.force,

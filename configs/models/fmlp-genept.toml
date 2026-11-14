@@ -4,7 +4,7 @@ title = "fMLP-GenePT"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-and-synthetic-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -17,15 +17,22 @@ environment = "models/pixi.toml#fmlp"
 lockfile = "models/pixi.lock"
 
 [input]
-space = "reference-workflow"
+space = "normalized-log1p expression"
 perturbation_conditioning = "the same pinned GenePT embedding table used by GenePert"
 
 [output]
-space = "reference-native delta"
-evaluation_transform = "reference-workflow-to-shared-log1p"
+space = "normalized-log1p expression"
+evaluation_transform = "identity"
 prediction = "one centroid per held-out perturbation"
 
 [training]
 seeds = [42]
+epochs = 100
+batch_size = 256
+learning_rate = 0.001
+latent_dim = 128
+hidden_dim = 512
+validation_every_epochs = 10
+checkpoint_selection = "minimum validation MSE"
 hyperparameter_policy = "Miller et al. published fMLP configuration; no dataset-specific tuning"
 

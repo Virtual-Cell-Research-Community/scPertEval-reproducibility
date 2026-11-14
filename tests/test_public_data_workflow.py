@@ -314,7 +314,7 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
         "fmlp-esm2",
         "cellflow",
     ]
-    assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 1546
+    assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 1352
     assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
     assert all(experiment["cohort_freeze_requirements"].values())
 
@@ -330,9 +330,9 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     assert file_checksum(audit_path) == experiment["coverage_audit"]["sha256"]
     assert audit["counts"]["preliminary_gears_genept_common"] == 1574
     assert audit["counts"]["txpert_public_supported_in_preliminary"] == 1574
-    assert audit["counts"]["final_common_targets"] == 1546
+    assert audit["counts"]["final_common_targets"] == 1352
     assert audit["final_targets"] == experiment["perturbations"]
-    assert audit["retention_fraction_of_preliminary"] > 0.98
+    assert audit["retention_fraction_of_preliminary"] > 0.85
 
     validation_path = ROOT / experiment["metadata_validation"]["path"]
     validation = json.loads(validation_path.read_text())
@@ -384,7 +384,7 @@ def test_feature_coverage_audit_intersects_every_required_reference(tmp_path: Pa
     esm2_fasta_path = tmp_path / "proteins.fa"
     esm2_fasta_path.write_text(
         ">protein-a transcript:ENSTA gene_symbol:A\nAAAA\n"
-        ">protein-b transcript:ENSTB gene_symbol:B\n" + "A" * 15_001 + "\n"
+        ">protein-b transcript:ENSTB gene_symbol:B\n" + "A" * 1_025 + "\n"
         ">protein-c transcript:ENSTC gene_symbol:C\nCCCC\n"
     )
 

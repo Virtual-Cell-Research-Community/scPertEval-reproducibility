@@ -148,6 +148,10 @@ def main() -> int:
     args = parser.parse_args()
     if args.alpha <= 0:
         raise ValueError("--alpha must be positive")
+    if not args.embeddings.is_file():
+        raise FileNotFoundError(
+            f"{args.embeddings} missing; run `pixi run -e genepert fetch-embeddings` first"
+        )
 
     run = begin_point_model_run(
         args,
@@ -164,15 +168,11 @@ def main() -> int:
             "block_rows": args.block_rows,
         },
         deterministic=True,
+        additional_inputs={"genept_embeddings": args.embeddings},
     )
     if run.skipped:
         print(f"skipping verified completed run: {run.handle.directory}")
         return 0
-    if not args.embeddings.is_file():
-        raise FileNotFoundError(
-            f"{args.embeddings} missing; run `pixi run -e genepert fetch-embeddings` first"
-        )
-
     fold_path = DATA_DIR / args.dataset / "folds" / f"fold_{args.fold}.pkl"
     with fold_path.open("rb") as stream:
         fold = pickle.load(stream)
