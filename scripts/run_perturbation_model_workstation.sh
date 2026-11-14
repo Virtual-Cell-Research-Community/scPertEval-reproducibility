@@ -21,7 +21,12 @@ MODELS_DIR="${PROJECT_ROOT}/models"
 DATASET="${DATASET:-replogle-weissman-2022-k562-essential}"
 PIXI_BIN="${PIXI_BIN:-${HOME}/.pixi/bin/pixi}"
 SHARED_PROJECT_ROOT="${SHARED_PROJECT_ROOT:-/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility}"
-if [[ -d "${SHARED_PROJECT_ROOT}" ]]; then
+if [[ -n "${RUNS_ROOT:-}" && -n "${LOG_ROOT:-}" ]]; then
+    # Explicit paths are authoritative. In particular, do not even stat a
+    # degraded SSHFS mount when the caller has selected local/fast scratch.
+    DEFAULT_RUNS_ROOT="${RUNS_ROOT}"
+    DEFAULT_LOG_ROOT="${LOG_ROOT}"
+elif [[ -d "${SHARED_PROJECT_ROOT}" ]]; then
     DEFAULT_RUNS_ROOT="${SHARED_PROJECT_ROOT}/runs"
     DEFAULT_LOG_ROOT="${SHARED_PROJECT_ROOT}/logs/perturbation-production-workstation"
 else
