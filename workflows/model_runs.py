@@ -94,6 +94,7 @@ class PopulationModelRun(PointModelRun):
         checkpoints: list[Path] | None = None,
         extra_artifacts: dict[str, Path] | None = None,
         evaluation_transform: str = "identity",
+        minimum_cells_per_condition: int = 50,
     ) -> Path:
         prediction_manifest = build_prediction_manifest(
             prediction_path=self.prediction_path,
@@ -109,6 +110,7 @@ class PopulationModelRun(PointModelRun):
             environment=self.environment,
             command=self.command,
             evaluation_transform=evaluation_transform,
+            minimum_cells_per_condition=minimum_cells_per_condition,
         )
         manifest_path = self.prediction_path.with_suffix(".manifest.json")
         manifest_path.write_text(json.dumps(prediction_manifest, indent=2) + "\n")
