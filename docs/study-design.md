@@ -20,10 +20,13 @@ uv run reproduce-all
 paper analyses. It resolves the production stage manifest, resumes checksum-valid
 DE and DRF/timing stages, and renders and validates the seven figure families.
 Helix executes the same stages as a bounded Slurm array; the zero-argument command
-can also run them sequentially. `reproduce-ranking-sensitivity` will evaluate frozen prediction
-bundles over the complete versioned sensitivity grid and render its result
-figures. `reproduce-all` will invoke both workflows after validating their
-shared prepared data and prediction dependencies. The latter two commands are
+can also run them sequentially. The Helix launcher separates DE, standard CPU
+DRF/timing, GWPS CPU DRF/timing, and GPU stages so that each resource class has a
+fixed request without forcing the small timing stages to reserve GWPS-scale RAM.
+`reproduce-ranking-sensitivity` will evaluate frozen prediction bundles over the
+complete versioned sensitivity grid and render its result figures.
+`reproduce-all` will invoke both workflows after validating their shared prepared
+data and prediction dependencies. The latter two commands are
 planned interfaces, not yet registered executables; documentation must not
 present them as complete until their end-to-end artifact tests pass.
 

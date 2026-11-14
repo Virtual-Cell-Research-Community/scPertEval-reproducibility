@@ -11,6 +11,7 @@ import pytest
 from analyses.protocol_behavior.cli import (
     DEFAULT_GWPS_DATASET,
     build_parser,
+    main,
     run_gwps_de_pilot,
     select_quartile_targets,
 )
@@ -40,6 +41,22 @@ def test_production_manifest_declares_all_analysis_units_and_chunks():
     assert sum(stage.kind == "drf-gpu" for stage in stages) == 8
     chemical = next(item for item in manifest["datasets"] if item["id"] == "chemical-a549")
     assert len(_declared_perturbations(chemical)) == 33
+
+
+@pytest.mark.parametrize(
+    ("stage_class", "expected_count", "expected_prefix"),
+    [
+        ("de", 48, "de."),
+        ("drf-cpu", 8, "drf.cpu."),
+        ("drf-gpu", 8, "drf.gpu."),
+    ],
+)
+def test_production_stage_classes_are_independently_listable(stage_class, expected_count, expected_prefix, capsys):
+    assert main(["--list-stages", "--stage-class", stage_class]) == 0
+
+    stages = capsys.readouterr().out.splitlines()
+    assert len(stages) == expected_count
+    assert all(stage.startswith(expected_prefix) for stage in stages)
 
 
 def test_analysis_unit_can_resolve_from_an_external_data_root(tmp_path, monkeypatch):

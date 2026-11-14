@@ -342,7 +342,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--stage", help=argparse.SUPPRESS)
     parser.add_argument("--list-stages", action="store_true", help=argparse.SUPPRESS)
-    parser.add_argument("--stage-class", choices=["all", "cpu", "gpu"], default="all", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--stage-class",
+        choices=["all", "cpu", "gpu", "de", "drf-cpu", "drf-gpu"],
+        default="all",
+        help=argparse.SUPPRESS,
+    )
     parser.add_argument("--finalize", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--targets-per-quartile", type=int, default=16)
     parser.add_argument("--seed", type=int, default=42)
@@ -376,6 +381,8 @@ def main(argv: list[str] | None = None) -> int:
             stages = [stage for stage in stages if stage.kind != "drf-gpu"]
         elif args.stage_class == "gpu":
             stages = [stage for stage in stages if stage.kind == "drf-gpu"]
+        elif args.stage_class != "all":
+            stages = [stage for stage in stages if stage.kind == args.stage_class]
         print("\n".join(stage.id for stage in stages))
         return 0
     if args.stage:
