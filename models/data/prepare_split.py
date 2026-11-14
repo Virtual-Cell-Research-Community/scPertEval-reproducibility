@@ -166,6 +166,10 @@ def build_split_manifest(
         "seed": seed,
         "n_folds": len(folds),
         "validation_fraction_of_remainder": VAL_FRAC_OF_REMAINDER,
+        "prediction_population_policy": {
+            "mode": "match-observed",
+            "control_sampling": "with-replacement-if-needed",
+        },
         "n_perturbations": len(genes),
         "perturbations_sha256": _ordered_strings_sha256(genes),
         "perturbations": genes,

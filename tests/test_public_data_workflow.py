@@ -1086,6 +1086,10 @@ def test_unseen_perturbation_split_manifest_is_explicit_and_full_coverage(tmp_pa
 
     assert manifest["n_perturbations"] == 5
     assert manifest["model_view"]["expression_space"] == "log1p_expression"
+    assert manifest["prediction_population_policy"] == {
+        "mode": "match-observed",
+        "control_sampling": "with-replacement-if-needed",
+    }
     assert sorted(gene for fold in manifest["folds"] for gene in fold["test"]) == genes
 
 
