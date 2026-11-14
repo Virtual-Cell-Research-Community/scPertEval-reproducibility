@@ -24,6 +24,17 @@ def apply_prediction_evaluation_transform(prediction: ad.AnnData, transform: str
     """Map a declared native prediction space into the shared evaluation view."""
     if transform == "identity":
         return prediction
+    if transform == "renormalize-log1p-to-10000":
+        result = prediction.copy()
+        if sp.issparse(result.X):
+            result.X.data = np.maximum(np.expm1(result.X.data), 0).astype(np.float32)
+            result.X.eliminate_zeros()
+        else:
+            result.X = np.maximum(
+                np.expm1(np.asarray(result.X, dtype=np.float32)),
+                0,
+            ).astype(np.float32)
+        return apply_prediction_evaluation_transform(result, "normalize-total-10000-log1p")
     if transform != "normalize-total-10000-log1p":
         raise ValueError(f"evaluation transform {transform!r} is not implemented")
 

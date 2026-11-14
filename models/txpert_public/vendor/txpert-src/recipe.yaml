@@ -1,0 +1,58 @@
+context:
+  version: "0.1.0"
+  rev: "08d82eea86746b044cf7531f4ec8c5f60e1cb73f"
+
+package:
+  name: txpert-src
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/valence-labs/TxPert.git
+    rev: ${{ rev }}
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    - rm -rf "$PREFIX/lib/python3.12/site-packages/gspp"
+    - mkdir -p "$PREFIX/lib/python3.12/site-packages"
+    - cp -r gspp "$PREFIX/lib/python3.12/site-packages/"
+    # constants.py resolves Path(__file__).parent.parent/data = site-packages/data, while the
+    # repository stores these files in top-level data/. Place them where its own code looks.
+    - rm -rf "$PREFIX/lib/python3.12/site-packages/data"
+    - mkdir -p "$PREFIX/lib/python3.12/site-packages/data"
+    - cp data/gears_gene_set.csv data/master_gene_set_sorted.csv data/pharos_mean_rank.csv "$PREFIX/lib/python3.12/site-packages/data/"
+    - cp -r data/graphs "$PREFIX/lib/python3.12/site-packages/data/"
+
+requirements:
+  run:
+    - python 3.12.*
+    - pytorch-gpu 2.6.*
+    - pytorch_geometric
+    - pytorch_scatter
+    - lightning 2.5.*
+    - scanpy 1.11.*
+    - anndata 0.11.*
+    - numpy 1.26.*
+    - pandas 2.2.*
+    - scipy 1.15.*
+    - timm 1.0.*
+    - scikit-learn 1.5.*
+    - joblib
+    - loguru
+    - hydra-core 1.3.*
+    - omegaconf 2.3.*
+    - pyarrow
+    - tqdm
+
+tests:
+  - python:
+      imports:
+        - gspp
+        - gspp.models.txpert
+        - gspp.data.graphmodule
+        - gspp.predictor
+
+about:
+  license: LicenseRef-Recursion-NonCommercial-EULA
+  summary: Pinned public TxPert source and STRING/GO assets for the TxPert-public benchmark adapter.

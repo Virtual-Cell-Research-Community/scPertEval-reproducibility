@@ -4,7 +4,7 @@ title = "fMLP-ESM2"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-and-generator-complete-esm2-asset-and-full-fold-pending"
+implementation_status = "adapter-generator-and-exact-model-smoke-complete-full-asset-and-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -22,6 +22,7 @@ weight_serialization = "pytorch-bin (the pinned revision has no safetensors; wei
 path = "models/fmlp/train_predict.py"
 asset_generator = "models/fmlp/generate_esm2_embeddings.py"
 environment = "models/pixi.toml#fmlp"
+asset_environment = "models/pixi.toml#esm2-assets"
 lockfile = "models/pixi.lock"
 
 [input]

@@ -313,6 +313,7 @@ def main() -> int:
             "identity",
             "log1p",
             "normalize-total-10000-log1p",
+            "renormalize-log1p-to-10000",
             "add-held-out-context-control",
             "add-held-out-context-control-then-log1p",
             "add-held-out-context-control-then-normalize-total-10000-log1p",

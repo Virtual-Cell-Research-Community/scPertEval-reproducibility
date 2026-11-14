@@ -4,7 +4,7 @@ title = "TxPert (public STRING+GO variant)"
 capability = "population"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-environment-and-synthetic-archival-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/valence-labs/TxPert"
@@ -23,11 +23,19 @@ space = "reference-workflow"
 perturbation_conditioning = "transferable public STRING and GO graph features"
 
 [output]
-space = "normalize_total_10000_log1p"
-evaluation_transform = "identity"
+space = "normalize_total_4000_log1p"
+evaluation_transform = "inverse-log-clip-nonnegative-renormalize-total-10000-log1p"
 prediction = "per-cell predictions transformed from held-out controls"
 
 [training]
 seeds = [42]
+epochs = 50
+batch_size = 64
+learning_rate = 0.001
+warmup_epochs = 5
+scheduler = "cosine"
+early_stop_monitor = "validation Pearson correlation of control-centered mean response"
+early_stop_patience = 40
+training_entry_point = "reconstructed from optimization logic and released public checkpoint metadata because upstream main.py exposes only inference/predict"
 hyperparameter_policy = "official public K562-essential configuration; no dataset-specific tuning"
 

@@ -74,6 +74,11 @@ def _sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def reproducible_command(command: list[str]) -> list[str]:
+    """Remove operational recovery flags that do not define a scientific run."""
+    return [argument for argument in command if argument != "--force"]
+
+
 def _atomic_write(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
@@ -141,7 +146,7 @@ def begin_run(
             "training_seed": int(seed),
         },
         "repository_revision": repository_revision(repo_root),
-        "command": command,
+        "command": reproducible_command(command),
         "configuration": configuration,
         "inputs": {
             name: {"path": str(path), "sha256": file_checksum(path)}

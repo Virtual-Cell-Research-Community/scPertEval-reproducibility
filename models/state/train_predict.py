@@ -175,7 +175,7 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 if str(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, str(REPOSITORY_ROOT))
 
-from workflows.predictions import build_prediction_manifest, cap_population_predictions
+from workflows.predictions import build_prediction_manifest
 from workflows.run_contract import begin_run, complete_run, repository_revision, resume_incomplete_run
 
 try:
@@ -570,11 +570,11 @@ def main() -> None:
     pred = ad.read_h5ad(pred_path)
     if context_split is None:
         # STATE yields control rows alongside the actual held-out perturbations. Keep every
-        # predicted test condition, but remove controls and apply the study's archival cap.
+        # predicted test cell and remove only controls; match-observed population validation
+        # below enforces the condition-specific ground-truth counts without an archival cap.
         labels = pred.obs[args.perturbation_key].astype(str)
         pred = pred[labels != "control"].copy()
         pred.obs["perturbation"] = pred.obs[args.perturbation_key].astype(str)
-        pred = cap_population_predictions(pred, seed=args.seed)
     else:
         pred = relabel_context_predictions(
             pred,

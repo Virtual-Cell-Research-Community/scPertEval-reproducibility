@@ -9,7 +9,13 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from workflows.predictions import build_prediction_manifest
-from workflows.run_contract import RunHandle, begin_run, complete_run, repository_revision
+from workflows.run_contract import (
+    RunHandle,
+    begin_run,
+    complete_run,
+    repository_revision,
+    reproducible_command,
+)
 
 
 @dataclass(frozen=True)
@@ -77,6 +83,50 @@ class PointModelRun:
         )
 
 
+@dataclass(frozen=True)
+class PopulationModelRun(PointModelRun):
+    """Resolved paths and provenance for one population-prediction model run."""
+
+    def complete(
+        self,
+        *,
+        implementation_revision: str,
+        checkpoints: list[Path] | None = None,
+        extra_artifacts: dict[str, Path] | None = None,
+        evaluation_transform: str = "identity",
+    ) -> Path:
+        prediction_manifest = build_prediction_manifest(
+            prediction_path=self.prediction_path,
+            truth_path=self.raw_path,
+            dataset_manifest_path=self.data_manifest_path,
+            split_manifest_path=self.split_manifest_path,
+            capability="population",
+            model_id=self.model_id,
+            implementation_revision=implementation_revision,
+            adapter_revision=repository_revision(self.repository_root),
+            fold=self.fold,
+            seed=self.seed,
+            environment=self.environment,
+            command=self.command,
+            evaluation_transform=evaluation_transform,
+        )
+        manifest_path = self.prediction_path.with_suffix(".manifest.json")
+        manifest_path.write_text(json.dumps(prediction_manifest, indent=2) + "\n")
+        artifacts: dict[str, Path] = {
+            "metrics": self.metrics_path,
+            "prediction": self.prediction_path,
+            "prediction_manifest": manifest_path,
+        }
+        for index, checkpoint in enumerate(checkpoints or []):
+            artifacts[f"checkpoint_{index}"] = checkpoint
+        artifacts.update(extra_artifacts or {})
+        return complete_run(
+            self.handle,
+            artifacts,
+            precomputed_checksums={"prediction": prediction_manifest["artifact"]["sha256"]},
+        )
+
+
 def add_point_run_arguments(parser: argparse.ArgumentParser, *, deterministic: bool = False) -> None:
     """Add the common fold/seed/archive options to a model adapter parser."""
     parser.add_argument(
@@ -126,7 +176,8 @@ def begin_point_model_run(
         data_manifest_path = split_manifest_path
 
     runs_root = args.runs_root or repository_root / "runs"
-    command = " ".join([sys.executable, *sys.argv])
+    command_arguments = reproducible_command([sys.executable, *sys.argv])
+    command = " ".join(command_arguments)
     inputs = {
         "model_view_manifest": data_manifest_path,
         "split_manifest": split_manifest_path,
@@ -140,7 +191,7 @@ def begin_point_model_run(
         seed=args.seed,
         configuration=configuration,
         inputs=inputs,
-        command=[sys.executable, *sys.argv],
+        command=command_arguments,
         repo_root=repository_root,
         force=args.force,
     )
@@ -160,3 +211,23 @@ def begin_point_model_run(
         environment=environment,
         command=command,
     )
+
+
+def begin_population_model_run(
+    args: argparse.Namespace,
+    *,
+    repository_root: Path,
+    model_id: str,
+    environment: str,
+    configuration: dict,
+    additional_inputs: dict[str, Path] | None = None,
+) -> PopulationModelRun:
+    point = begin_point_model_run(
+        args,
+        repository_root=repository_root,
+        model_id=model_id,
+        environment=environment,
+        configuration=configuration,
+        additional_inputs=additional_inputs,
+    )
+    return PopulationModelRun(**vars(point))

@@ -8,17 +8,19 @@ below is run via `pixi run -e <model> ...` from this directory (`models/`).
 The revised perturbation panel additionally includes TxPert-public, GenePert,
 fMLP-GenePT, fMLP-ESM2, and CellFlow; the chemical context panel adds
 SAMS-VAE(S). Their declarations are frozen under `configs/models/`. GenePert's
-adapter and the shared fMLP adapter have pinned Pixi environments and have
+GenePert, TxPert-public, and the shared fMLP adapter have pinned Pixi environments and have
 passed complete synthetic archival smoke tests. Their representative full-fold
-smokes remain pending until the frozen model view is materialized; fMLP-ESM2
-also still needs its pinned ESM2-15B embedding artifact generated. Its restart-safe generator
+smokes remain pending until the frozen model view is materialized. fMLP-ESM2's exact pinned
+15B checkpoint additionally passed a one-target load-and-embedding smoke; its complete durable
+target embedding asset is not yet complete. Its restart-safe generator
 is `models/fmlp/generate_esm2_embeddings.py`: cache Hugging Face model weights on local NVMe,
 cache each completed target embedding atomically, and write only the compact final dictionary
 plus its provenance manifest to durable storage. Miller's generator requests safetensors,
 but the pinned 15B revision publishes only sharded PyTorch `.bin` weights; the local generator
-uses those identical pinned weights and records the serialization correction. The other new
-adapters are still marked pending and are not yet launchable from the legacy
-scripts below.
+uses those identical pinned weights and records the serialization correction. Asset generation
+runs in the isolated `esm2-assets` environment (Torch 2.6, required by Transformers' CVE guard),
+while fMLP training remains on Miller's exact Torch 2.5.1 environment. CellFlow and
+SAMS-VAE(S) still need adapters and are not yet launchable from the legacy scripts below.
 
 This doesn't cover `compare.py`/`plots.py` — those are being folded into the project's
 notebooks and are still in flux.

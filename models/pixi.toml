@@ -171,15 +171,44 @@ scipy = "1.12.*"
 pandas = "2.2.*"
 anndata = "0.10.*"
 h5py = "3.11.*"
-accelerate = "1.7.*"
-safetensors = "0.5.*"
-transformers = "4.52.*"
 
 [feature.fmlp.tasks]
 smoke-test = "python -c \"import anndata, torch; print('anndata', anndata.__version__); print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available())\""
 fetch-genept-embeddings = { cmd = "mkdir -p sclambda/cache && cd sclambda/cache && curl -fsSL -o GenePT_emebdding_v2.zip 'https://zenodo.org/records/10833191/files/GenePT_emebdding_v2.zip?download=1' && unzip -o GenePT_emebdding_v2.zip && rm -f GenePT_emebdding_v2.zip", outputs = [
   "sclambda/cache/GenePT_emebdding_v2/GenePT_gene_protein_embedding_model_3_text.pickle.",
 ] }
+
+# The pinned ESM2-15B revision publishes only PyTorch .bin shards. Transformers 4.52 blocks
+# deserializing those shards with torch<2.6 due CVE-2025-32434, while fMLP training itself must
+# remain on Miller's exact torch 2.5.1. Keep asset generation isolated from model training.
+[feature.esm2-assets.system-requirements]
+cuda = "12"
+
+[feature.esm2-assets.dependencies]
+python = "3.11.*"
+cuda-version = "12.6.*"
+pytorch-gpu = "2.6.*"
+numpy = "1.26.*"
+pandas = "2.2.*"
+accelerate = "1.7.*"
+safetensors = "0.5.*"
+transformers = "4.52.*"
+
+[feature.esm2-assets.tasks]
+smoke-test = "python -c \"import torch, transformers; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('transformers', transformers.__version__)\""
+
+# --- TxPert-public (public STRING+GO graph variant) ------------------------
+# The public release exposes inference and prediction only, although its LightningModule
+# contains the complete training logic. Our adapter supplies the missing Trainer.fit entry
+# point with the exact schedule recoverable from the released public checkpoint.
+[feature.txpert-public.system-requirements]
+cuda = "12"
+
+[feature.txpert-public.dependencies]
+txpert-src = { path = "txpert_public/vendor/txpert-src" }
+
+[feature.txpert-public.tasks]
+smoke-test = "python -c \"import torch, lightning, gspp; from gspp.models.txpert import TxPert; from gspp.data.graphmodule import GSPGraph; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('lightning', lightning.__version__)\""
 
 # --- STATE (https://github.com/ArcInstitute/state) --------------------------
 # Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
@@ -347,6 +376,8 @@ presage = { features = ["presage"], no-default-feature = true }
 sclambda = { features = ["sclambda"], no-default-feature = true }
 genepert = { features = ["genepert"], no-default-feature = true }
 fmlp = { features = ["fmlp"], no-default-feature = true }
+esm2-assets = { features = ["esm2-assets"], no-default-feature = true }
+txpert-public = { features = ["txpert-public"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }

@@ -71,6 +71,7 @@ from models.trvae.context_config import densify_expression as densify_trvae_expr
 from models.trvae.context_config import select_heldout_controls as select_trvae_controls
 from models.trvae.context_config import select_trvae_training_data
 from models.trvae.scarchon_patch import eligible_mmd_groups
+from models.txpert_public.train_predict import to_txpert_log1p_4000, txpert_annotations
 from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
@@ -96,6 +97,7 @@ from workflows.run_contract import (
     begin_run,
     complete_run,
     completed_run_is_valid,
+    reproducible_command,
     resume_incomplete_run,
     run_directory,
 )
@@ -173,6 +175,30 @@ def test_esm2_generator_reproduces_longest_canonical_sequence_and_atomic_cache(t
     _atomic_numpy(expected, cache)
     np.testing.assert_array_equal(_load_cached(cache, expected_dimension=3), expected)
     assert _load_cached(cache, expected_dimension=2) is None
+
+
+def test_txpert_native_scale_and_annotations_round_trip_to_shared_view() -> None:
+    counts = np.asarray([[1.0, 3.0], [2.0, 2.0]], dtype=np.float32)
+    shared = np.log1p(counts * 2_500.0)
+    native = to_txpert_log1p_4000(shared)
+    np.testing.assert_allclose(np.expm1(native).sum(axis=1), 4_000.0, rtol=1e-5)
+
+    prediction = AnnData(X=native, obs={"perturbation": ["A", "B"]})
+    restored = apply_prediction_evaluation_transform(prediction, "renormalize-log1p-to-10000")
+    np.testing.assert_allclose(restored.X, shared, rtol=1e-5)
+
+    annotated = AnnData(
+        X=sp.csr_matrix(np.eye(2)),
+        obs={
+            "perturbation": ["A", "control"],
+            "is_control": [False, True],
+            "batch": pd.Categorical([1, 2]),
+        },
+    )
+    txpert_annotations(annotated)
+    assert annotated.obs["condition"].tolist() == ["A+ctrl", "ctrl"]
+    assert annotated.obs["condition_name"].tolist() == ["K562_A+ctrl_1+1", "K562_ctrl_1+1"]
+    assert annotated.obs["control"].tolist() == [0, 1]
 
 
 def test_dataset_manifests_pin_sources_and_reference_outputs() -> None:
@@ -1065,6 +1091,29 @@ def test_run_contract_skips_only_checksum_valid_completed_runs(tmp_path: Path) -
     prediction.write_bytes(b"tampered")
     third = begin_run(root, **kwargs)
     assert not third.skipped
+
+
+def test_force_is_not_part_of_reproducible_run_identity(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.json"
+    input_path.write_text('{"frozen": true}\n')
+    root = tmp_path / "runs"
+    kwargs = {
+        "experiment": "experiment",
+        "model": "model",
+        "fold": "holdout-a",
+        "seed": 42,
+        "configuration": {"epochs": 1},
+        "inputs": {"input": input_path},
+        "repo_root": ROOT,
+    }
+
+    first = begin_run(root, command=["python", "runner.py", "--force"], **kwargs)
+    prediction = first.directory / "predictions" / "predictions.h5ad"
+    prediction.write_bytes(b"prediction")
+    complete_run(first, {"prediction": prediction})
+
+    assert reproducible_command(["python", "runner.py", "--force"]) == ["python", "runner.py"]
+    assert begin_run(root, command=["python", "runner.py"], **kwargs).skipped
 
 
 def test_run_contract_accepts_a_valid_precomputed_artifact_checksum(tmp_path: Path) -> None:
