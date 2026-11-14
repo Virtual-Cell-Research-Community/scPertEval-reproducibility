@@ -273,8 +273,8 @@ def _plot_jaccard(
 ) -> None:
     columns = min(4, len(matrices))
     rows = int(np.ceil(len(matrices) / columns))
-    fig = plt.figure(figsize=(4.5 * columns, 5.5 * rows + 7.5), layout="constrained")
-    outer = fig.add_gridspec(3, 1, height_ratios=[5.5 * rows, 2.5, 4.5])
+    fig = plt.figure(figsize=(4.5 * columns, 8 * rows + 4.5), layout="constrained")
+    outer = fig.add_gridspec(3, 1, height_ratios=[5.5 * rows, 2.5 * rows, 4.5])
     heat_grid = outer[0].subgridspec(rows, columns)
     axes = np.asarray([[fig.add_subplot(heat_grid[row, column]) for column in range(columns)] for row in range(rows)])
     image = None
@@ -287,9 +287,9 @@ def _plot_jaccard(
         ax.axis("off")
     if image is not None:
         fig.colorbar(image, ax=axes.ravel().tolist(), shrink=0.55, label="Mean Jaccard")
-    distribution_grid = outer[1].subgridspec(1, columns)
+    distribution_grid = outer[1].subgridspec(rows, columns)
     for index, (dataset, _matrix) in enumerate(matrices):
-        distribution_ax = fig.add_subplot(distribution_grid[index])
+        distribution_ax = fig.add_subplot(distribution_grid[index // columns, index % columns])
         values = spearman_values[index]
         finite = values[np.isfinite(values)]
         if finite.size:

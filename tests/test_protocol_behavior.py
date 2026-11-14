@@ -22,6 +22,7 @@ from analyses.protocol_behavior.render import (
     FIGURE_STEMS,
     _concordance_rows,
     _k_grid,
+    _plot_jaccard,
     _table_text_color,
     _wrap_table_label,
     render_and_validate,
@@ -178,6 +179,18 @@ def test_concordance_uses_legacy_grid_and_reports_aucc():
     assert [row["k"] for row in rows] == _k_grid(1000).tolist()
     assert all(row["median"] == pytest.approx(1.0) for row in rows)
     assert all(row["median_aucc"] == pytest.approx(1.0) for row in rows)
+
+
+def test_jaccard_renderer_supports_multiple_dataset_rows(tmp_path):
+    labels = ["criterion-a", "criterion-b"]
+    matrices = [(f"dataset-{index}", np.eye(2)) for index in range(8)]
+    median_sizes = [np.array([10.0, 20.0]) for _dataset in matrices]
+    spearman_values = [np.linspace(0, 1, 10) for _dataset in matrices]
+    output = tmp_path / "jaccard.png"
+
+    _plot_jaccard(matrices, labels, median_sizes, spearman_values, output, "Example")
+
+    assert output.stat().st_size > 0
 
 
 def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
