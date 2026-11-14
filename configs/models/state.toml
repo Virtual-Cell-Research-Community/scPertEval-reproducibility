@@ -28,6 +28,7 @@ prediction = "native per-cell predictions; no pseudobulk during inference"
 [training]
 seeds = [42, 43, 44]
 max_steps = 10000
+val_freq = 272
 early_stop_patience = 10
 batch_size = 64
 cell_set_len = 64

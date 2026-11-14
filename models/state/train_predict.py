@@ -91,9 +91,9 @@ Replogle-Nadig") with a few deliberate deviations:
   fine-tuning mechanics; the only concrete step/epoch/optimizer numbers in the paper, section
   5.6.3-5.6.4, are for the unrelated 600M-parameter SE pretraining model) — so 80000 was only
   ever Colab-derived, not paper-grounded. A real diagnostic run at hidden_dim=328 (the old
-  default; 10 epochs = 470 steps at 47 steps/epoch, validating every half-epoch, on the actual
-  full-scale data) showed val_loss flat/noisy from step ~287 (epoch ~6) onward — clear evidence
-  of a plateau far short of 80000. 10000 is used instead — note the exact steps/epoch, and so
+  default; 10 epochs = 470 steps at 47 steps/epoch on an earlier, smaller model view) showed
+  val_loss flat/noisy from step ~287 (epoch ~6) onward — clear evidence of a plateau far short
+  of 80000. 10000 is used instead — note the exact steps/epoch, and so
   the exact epoch-equivalent of 10000, shifts with cell_set_len (fewer cells per set means more
   sentences per epoch — see the cell_set_len bullet above); re-check the plateau empirically
   whenever hidden_dim/cell_set_len change rather than assuming the old run's step count still
@@ -117,8 +117,9 @@ Replogle-Nadig") with a few deliberate deviations:
   --batch-size 4`). `--num-workers` doesn't need lowering for smoke runs specifically — see the
   `main()` argument's own docstring for why (predict's own dataloader workers are always forced
   to 0 regardless of this value, which is what smoke-scale `--num-workers 0` was working around).
-- `training.val_freq` defaults to 47, not the Colab's 2000 — one full epoch's worth of steps at
-  cell_set_len=64 (measured: 47 steps/epoch), not an arbitrary smaller number. This matters for
+- `training.val_freq` defaults to 272, not the Colab's 2000 — one full epoch's worth of steps
+  for the frozen 50-cell GWPS model view at cell_set_len=64 (measured directly from the first
+  production fold), not an arbitrary smaller number. This matters for
   two reasons, not just giving EarlyStopping (see next bullet) enough resolution: PRESAGE and
   scGPT — the two other benchmarked models with real early stopping — both validate exactly
   once per epoch (PRESAGE: no val_check_interval/check_val_every_n_epoch override anywhere in
@@ -127,7 +128,7 @@ Replogle-Nadig") with a few deliberate deviations:
   no sub-epoch checks). STATE's val_freq is a *step* count, not an epoch count — at the Colab's
   2000 (or even the previously-tried 200), checks land mid-epoch (confirmed directly in
   metrics.csv: `epoch=4 step=206`, not aligned to any epoch boundary), so `patience` wouldn't
-  mean "N epochs of no improvement" the way it does for PRESAGE/scGPT. At val_freq=47, checks
+  mean "N epochs of no improvement" the way it does for PRESAGE/scGPT. At val_freq=272, checks
   land on true epoch boundaries, making `patience` directly comparable in epoch terms.
 - STATE has no EarlyStopping callback anywhere in the installed library (arc-state==0.11.1) —
   confirmed directly against `state/_cli/_tx/_train.py`/`state/tx/utils/__init__.py`;
@@ -148,7 +149,7 @@ Replogle-Nadig") with a few deliberate deviations:
   diagnostic), and produced the exact same stop point as 0.0 at every patience value tested,
   since the real step-to-step "new low" moves in that data are almost always bigger than 0.01
   even amid noise. It wasn't filtering anything, so it was dropped rather than kept as a knob
-  doing nothing. `patience=10` (epochs, not steps, given val_freq=47 above) matches PRESAGE's
+  doing nothing. `patience=10` (epochs, not steps, given val_freq=272 above) matches PRESAGE's
   and scGPT's own patience=10 — not yet validated against a real diagnostic at this cadence.
 """
 
@@ -329,20 +330,21 @@ def main() -> None:
         "--max-steps",
         type=int,
         default=10000,
-        help="training.max_steps (default: 10000, full-scale — ~213 epochs at 47 steps/epoch with cell_set_len=64, see module docstring)",
+        help="training.max_steps (default: 10000, full-scale — ~36 epochs at 272 steps/epoch for the frozen GWPS view with cell_set_len=64, see module docstring)",
     )
     # training.val_freq is the *actual* checkpoint-cadence knob (every_n_train_steps=
     # val_freq in state's own ModelCheckpoint callback — see --ckpt-every-n-steps below),
     # not just a validation-logging frequency. The Colab uses the library's own default
-    # (2000) as-is; set here to 47 (one full epoch's worth of steps at cell_set_len=64) so
+    # (2000) as-is; set here to 272 (one full epoch's worth of steps for the frozen 50-cell
+    # GWPS model view at cell_set_len=64, measured from the first production fold) so
     # EarlyStopping's `patience` means "N epochs with no improvement" the same way it does
     # for PRESAGE/scGPT, not an arbitrary sub-epoch step count — see module docstring.
-    parser.add_argument("--val-freq", type=int, default=47, help="training.val_freq (default: 47, one epoch at cell_set_len=64 — matches PRESAGE/scGPT's per-epoch validation cadence so EarlyStopping's patience is directly comparable, see module docstring)")
+    parser.add_argument("--val-freq", type=int, default=272, help="training.val_freq (default: 272, one epoch for the frozen 50-cell GWPS view at cell_set_len=64 — matches PRESAGE/scGPT's per-epoch validation cadence so EarlyStopping's patience is directly comparable, see module docstring)")
     parser.add_argument(
         "--early-stop-patience",
         type=int,
         default=10,
-        help="EarlyStopping patience in validation checks (default: 10 epochs at val_freq=47, matching PRESAGE's and scGPT's own patience=10 — min_delta left at Lightning's own default, see module docstring and state/patch/sitecustomize.py)",
+        help="EarlyStopping patience in validation checks (default: 10 epochs at val_freq=272 for the frozen GWPS view, matching PRESAGE's and scGPT's own patience=10 — min_delta left at Lightning's own default, see module docstring and state/patch/sitecustomize.py)",
     )
     parser.add_argument(
         "--ckpt-every-n-steps",
