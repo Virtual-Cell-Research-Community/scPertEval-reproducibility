@@ -1,9 +1,10 @@
 #!/bin/bash
 # Submit the frozen five-fold, single-seed essential-screen grid for implemented adapters.
 #
-# Usage: models/slurm/submit_all.sh [--test-only] [--canary|--smoke] [--afterok JOB_ID] [dataset] [model ...]
+# Usage: models/slurm/submit_all.sh [--test-only] [--staged|--canary|--smoke] [--afterok JOB_ID] [dataset] [model ...]
 #   models/slurm/submit_all.sh
 #   models/slurm/submit_all.sh --test-only
+#   models/slurm/submit_all.sh --staged
 #   models/slurm/submit_all.sh --canary
 #   models/slurm/submit_all.sh --smoke replogle-weissman-2022-k562-essential gears scgpt
 #   models/slurm/submit_all.sh --smoke --afterok 123456
@@ -16,12 +17,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODELS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 TEST_ONLY=0
+STAGED=0
 CANARY=0
 SMOKE=0
 AFTEROK=""
 while [[ "${1:-}" == --* ]]; do
     case "$1" in
         --test-only) TEST_ONLY=1 ;;
+        --staged) STAGED=1 ;;
         --canary) CANARY=1 ;;
         --smoke) SMOKE=1 ;;
         --afterok)
@@ -33,8 +36,12 @@ while [[ "${1:-}" == --* ]]; do
     esac
     shift
 done
-if [[ "$CANARY" == "1" && "$SMOKE" == "1" ]]; then
-    echo "--canary and --smoke are mutually exclusive" >&2
+if ((STAGED + CANARY + SMOKE > 1)); then
+    echo "--staged, --canary, and --smoke are mutually exclusive" >&2
+    exit 2
+fi
+if [[ "$STAGED" == "1" && ("$TEST_ONLY" == "1" || -n "$AFTEROK") ]]; then
+    echo "--staged cannot be combined with --test-only or --afterok" >&2
     exit 2
 fi
 DATASET="${1:-replogle-weissman-2022-k562-essential}"
@@ -78,6 +85,8 @@ for MODEL in "${MODELS[@]}"; do
     )
     if [[ "$MODEL" == "sclambda" && "$SMOKE" != "1" ]]; then
         SBATCH_ARGS+=(--mem=256G)
+    elif [[ "$SMOKE" != "1" ]]; then
+        SBATCH_ARGS+=(--mem=64G)
     fi
     if [[ "$SMOKE" == "1" ]]; then
         SBATCH_ARGS+=(--cpus-per-task=8 --mem=64G --time=08:00:00)
@@ -88,5 +97,22 @@ for MODEL in "${MODELS[@]}"; do
     if [[ "$TEST_ONLY" == "1" ]]; then
         SBATCH_ARGS+=(--test-only)
     fi
-    sbatch "${SBATCH_ARGS[@]}" "$SCRIPT_DIR/train.sbatch"
+    if [[ "$STAGED" == "1" ]]; then
+        CANARY_ARGS=("${SBATCH_ARGS[@]}")
+        for index in "${!CANARY_ARGS[@]}"; do
+            if [[ "${CANARY_ARGS[$index]}" == --array=* ]]; then
+                CANARY_ARGS[$index]="--array=0"
+            fi
+        done
+        CANARY_ID="$(sbatch --parsable "${CANARY_ARGS[@]}" "$SCRIPT_DIR/train.sbatch")"
+        CANARY_ID="${CANARY_ID%%;*}"
+        echo "submitted ${MODEL} canary ${CANARY_ID}"
+        sbatch \
+            --dependency="afterok:${CANARY_ID}" \
+            --kill-on-invalid-dep=yes \
+            "${SBATCH_ARGS[@]}" \
+            "$SCRIPT_DIR/train.sbatch"
+    else
+        sbatch "${SBATCH_ARGS[@]}" "$SCRIPT_DIR/train.sbatch"
+    fi
 done

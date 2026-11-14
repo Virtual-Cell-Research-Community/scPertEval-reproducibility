@@ -162,6 +162,7 @@ On Slurm, submit the same frozen grid as arrays:
 ```bash
 models/slurm/submit_all.sh                 # five folds at seed 42
 models/slurm/submit_all.sh --test-only     # validate scheduling without submitting
+models/slurm/submit_all.sh --staged        # canary, then family-local afterok array
 models/slurm/submit_all.sh --canary        # full-budget fold 0 retained as production
 models/slurm/submit_all.sh --smoke         # fold 0, seed 42, reduced training budgets
 models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/preparation job
@@ -170,7 +171,8 @@ models/slurm/submit_all.sh --smoke --afterok 123456  # wait for an asset/prepara
 Every model uses one five-fold array at seed 42. TabICLv2 is training-free and
 deterministic. `--smoke` submits only fold 0 at seed 42 with model-specific
 truncated budgets; `--canary` submits the same fold at its complete frozen
-budget. Full arrays default to
+budget. `--staged` submits that production canary and a dependent full array;
+an unsuccessful canary cancels only its own dependent family. Full arrays default to
 one concurrent task per model (`MAX_CONCURRENT=1`) so no model family launches several large
 SDS reads at once. Set `MAX_CONCURRENT` explicitly only after confirming storage and node
 capacity. Full tasks retain conservative 192 GiB requests until essential-screen
@@ -328,6 +330,7 @@ wrapper rather than submitting the array script directly:
 
 ```bash
 scripts/submit_context_models_helix.sh --test-only --canary
+scripts/submit_context_models_helix.sh --staged
 scripts/submit_context_models_helix.sh --canary
 scripts/submit_context_models_helix.sh  # remaining/full seven-fold arrays
 ```
