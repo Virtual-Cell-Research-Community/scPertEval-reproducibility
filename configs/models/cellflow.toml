@@ -4,13 +4,15 @@ title = "CellFlow"
 capability = "population"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-pending"
+implementation_status = "adapter-environment-and-full-architecture-synthetic-smoke-complete-full-fold-pending"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
 revision = "15361aec8392fb45a75c8c9da88ca5e6510fca97"
 model_key = "cellflow"
 reference_implementation = "https://github.com/theislab/cellflow"
+reference_revision = "0f55ba20c49bcee60da979bd5a9fb4ab16420b1e"
+license = "PolyForm Noncommercial License 1.0.0"
 
 [adapter]
 path = "models/cellflow/train_predict.py"
@@ -18,15 +20,33 @@ environment = "models/pixi.toml#cellflow"
 lockfile = "models/pixi.lock"
 
 [input]
-space = "reference-workflow"
+space = "normalize_total_10000_log1p"
 perturbation_conditioning = "pinned ESM2 embeddings permit unseen-target generalization"
 
 [output]
-space = "reference-native"
-evaluation_transform = "reference-workflow-to-shared-log1p"
-prediction = "native flow-matching population predictions"
+space = "normalize_total_10000_log1p reconstructed from the centered 50-PC model space"
+evaluation_transform = "identity"
+prediction = "native flow-matching population predictions, exactly size-matched to each observed test population"
 
 [training]
 seeds = [42]
+iterations = 200000
+batch_size = 1024
+learning_rate = 0.00005
+optimizer = "Adam with optax.MultiSteps(every_k_schedule=20)"
+pca_components = 50
+condition_embedding_dim = 1024
+hidden_dims = [4096, 4096, 4096]
+decoder_dims = [4096, 4096, 4096]
+control_cells_train = 2048
+control_cells_validation = 256
+control_cells_test = 512
+validation_usage = "metrics at the end of training; not checkpoint selection"
 hyperparameter_policy = "Miller et al. published unseen-gene configuration; no dataset-specific tuning"
+
+[validation]
+synthetic_gpu_smoke = "passed with the complete published architecture and one training iteration"
+checkpoint_reload = "reloaded predictions match the archived predictions"
+restart_safety = "verified completed run is skipped"
+representative_full_fold = "pending frozen essential model view"
 

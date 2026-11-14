@@ -361,10 +361,11 @@ after the final run; completed runs remain safe to skip on restart.
 2. Regenerate the genetic context model view at the 50-cell rule.
 3. Materialize the now-frozen 1,352-target essential model view and record its
    checksum and metadata-validation record.
-4. Implement and pin TxPert-public, CellFlow, and SAMS-VAE(S) adapters and Pixi
-   environments; GenePert and fMLP are implemented and synthetically
-   smoke-tested, with representative full-fold smokes waiting on item 3 and the
-   fMLP-ESM2 asset still to generate.
+4. Implement and pin SAMS-VAE(S). TxPert-public and CellFlow now have pinned
+   environments and complete synthetic archival smokes; GenePert and both fMLP
+   variants are implemented and synthetically smoke-tested. Representative
+   full-fold smokes wait on item 3. The full 1,352-target ESM2 asset is being
+   generated once on Beast with a restart-safe per-gene cache.
 5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
    digests, then reconstruct their Pixi environments.
 6. Smoke-test every context adapter on one genetic and one chemical fold;
@@ -390,3 +391,12 @@ benchmark results and do not authorize the full launch.
 | Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
 
 The full benchmark remains deliberately unlaunched until every row is ready.
+
+For the perturbation-generalization panel, TxPert-public and CellFlow have both
+passed full-contract synthetic GPU smokes. CellFlow used the complete published
+4,096-wide architecture rather than a reduced test network; its saved model
+reloaded to reproduce the archived predictions, and a verified completed run
+was skipped on restart. Its native full-architecture checkpoint is about
+1.7 GB, so five retained fold checkpoints are expected to consume roughly
+8.5 GB before filesystem compression. Representative full-fold runtime remains
+the inclusion gate.

@@ -210,6 +210,44 @@ txpert-src = { path = "txpert_public/vendor/txpert-src" }
 [feature.txpert-public.tasks]
 smoke-test = "python -c \"import torch, lightning, gspp; from gspp.models.txpert import TxPert; from gspp.data.graphmodule import GSPGraph; print('torch', torch.__version__, 'cuda available:', torch.cuda.is_available()); print('lightning', lightning.__version__)\""
 
+# --- CellFlow (Miller et al. unseen-gene configuration) -------------------
+# Miller pins CellFlow source at this revision, removes two stale package constraints, and
+# installs current CUDA JAX. Package the exact source without dependencies and let Pixi lock
+# the complete runtime explicitly instead of relying on an unversioned Docker build.
+[feature.cellflow.system-requirements]
+cuda = "12"
+
+[feature.cellflow.dependencies]
+cellflow-src = { path = "cellflow/vendor/cellflow-src" }
+python = "3.13.*"
+numpy = "2.2.*"
+pandas = "2.2.*"
+scipy = "1.15.*"
+scikit-learn = "1.6.*"
+anndata = "0.11.*"
+scanpy = "1.11.*"
+h5py = "3.13.*"
+pyarrow = "*"
+# CellFlow imports its optional embedding helpers eagerly at package import. Miller's image
+# therefore installs these even though our adapter consumes precomputed ESM2 embeddings.
+pytorch-gpu = ">=2.7"
+transformers = "*"
+
+[feature.cellflow.pypi-dependencies]
+jax = { version = "*", extras = ["cuda12"] }
+flax = "*"
+orbax-checkpoint = "*"
+dask = "*"
+diffrax = "*"
+ott-jax = "==0.5"
+optax = "*"
+adjusttext = "*"
+cloudpickle = "*"
+session-info = "*"
+
+[feature.cellflow.tasks]
+smoke-test = "python -c \"import jax, cellflow; from cellflow.model import CellFlow; print('jax', jax.__version__, 'devices', jax.devices()); print('cellflow import succeeded')\""
+
 # --- STATE (https://github.com/ArcInstitute/state) --------------------------
 # Unlike gears/presage/sclambda, STATE (`arc-state`) is a properly packaged, PyPI-published
 # project (pyproject.toml, hatchling build) — a plain pypi-dependency, no vendoring needed.
@@ -378,6 +416,7 @@ genepert = { features = ["genepert"], no-default-feature = true }
 fmlp = { features = ["fmlp"], no-default-feature = true }
 esm2-assets = { features = ["esm2-assets"], no-default-feature = true }
 txpert-public = { features = ["txpert-public"], no-default-feature = true }
+cellflow = { features = ["cellflow"], no-default-feature = true }
 state = { features = ["state"], no-default-feature = true }
 cpa = { features = ["cpa"], no-default-feature = true }
 biolord = { features = ["biolord"], no-default-feature = true }

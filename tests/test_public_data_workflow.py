@@ -24,6 +24,11 @@ from models.biolord.context_config import (
     relabel_biolord_predictions,
     select_heldout_controls,
 )
+from models.cellflow.train_predict import (
+    annotate_cellflow,
+    split_cellflow_data,
+)
+from models.cellflow.train_predict import load_embeddings as load_cellflow_embeddings
 from models.cpa.context_config import assign_cpa_splits, build_counterfactual_queries
 from models.data.prepare_context import _input_provenance, _verify_inputs_unchanged, prepare_context_view
 from models.data.prepare_data import (
@@ -199,6 +204,46 @@ def test_txpert_native_scale_and_annotations_round_trip_to_shared_view() -> None
     assert annotated.obs["condition"].tolist() == ["A+ctrl", "ctrl"]
     assert annotated.obs["condition_name"].tolist() == ["K562_A+ctrl_1+1", "K562_ctrl_1+1"]
     assert annotated.obs["control"].tolist() == [0, 1]
+
+
+def test_cellflow_embeddings_annotations_and_frozen_split(tmp_path: Path) -> None:
+    embedding_path = tmp_path / "esm2.pickle"
+    with embedding_path.open("wb") as stream:
+        pickle.dump(
+            {
+                "A": np.asarray([3.0, 4.0], dtype=np.float32),
+                "B": np.asarray([5.0, 12.0], dtype=np.float32),
+            },
+            stream,
+        )
+    embeddings = load_cellflow_embeddings(embedding_path, ["A", "B"])
+    np.testing.assert_array_equal(embeddings["control"], np.zeros(2, dtype=np.float32))
+
+    data = AnnData(
+        X=sp.csr_matrix(np.eye(8, dtype=np.float32)),
+        obs={
+            "perturbation": ["control", "control", "control", "control", "A", "A", "B", "B"],
+            "is_control": [True, True, True, True, False, False, False, False],
+        },
+    )
+    annotate_cellflow(data, embeddings)
+    assert data.obs["condition"].tolist()[:5] == ["control"] * 4 + ["A"]
+    assert data.obs["gene_target_2"].unique().tolist() == ["control"]
+    assert data.uns["gene_embeddings"]["A"].tolist() == [3.0, 4.0]
+
+    fold = {"train": ["A"], "val": ["B"], "test": []}
+    train, validation, test_controls = split_cellflow_data(
+        data,
+        fold,
+        seed=42,
+        n_control_train=2,
+        n_control_val=1,
+        n_control_test=3,
+    )
+    assert train.obs["condition"].value_counts().to_dict() == {"control": 2, "A": 2}
+    assert validation.obs["condition"].value_counts().to_dict() == {"B": 2, "control": 1}
+    assert test_controls.n_obs == 3
+    assert test_controls.obs["is_control"].all()
 
 
 def test_dataset_manifests_pin_sources_and_reference_outputs() -> None:

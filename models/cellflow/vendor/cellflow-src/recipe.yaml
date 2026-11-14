@@ -1,0 +1,39 @@
+context:
+  version: "0.1.0"
+  rev: "0f55ba20c49bcee60da979bd5a9fb4ab16420b1e"
+
+package:
+  name: cellflow-src
+  version: ${{ version }}
+
+source:
+  - git: https://github.com/theislab/CellFlow.git
+    rev: ${{ rev }}
+
+build:
+  number: 0
+  noarch: generic
+  script:
+    - rm -rf "$PREFIX/lib/python3.13/site-packages/cellflow"
+    - rm -rf "$PREFIX/lib/python3.13/site-packages/cfp"
+    - mkdir -p "$PREFIX/lib/python3.13/site-packages"
+    - cp -r src/cellflow "$PREFIX/lib/python3.13/site-packages/"
+    - cp -r src/cfp "$PREFIX/lib/python3.13/site-packages/"
+    - mkdir -p "$PREFIX/lib/python3.13/site-packages/cellflow_src-0.1.0.dist-info"
+    - |
+      printf 'Metadata-Version: 2.1\nName: cellflow-src\nVersion: 0.1.0\n' > "$PREFIX/lib/python3.13/site-packages/cellflow_src-0.1.0.dist-info/METADATA"
+
+requirements:
+  run:
+    - python 3.13.*
+
+tests:
+  - python:
+      imports:
+        - cellflow
+        - cellflow.model
+        - cellflow.preprocessing
+
+about:
+  license: PolyForm-Noncommercial-1.0.0
+  summary: Pinned CellFlow source used by Miller et al.'s CellSimBench adapter.
