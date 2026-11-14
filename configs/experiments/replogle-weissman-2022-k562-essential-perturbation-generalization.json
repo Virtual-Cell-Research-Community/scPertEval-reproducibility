@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "replogle-weissman-2022-k562-essential-perturbation-generalization",
   "role": "primary",
-  "status": "inputs-materialized-runtime-gates-pending",
+  "status": "inputs-materialized-runtime-gates-passed",
   "dataset": "replogle-weissman-2022-k562-essential",
   "task": "unseen-perturbation",
   "models": [
@@ -37,6 +37,18 @@
   },
   "model_fit_scope": "one-model-per-fold",
   "hyperparameter_policy": "published-or-established-config-no-hpo",
+  "new_model_runtime_gates": {
+    "status": "passed",
+    "representative_fold": 0,
+    "maximum_projected_gpu_hours_per_fold": 24,
+    "models": [
+      "txpert-public",
+      "genepert",
+      "fmlp-genept",
+      "fmlp-esm2",
+      "cellflow"
+    ]
+  },
   "gene_panel": {
     "strategy": "all-measured-genes",
     "n_genes": 8563

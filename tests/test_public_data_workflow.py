@@ -505,7 +505,7 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
         ).read_text()
     )
     assert experiment["role"] == "primary"
-    assert experiment["status"] == "inputs-materialized-runtime-gates-pending"
+    assert experiment["status"] == "inputs-materialized-runtime-gates-passed"
     assert experiment["training_seeds"] == [42]
     assert experiment["gene_panel"] == {"strategy": "all-measured-genes", "n_genes": 8563}
     assert experiment["models"] == [
@@ -520,6 +520,12 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
         "fmlp-esm2",
         "cellflow",
     ]
+    assert experiment["new_model_runtime_gates"] == {
+        "status": "passed",
+        "representative_fold": 0,
+        "maximum_projected_gpu_hours_per_fold": 24,
+        "models": ["txpert-public", "genepert", "fmlp-genept", "fmlp-esm2", "cellflow"],
+    }
     assert experiment["n_perturbations"] == len(experiment["perturbations"]) == 1352
     assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
     assert all(experiment["cohort_freeze_requirements"].values())

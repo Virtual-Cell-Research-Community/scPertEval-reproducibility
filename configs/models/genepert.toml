@@ -4,7 +4,7 @@ title = "GenePert"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-and-synthetic-smoke-complete-full-fold-pending"
+implementation_status = "representative-full-fold-runtime-gate-passed"
 
 [implementation]
 repository = "https://github.com/zou-group/GenePert"
@@ -30,4 +30,10 @@ method = "ridge regression"
 development_pool = "train plus validation; the method performs no checkpoint selection"
 alpha = 10.0
 hyperparameter_policy = "fixed from the official K562 example before benchmark outcomes; no dataset-specific tuning"
+
+[validation]
+representative_full_fold = "passed on frozen K562-essential fold 0"
+wall_time_seconds = 113
+prediction_shape = [271, 8563]
+completion_contract = "prediction shape, condition and gene order, finite values, checksums, and completion record validated"
 

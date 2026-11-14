@@ -21,6 +21,12 @@ chemical smoke test but is excluded from the 480-perturbation genetic track by
 the prespecified scaling rule. No-change, training-condition mean, and a
 context-aware linear model are ranked baselines.
 
+All newly added models have passed representative frozen-fold runtime gates.
+Their declarations record the measured wall time, prediction shape, storage,
+and conservative full-budget projection. CellFlow requires Beauty's 98 GB GPU;
+the other new runners fit the available workstation hardware. These gates
+validate feasibility and archival contracts, not model performance.
+
 All benchmark tracks use the single training seed 42. Hugo's existing model
 environments remain in Pixi. New model runners also
 receive one Pixi environment per model, reconstructed from pinned reference

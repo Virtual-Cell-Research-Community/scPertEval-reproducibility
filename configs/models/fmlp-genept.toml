@@ -4,7 +4,7 @@ title = "fMLP-GenePT"
 capability = "point"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-and-synthetic-smoke-complete-full-fold-pending"
+implementation_status = "representative-full-fold-scaling-gate-passed"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -35,4 +35,11 @@ hidden_dim = 512
 validation_every_epochs = 10
 checkpoint_selection = "minimum validation MSE"
 hyperparameter_policy = "Miller et al. published fMLP configuration; no dataset-specific tuning"
+
+[validation]
+representative_full_fold = "one-epoch scaling probe passed on frozen K562-essential fold 0"
+one_epoch_total_wall_time_seconds = 292
+conservative_full_budget_projection_gpu_hours = 8.12
+prediction_shape = [271, 8563]
+completion_contract = "prediction shape, condition and gene order, finite values, checksums, and completion record validated"
 

@@ -4,7 +4,7 @@ title = "TxPert (public STRING+GO variant)"
 capability = "population"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-environment-and-synthetic-archival-smoke-complete-full-fold-pending"
+implementation_status = "representative-full-fold-scaling-gate-passed"
 
 [implementation]
 repository = "https://github.com/valence-labs/TxPert"
@@ -38,4 +38,15 @@ early_stop_monitor = "validation Pearson correlation of control-centered mean re
 early_stop_patience = 40
 training_entry_point = "reconstructed from optimization logic and released public checkpoint metadata because upstream main.py exposes only inference/predict"
 hyperparameter_policy = "official public K562-essential configuration; no dataset-specific tuning"
+
+[validation]
+representative_full_fold = "one-epoch scaling probe passed on frozen K562-essential fold 0"
+one_epoch_training_time_seconds = 122
+total_probe_wall_time_seconds = 295
+conservative_full_budget_projection_gpu_hours = 1.75
+prediction_shape = [36972, 8563]
+checkpoint_size_bytes = 118017522
+prediction_size_bytes = 1268626780
+population_policy = "exact observed treated-cell count for every test perturbation"
+completion_contract = "condition and gene order, exact population sizes, finite values, checksums, and completion record validated"
 

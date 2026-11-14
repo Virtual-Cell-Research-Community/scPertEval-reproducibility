@@ -363,15 +363,17 @@ after the final run; completed runs remain safe to skip on restart.
    8,563 genes. Its SHA-256 is
    `673ed91b5ad7bd04b16422a1273ed2e095d5670acefa130c414df9efdc97b70a`;
    the regenerated fold assignment exactly matches the frozen fold hash.
-4. Run representative full-fold smokes for the new model panel. TxPert-public,
-   CellFlow, SAMS-VAE(S), GenePert, and both fMLP variants now have pinned
-   environments and complete synthetic archival smokes. The validated
-   1,352-target, 5,120-dimensional ESM2 asset is materialized on SDS.
-5. Pin CPA, bioLORD, scDisInFact, and trVAE reference revisions and container
-   digests, then reconstruct their Pixi environments.
-6. Smoke-test every context adapter on one genetic and one chemical fold;
-   explicitly verify that trVAE is jointly perturbation-conditioned.
-7. Verify the declared native input and output conversion for every model.
+4. **Complete:** representative full-fold scaling gates passed for
+   TxPert-public, CellFlow, SAMS-VAE(S), GenePert, and both fMLP variants. The
+   validated 1,352-target, 5,120-dimensional ESM2 asset is materialized on SDS.
+5. **Complete:** CPA, bioLORD, scDisInFact, and trVAE use pinned reference
+   revisions and isolated Pixi environments reconstructed from their references.
+6. **Complete:** every context adapter passed a representative genetic and/or
+   chemical smoke appropriate to its declared panel; trVAE was explicitly
+   verified as jointly perturbation-conditioned before its genetic exclusion by
+   the scaling rule.
+7. **Complete:** every model declaration records its native input, output, and
+   deterministic evaluation-space conversion.
 
 ## Current launch readiness
 
@@ -387,23 +389,38 @@ benchmark results and do not authorize the full launch.
 | bioLORD | passed | passed | pinned official revision | ready |
 | scDisInFact | passed | passed | source tree and core dependencies match the pinned scArchon image | ready |
 | trVAE | passed | excluded by the prespecified scaling rule | matched to pinned scArchon image, using its corresponding stable pandas release | ready |
-| SAMS-VAE(S) | synthetic full-architecture smoke passed; representative fold pending | not included | pinned PerturBench revision and Pixi environment | pending representative runtime gate |
+| SAMS-VAE(S) | 26-second one-epoch training probe; 3.76-hour conservative 500-epoch projection | not included | pinned PerturBench revision and Pixi environment | ready |
 | No-change, fold-mean, and linear baselines | passed | passed | completion records validated | ready |
 | Helix launch scripts | not submitted | not submitted | `sbatch --test-only` still required | pending |
 
 The full benchmark remains deliberately unlaunched until every row is ready.
 
-For the perturbation-generalization panel, TxPert-public and CellFlow have both
-passed full-contract synthetic GPU smokes. CellFlow used the complete published
-4,096-wide architecture rather than a reduced test network; its saved model
-reloaded to reproduce the archived predictions, and a verified completed run
-was skipped on restart. Its native full-architecture checkpoint is about
-1.7 GB, so five retained fold checkpoints are expected to consume roughly
-8.5 GB before filesystem compression. Representative full-fold runtime remains
-the inclusion gate.
+The added perturbation-generalization models also passed their representative
+fold-0 scaling gates on the frozen 198,346-cell × 8,563-gene K562-essential
+view. These are engineering gates, not benchmark scores.
 
-SAMS-VAE(S) also passed the full synthetic archival contract using the published
-SciPlex3 hyperparameters: validation-selected checkpointing, fresh checkpoint
-reload before prediction, exact population sizes, checksums, and restart-safe
-skipping. Its checkpoint is about 871 MB, or roughly 2.6 GB across the three
-chemical folds.
+| Model | Representative evidence | Conservative full-budget projection | Status |
+| --- | --- | --- | --- |
+| GenePert | complete fold in 113 seconds | complete measurement | ready |
+| fMLP-GenePT | one-epoch run in 292 seconds | 8.12 GPU-hours for 100 epochs | ready |
+| fMLP-ESM2 | one-epoch run in 292 seconds | 8.12 GPU-hours for 100 epochs | ready |
+| TxPert-public | one-epoch training in 122 seconds; 295 seconds end to end | 1.75 GPU-hours for 50 epochs | ready |
+| CellFlow | 200 iterations plus all 271 populations in 1,475 seconds | at most 1.25 GPU-hours for 200,000 iterations | ready on Beauty's 98 GB GPU |
+
+TxPert-public and CellFlow each archived 36,972 genuine cell predictions,
+exactly matching the 51–475 observed treated cells for every test perturbation.
+CellFlow used the complete published 4,096-wide architecture and peaked at
+73,994 MiB of GPU memory, so it is assigned to Beauty rather than the 48 GB
+Beast GPUs. Its measured model checkpoint, PCA reference, and prediction total
+11.04 GB per fold, or about 55.2 GB over five folds. TxPert-public projects to
+about 7.5 GB over five folds; GenePert and both fMLPs remain below 1 GB
+combined. Together with SAMS-VAE(S), the added panel projects to roughly 68 GB,
+well below the study's 500 GB prediction-and-checkpoint budget.
+
+SAMS-VAE(S) passed a representative frozen sci-Plex3 chemical fold using the
+published hyperparameters: validation-selected checkpointing, fresh checkpoint
+reload before prediction, 3,285 exactly size-matched cells across the 33 held-out
+populations, checksums, and restart-safe completion. One epoch took 26 seconds;
+including the fixed I/O cost, a deliberately conservative 500-epoch projection
+is 3.76 GPU-hours. Its measured checkpoint is 1.41 GB and its compressed
+prediction artifact is 105 MB, projecting to about 4.6 GB across three folds.

@@ -4,7 +4,7 @@ title = "CellFlow"
 capability = "population"
 modalities = ["genetic"]
 tasks = ["unseen-perturbation"]
-implementation_status = "adapter-environment-and-full-architecture-synthetic-smoke-complete-full-fold-pending"
+implementation_status = "representative-full-fold-scaling-gate-passed"
 
 [implementation]
 repository = "https://github.com/shiftbioscience/Perturbation-Models-Outperform-Baselines"
@@ -48,5 +48,16 @@ hyperparameter_policy = "Miller et al. published unseen-gene configuration; no d
 synthetic_gpu_smoke = "passed with the complete published architecture and one training iteration"
 checkpoint_reload = "reloaded predictions match the archived predictions"
 restart_safety = "verified completed run is skipped"
-representative_full_fold = "pending frozen essential model view"
+representative_full_fold = "200-iteration scaling probe passed on frozen K562-essential fold 0"
+probe_iterations = 200
+steady_iterations_per_second = 81.18
+total_probe_wall_time_seconds = 1475
+conservative_full_budget_projection_gpu_hours = 1.25
+maximum_observed_gpu_memory_mib = 73994
+prediction_shape = [36972, 8563]
+population_policy = "exact observed treated-cell count for every test perturbation"
+model_checkpoint_size_bytes = 5838404477
+pca_reference_size_bytes = 3930813779
+prediction_size_bytes = 1268589848
+completion_contract = "condition and gene order, exact population sizes, finite values, checksums, and completion record validated"
 
