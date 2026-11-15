@@ -7,6 +7,11 @@ results/
 checkpoints/
 logs/
 runs/
+runs-*/
+
+# Workstation-local prepared-data caches (usually symlinked from scratch)
+models/data/*/
+!models/data/source/
 
 # Local environments and tooling
 .venv/
