@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import zlib
 from pathlib import Path
 
@@ -180,6 +181,7 @@ def _score_variants(
         seed=seed,
         control_label="control",
     )
+    _allow_empty_deg_spaces_as_nan(variants)
     frames = []
     for variant in variants:
         result = spe.score(
@@ -199,6 +201,43 @@ def _score_variants(
         frame["draw_seed"] = draw_seed
         frames.append(frame)
     return frames
+
+
+def _allow_empty_deg_spaces_as_nan(variants: list[dict]) -> None:
+    """Let a DEG-space metric return NaN when a perturbation has no DEGs.
+
+    The pinned scPertEval revision deliberately raises for every empty gene subset. That is a
+    useful default for an ordinary benchmark, but an empty adjusted-p-value DEG set is itself a
+    valid outcome in this sensitivity study. Dropping the perturbation or widening the threshold
+    would change the declared evaluation choice. Instead, retain the perturbation and let NumPy's
+    metric implementation produce the mathematically undefined NaN for that one variant.
+
+    scPertEval exposes no public override for an already-instantiated space, so this narrowly
+    replaces only the concrete ``degs_<padj>`` registry entries used by the versioned grid. The
+    repository pins the upstream revision and tests this compatibility seam explicitly.
+    """
+    from scperteval.blocks.spaces import SPACES
+    from scperteval.dataset import to_dense
+
+    thresholds = set()
+    for variant in variants:
+        match = re.search(r"degs_padj=([0-9.eE+-]+)", variant["protocol"])
+        if match:
+            thresholds.add(float(match.group(1)))
+    for threshold in thresholds:
+        key = f"degs_{threshold:g}"
+        metadata = SPACES.meta(key)
+        if metadata.get("empty_subset_policy") == "nan":
+            continue
+        select = metadata["select"]
+
+        def apply_allowing_empty(X, ctx, pert, *, _select=select):
+            return to_dense(X[:, _select(ctx, pert)])
+
+        SPACES._items[key] = (
+            apply_allowing_empty,
+            {**metadata, "empty_subset_policy": "nan"},
+        )
 
 
 def evaluate_bundle(

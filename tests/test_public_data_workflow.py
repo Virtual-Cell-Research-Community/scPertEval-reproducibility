@@ -1642,6 +1642,68 @@ def test_evaluation_grid_scores_a_fixed_point_bundle(tmp_path: Path) -> None:
     assert detail["model"].unique().tolist() == ["example-model"]
 
 
+def test_evaluation_grid_retains_no_deg_perturbations_as_nan(tmp_path: Path) -> None:
+    labels = ["control"] * 12 + ["G1"] * 12
+    truth = AnnData(
+        X=np.ones((24, 4), dtype=np.float32),
+        obs=pd.DataFrame({"perturbation": labels}, index=[f"cell-{index}" for index in range(24)]),
+        var=pd.DataFrame(index=[f"gene-{index}" for index in range(4)]),
+    )
+    prediction = AnnData(
+        X=np.ones((1, 4), dtype=np.float32),
+        obs=pd.DataFrame({"perturbation": ["G1"]}, index=["prediction-G1"]),
+        var=truth.var.copy(),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    split_path = tmp_path / "split.json"
+    grid_path = tmp_path / "grid.json"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    split_path.write_text(
+        json.dumps(
+            {
+                "id": "split",
+                "dataset": "example",
+                "folds": [{"train": [], "val": [], "test": ["G1"]}],
+            }
+        )
+    )
+    grid_path.write_text(
+        json.dumps(
+            {
+                "minimum_observed_cells": 12,
+                "population": {"size_policy": "match-observed"},
+                "variants": [
+                    {
+                        "id": "genes-degs",
+                        "factor": "gene_set",
+                        "level": "degs-padj-0.05",
+                        "protocol": "pearson_ctrl_degs_padj=0.05",
+                        "de_method": "t-test",
+                        "better": "higher",
+                        "capabilities": ["point", "population"],
+                    }
+                ],
+            }
+        )
+    )
+
+    detail = evaluate_bundle(
+        truth_path=truth_path,
+        prediction_path=prediction_path,
+        split_manifest_path=split_path,
+        grid_path=grid_path,
+        model_id="example-model",
+        capability="point",
+        fold=0,
+    )
+
+    assert detail["perturbation"].tolist() == ["G1"]
+    assert detail["variant"].tolist() == ["genes-degs"]
+    assert detail["score"].isna().all()
+
+
 def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_path: Path) -> None:
     inputs = {}
     for context in ["context-a", "context-b"]:
