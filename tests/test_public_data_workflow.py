@@ -93,6 +93,7 @@ from workflows.evaluate import (
     paired_perturbation_bootstrap,
     rank_models,
     summarize_evaluations,
+    validate_comparable_cohorts,
     validate_matched_population_sizes,
 )
 from workflows.feature_coverage import audit_feature_coverage
@@ -1702,6 +1703,100 @@ def test_evaluation_grid_retains_no_deg_perturbations_as_nan(tmp_path: Path) -> 
     assert detail["perturbation"].tolist() == ["G1"]
     assert detail["variant"].tolist() == ["genes-degs"]
     assert detail["score"].isna().all()
+
+
+def test_point_predictions_use_shared_population_compatible_profile_cohort(tmp_path: Path) -> None:
+    conditions = ["A::Drug 1::10nM", "A::Drug 2::10nM"]
+    labels = ["control"] * 2 + [conditions[0]] * 2 + [conditions[1]] * 2
+    truth = AnnData(
+        X=np.arange(24, dtype=np.float32).reshape(6, 4),
+        obs=pd.DataFrame(
+            {
+                "context": ["A"] * 6,
+                "evaluation_condition": labels,
+            },
+            index=[f"truth-{index}" for index in range(6)],
+        ),
+        var=pd.DataFrame(index=[f"gene-{index}" for index in range(4)]),
+    )
+    prediction = AnnData(
+        X=np.vstack([truth.X[2:4].mean(axis=0), truth.X[4:6].mean(axis=0)]),
+        obs=pd.DataFrame(
+            {"perturbation": conditions},
+            index=["prediction-drug-1", "prediction-drug-2"],
+        ),
+        var=truth.var.copy(),
+    )
+    truth_path = tmp_path / "truth.h5ad"
+    prediction_path = tmp_path / "prediction.h5ad"
+    split_path = tmp_path / "split.json"
+    grid_path = tmp_path / "grid.json"
+    truth.write_h5ad(truth_path)
+    prediction.write_h5ad(prediction_path)
+    split_path.write_text(
+        json.dumps(
+            {
+                "id": "chemical-split",
+                "dataset": "chemical-example",
+                "contexts": ["A"],
+                "drugs": [
+                    {"label": "Drug 1", "canonical_label": "Drug 1"},
+                    {"label": "Drug 2", "canonical_label": "Drug 2"},
+                ],
+                "doses": [10.0],
+                "population_exclusions": [{"drug": "Drug 2", "dose": 10.0}],
+                "profile_evaluation_condition_capability": "population",
+                "folds": [{"id": "holdout-a", "test_context": "A", "train_contexts": []}],
+            }
+        )
+    )
+    grid_path.write_text(
+        json.dumps(
+            {
+                "minimum_observed_cells": 2,
+                "population": {"size_policy": "match-observed"},
+                "variants": [
+                    {
+                        "id": "representation-absolute",
+                        "factor": "representation",
+                        "level": "absolute",
+                        "protocol": "pearson",
+                        "de_method": "t-test",
+                        "better": "higher",
+                        "capabilities": ["point", "population"],
+                    }
+                ],
+            }
+        )
+    )
+
+    detail = evaluate_bundle(
+        truth_path=truth_path,
+        prediction_path=prediction_path,
+        split_manifest_path=split_path,
+        grid_path=grid_path,
+        model_id="point-model",
+        capability="point",
+        fold=0,
+    )
+
+    assert detail["perturbation"].tolist() == [conditions[0]]
+
+
+def test_comparable_cohort_validation_rejects_model_specific_conditions() -> None:
+    detail = pd.DataFrame(
+        {
+            "dataset": ["d", "d", "d"],
+            "split": ["s", "s", "s"],
+            "fold": [0, 0, 0],
+            "variant": ["reference", "reference", "reference"],
+            "model": ["m1", "m1", "m2"],
+            "perturbation": ["p1", "p2", "p1"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="different evaluation cohorts"):
+        validate_comparable_cohorts(detail)
 
 
 def test_genetic_context_view_freezes_model_and_evaluation_condition_ids(tmp_path: Path) -> None:

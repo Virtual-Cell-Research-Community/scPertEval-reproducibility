@@ -73,6 +73,13 @@ evaluation populations in every context. Three low-count drug–dose combination
 remain available to point-profile analyses but are excluded from population
 metrics.
 
+Point-capable chemical models may retain predictions for all 36 drug–dose
+conditions, but the shared profile leaderboard is evaluated on the same 33
+population-compatible conditions used by every model. The three lower-coverage
+conditions therefore remain in point prediction artifacts but are excluded from
+cross-model ranking. Aggregation rejects any model/fold/variant whose
+perturbation cohort differs from its competitors.
+
 ## Cell-count, prediction, and seed policy
 
 - Every benchmark uses a minimum of 50 observed treated cells per evaluated

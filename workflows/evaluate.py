@@ -255,7 +255,23 @@ def evaluate_bundle(
     split = json.loads(split_manifest_path.read_text())
     grid = json.loads(grid_path.read_text())
     truth, prediction, conditions = _load_fold(truth_path, prediction_path, split, fold, capability)
-    effects = observed_effect_strengths(truth)
+
+    profile_capability = split.get("profile_evaluation_condition_capability", capability)
+    if profile_capability not in {"point", "population"}:
+        raise ValueError(
+            "profile_evaluation_condition_capability must be 'point' or 'population'"
+        )
+    profile_conditions = expected_test_conditions(split, fold, profile_capability)
+    truth_labels = truth.obs["perturbation"].astype(str)
+    prediction_labels = prediction.obs["perturbation"].astype(str)
+    profile_truth = truth[truth_labels.isin(["control", *profile_conditions])].copy()
+    profile_prediction = prediction[prediction_labels.isin(profile_conditions)].copy()
+    observed_profile_conditions = sorted(
+        profile_prediction.obs["perturbation"].astype(str).unique().tolist()
+    )
+    if observed_profile_conditions != profile_conditions:
+        raise ValueError("prediction does not cover the shared profile-evaluation cohort")
+    effects = observed_effect_strengths(profile_truth)
 
     point_variants = [
         variant
@@ -263,8 +279,8 @@ def evaluate_bundle(
         if capability in variant["capabilities"] and not variant["id"].startswith("population-")
     ]
     frames = _score_variants(
-        truth,
-        prediction,
+        profile_truth,
+        profile_prediction,
         point_variants,
         minimum_observed_cells=grid["minimum_observed_cells"],
         seed=seed,
@@ -298,6 +314,28 @@ def evaluate_bundle(
     detail["fold"] = fold
     detail["capability"] = capability
     return detail
+
+
+def validate_comparable_cohorts(detail: pd.DataFrame) -> None:
+    """Require every model in a leaderboard stratum to use the same perturbations."""
+    required = {"dataset", "split", "fold", "variant", "model", "perturbation"}
+    missing = sorted(required - set(detail.columns))
+    if missing:
+        raise ValueError(f"detail is missing cohort columns: {', '.join(missing)}")
+
+    group_keys = ["dataset", "split", "fold", "variant"]
+    for values, group in detail.groupby(group_keys, dropna=False, sort=False):
+        cohorts = {
+            str(model): frozenset(model_rows["perturbation"].astype(str))
+            for model, model_rows in group.groupby("model", sort=False)
+        }
+        if len(set(cohorts.values())) <= 1:
+            continue
+        counts = ", ".join(f"{model}={len(cohort)}" for model, cohort in sorted(cohorts.items()))
+        labels = ", ".join(
+            f"{key}={value!r}" for key, value in zip(group_keys, values, strict=True)
+        )
+        raise ValueError(f"models use different evaluation cohorts for {labels}: {counts}")
 
 
 def summarize_evaluations(detail: pd.DataFrame) -> pd.DataFrame:

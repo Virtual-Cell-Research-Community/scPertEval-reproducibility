@@ -25,6 +25,7 @@ from workflows.evaluate import (
     paired_perturbation_bootstrap,
     rank_models,
     summarize_evaluations,
+    validate_comparable_cohorts,
 )
 from workflows.preparation_utils import file_checksum
 
@@ -251,6 +252,7 @@ def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replic
     if missing:
         raise RuntimeError(f"cannot aggregate with {len(missing)} missing or stale detail outputs")
     detail = pd.concat([pd.read_csv(job.output) for job in jobs], ignore_index=True)
+    validate_comparable_cohorts(detail)
     summary = summarize_evaluations(detail)
     ranking = rank_models(summary)
     rank_changes, comparisons = compare_to_reference(summary)
