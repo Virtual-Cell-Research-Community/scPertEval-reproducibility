@@ -34,7 +34,32 @@
   },
   "bootstrap": {
     "replicates": 1000,
-    "seed": 42
+    "seed": 42,
+    "unit": "perturbation_identity",
+    "retain_all_contexts_per_draw": true,
+    "paired_across_models": true
+  },
+  "ranking": {
+    "tie_method": "average",
+    "missing_score_policy": "exclude_from_comparison"
+  },
+  "score_conventions": [
+    {
+      "model": "no-change",
+      "protocol_pattern": "^pearson_ctrl(?:_|$)",
+      "undefined_value": 0.0,
+      "require_other_model_finite": true,
+      "reason": "A no-change prediction has a constant zero control-centered effect; its structurally undefined Pearson correlation is defined as zero."
+    }
+  ],
+  "showcase_selection": {
+    "profile": "largest_pairwise_reversal_among_winner_changes_else_largest_overall",
+    "population": "largest_pairwise_reversal"
+  },
+  "supplementary_inference": {
+    "test": "paired_wilcoxon_signed_rank",
+    "context_handling": "average_within_perturbation_identity",
+    "multiplicity": "holm_within_task_and_evaluation_variant"
   },
   "reference_variant": "reference",
   "variants": [

@@ -87,11 +87,14 @@ from workflows import data as data_workflow
 from workflows.data import MANIFEST_ROOT, load_manifest, source_artifacts
 from workflows.evaluate import (
     apply_prediction_evaluation_transform,
+    apply_score_conventions,
     compare_to_reference,
     evaluate_bundle,
     matched_draw,
+    paired_model_wilcoxon,
     paired_perturbation_bootstrap,
     rank_models,
+    select_showcase_scenarios,
     summarize_evaluations,
     validate_comparable_cohorts,
     validate_matched_population_sizes,
@@ -1573,6 +1576,135 @@ def test_one_factor_rank_comparisons_and_paired_bootstrap_report_reversals() -> 
         "aggregation-median",
     }
     assert (first_ranks["n_bootstrap"] == 50).all()
+
+
+def test_ranking_uses_average_ties_and_keeps_missing_scores_missing() -> None:
+    summary = pd.DataFrame(
+        [
+            {"model": "a", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 1.0},
+            {"model": "b", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 1.0},
+            {"model": "c", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 0.0},
+            {"model": "missing", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": np.nan},
+        ]
+    )
+    ranked = rank_models(summary).set_index("model")
+    assert ranked.loc["a", "rank"] == 1.5
+    assert ranked.loc["b", "rank"] == 1.5
+    assert ranked.loc["c", "rank"] == 3.0
+    assert np.isnan(ranked.loc["missing", "rank"])
+
+
+def test_winner_detection_retains_all_average_rank_ties() -> None:
+    rows = []
+    for variant, factor, scores in [
+        ("reference", "reference", {"a": 1.0, "b": 1.0, "c": 0.0}),
+        ("alternative", "metric", {"a": 2.0, "b": 1.0, "c": 0.0}),
+    ]:
+        for model, score in scores.items():
+            rows.append(
+                {
+                    "model": model,
+                    "dataset": "d",
+                    "split": "s",
+                    "capability": "point",
+                    "variant": variant,
+                    "factor": factor,
+                    "level": variant,
+                    "protocol": variant,
+                    "better": "higher",
+                    "aggregation": "mean",
+                    "score": score,
+                    "n_perturbations": 2,
+                }
+            )
+    _, comparisons = compare_to_reference(pd.DataFrame(rows))
+    comparison = comparisons.set_index("scenario").loc["alternative"]
+    assert comparison["reference_winners"] == "a;b"
+    assert comparison["alternative_winners"] == "a"
+    assert bool(comparison["winner_changed"])
+
+
+def test_declared_no_change_pearson_convention_only_replaces_undefined_scores() -> None:
+    detail = pd.DataFrame(
+        [
+            {"model": "no-change", "variant": "reference", "protocol": "pearson_ctrl", "score": np.nan},
+            {"model": "peer", "variant": "reference", "protocol": "pearson_ctrl", "score": 0.5},
+            {"model": "no-change", "variant": "top50", "protocol": "pearson_ctrl_top_k=50", "score": 0.25},
+            {"model": "no-change", "variant": "r2", "protocol": "r2_ctrl", "score": np.nan},
+            {"model": "no-change", "variant": "empty", "protocol": "pearson_ctrl_degs_padj=0.05", "score": np.nan},
+            {"model": "peer", "variant": "empty", "protocol": "pearson_ctrl_degs_padj=0.05", "score": np.nan},
+        ]
+    )
+    detail["dataset"] = "d"
+    detail["split"] = "s"
+    detail["fold"] = 0
+    detail["training_seed"] = 42
+    detail["perturbation"] = "G1"
+    grid = {
+        "score_conventions": [
+            {
+                "model": "no-change",
+                "protocol_pattern": r"^pearson_ctrl(?:_|$)",
+                "undefined_value": 0.0,
+                "require_other_model_finite": True,
+            }
+        ]
+    }
+    result = apply_score_conventions(detail, grid)
+    assert result.loc[0, "score"] == 0.0
+    assert result.loc[2, "score"] == 0.25
+    assert np.isnan(result.loc[3, "score"])
+    assert np.isnan(result.loc[4, "score"])
+    isolated = apply_score_conventions(detail[detail["model"] == "no-change"], grid, model_id="no-change")
+    assert np.isnan(isolated.loc[0, "score"])
+
+
+def test_context_bootstrap_samples_perturbation_identities_and_retains_contexts() -> None:
+    rows = []
+    for variant, factor in [("reference", "reference"), ("alternative", "metric")]:
+        for model_index, model in enumerate(["m1", "m2"]):
+            for context_index, context in enumerate(["A", "B"]):
+                for perturbation_index, perturbation in enumerate(["G1", "G2"]):
+                    rows.append(
+                        {
+                            "model": model,
+                            "dataset": "d",
+                            "split": "s",
+                            "capability": "point",
+                            "variant": variant,
+                            "factor": factor,
+                            "level": variant,
+                            "protocol": "pearson_ctrl" if variant == "reference" else "r2_ctrl",
+                            "better": "higher",
+                            "perturbation": f"{context}::{perturbation}",
+                            "held_out_context": context,
+                            "score": float(model_index + context_index + perturbation_index + (variant == "alternative")),
+                            "effect_strength": 1.0,
+                        }
+                    )
+    detail = pd.DataFrame(rows)
+    _, comparisons = paired_perturbation_bootstrap(detail, n_bootstrap=20, seed=3)
+    alternative = comparisons.set_index("scenario").loc["alternative"]
+    assert alternative["n_perturbations"] == 2
+    assert alternative["n_evaluation_populations"] == 4
+
+    tests = paired_model_wilcoxon(detail)
+    assert set(tests["n_perturbations"]) == {2}
+    assert tests["pvalue_holm"].between(0, 1).all()
+
+
+def test_showcase_selection_prefers_largest_winner_change_and_population_reversal() -> None:
+    comparisons = pd.DataFrame(
+        [
+            {"dataset": "d", "split": "s", "scenario": "large-no-change", "stratum": "profile", "winner_changed": False, "pairwise_reversal_fraction": 0.9},
+            {"dataset": "d", "split": "s", "scenario": "small-change", "stratum": "profile", "winner_changed": True, "pairwise_reversal_fraction": 0.2},
+            {"dataset": "d", "split": "s", "scenario": "large-change", "stratum": "profile", "winner_changed": True, "pairwise_reversal_fraction": 0.4},
+            {"dataset": "d", "split": "s", "scenario": "population-small", "stratum": "population", "winner_changed": False, "pairwise_reversal_fraction": 0.1},
+            {"dataset": "d", "split": "s", "scenario": "population-large", "stratum": "population", "winner_changed": True, "pairwise_reversal_fraction": 0.5},
+        ]
+    )
+    selected = select_showcase_scenarios(comparisons)
+    assert selected["scenario"].tolist() == ["large-change", "population-large"]
 
 
 def test_evaluation_grid_scores_a_fixed_point_bundle(tmp_path: Path) -> None:

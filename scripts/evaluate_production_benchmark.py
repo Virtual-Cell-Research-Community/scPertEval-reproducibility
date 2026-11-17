@@ -20,10 +20,13 @@ from pathlib import Path
 import pandas as pd
 
 from workflows.evaluate import (
+    apply_score_conventions,
     compare_to_reference,
     evaluate_bundle,
+    paired_model_wilcoxon,
     paired_perturbation_bootstrap,
     rank_models,
+    select_showcase_scenarios,
     summarize_evaluations,
     validate_comparable_cohorts,
 )
@@ -252,6 +255,7 @@ def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replic
     if missing:
         raise RuntimeError(f"cannot aggregate with {len(missing)} missing or stale detail outputs")
     detail = pd.concat([pd.read_csv(job.output) for job in jobs], ignore_index=True)
+    detail = apply_score_conventions(detail, _json(jobs[0].grid))
     validate_comparable_cohorts(detail)
     summary = summarize_evaluations(detail)
     ranking = rank_models(summary)
@@ -261,6 +265,8 @@ def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replic
         n_bootstrap=bootstrap_replicates,
         seed=42,
     )
+    pairwise_tests = paired_model_wilcoxon(detail)
+    showcase_scenarios = select_showcase_scenarios(comparisons)
     frames = {
         "detail.csv": detail,
         "summary.csv": summary,
@@ -269,6 +275,8 @@ def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replic
         "comparisons.csv": comparisons,
         "bootstrap-rank-changes.csv": bootstrap_ranks,
         "bootstrap-comparisons.csv": bootstrap_comparisons,
+        "pairwise-wilcoxon.csv": pairwise_tests,
+        "showcase-scenarios.csv": showcase_scenarios,
     }
     for name, frame in frames.items():
         _atomic_csv(frame, results_root / name)

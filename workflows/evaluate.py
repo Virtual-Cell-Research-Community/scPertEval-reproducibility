@@ -6,13 +6,14 @@ import argparse
 import json
 import re
 import zlib
+from itertools import combinations
 from pathlib import Path
 
 import anndata as ad
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-from scipy.stats import kendalltau, spearmanr
+from scipy.stats import kendalltau, spearmanr, wilcoxon
 
 from workflows.predictions import expected_test_conditions
 
@@ -203,6 +204,43 @@ def _score_variants(
     return frames
 
 
+def apply_score_conventions(
+    detail: pd.DataFrame,
+    grid: dict,
+    *,
+    model_id: str | None = None,
+) -> pd.DataFrame:
+    """Apply narrowly declared conventions for structurally undefined scores."""
+    result = detail.copy()
+    for convention in grid.get("score_conventions", []):
+        if model_id is None:
+            models = result["model"].astype(str).eq(convention["model"])
+        else:
+            models = pd.Series(model_id == convention["model"], index=result.index)
+        protocol = result["protocol"].astype(str).str.match(convention["protocol_pattern"])
+        undefined = ~np.isfinite(result["score"].to_numpy(float))
+        eligible = np.ones(len(result), dtype=bool)
+        if convention.get("require_other_model_finite", False):
+            if model_id is not None:
+                continue
+            cohort_keys = [
+                column
+                for column in ["dataset", "split", "fold", "training_seed", "variant", "perturbation"]
+                if column in result.columns
+            ]
+            if not cohort_keys:
+                raise ValueError("peer-aware score convention requires cohort columns")
+            peer_rows = result.loc[
+                ~models.to_numpy() & np.isfinite(result["score"].to_numpy(float)),
+                cohort_keys,
+            ]
+            peer_keys = pd.MultiIndex.from_frame(peer_rows.drop_duplicates())
+            eligible = pd.MultiIndex.from_frame(result[cohort_keys]).isin(peer_keys)
+        mask = models.to_numpy() & protocol.to_numpy() & undefined & eligible
+        result.loc[mask, "score"] = float(convention["undefined_value"])
+    return result
+
+
 def _allow_empty_deg_spaces_as_nan(variants: list[dict]) -> None:
     """Let a DEG-space metric return NaN when a perturbation has no DEGs.
 
@@ -306,7 +344,7 @@ def evaluate_bundle(
             )
         )
 
-    detail = pd.concat(frames, ignore_index=True)
+    detail = apply_score_conventions(pd.concat(frames, ignore_index=True), grid, model_id=model_id)
     detail["effect_strength"] = detail["perturbation"].map(effects)
     detail["model"] = model_id
     detail["dataset"] = split["dataset"]
@@ -376,9 +414,9 @@ def rank_models(summary: pd.DataFrame) -> pd.DataFrame:
         if len(directions) != 1:
             raise ValueError("a variant has inconsistent metric directions")
         ranks.loc[group.index] = group["score"].rank(
-            method="min",
+            method="average",
             ascending=directions[0] == "lower",
-            na_option="bottom",
+            na_option="keep",
         )
     result["rank"] = ranks
     return result
@@ -439,14 +477,14 @@ def _one_factor_scenarios(
 
 
 def _rank_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    result = frame.copy()
+    result = frame[np.isfinite(frame["score"].to_numpy(float))].copy()
     directions = result["better"].dropna().unique()
     if len(directions) != 1:
         raise ValueError("a scenario has inconsistent metric directions")
     result["rank"] = result["score"].rank(
-        method="min",
+        method="average",
         ascending=directions[0] == "lower",
-        na_option="bottom",
+        na_option="keep",
     )
     return result
 
@@ -469,6 +507,15 @@ def _pairwise_reversal_fraction(reference: np.ndarray, alternative: np.ndarray) 
             comparable += 1
             reversals += int(reference_order != alternative_order)
     return float(reversals / comparable) if comparable else np.nan
+
+
+def _winner_mask(scores: np.ndarray, better: str) -> np.ndarray:
+    """Return all tied winners independently of the rank tie convention."""
+    finite = np.isfinite(scores)
+    if not finite.any():
+        return np.zeros(len(scores), dtype=bool)
+    best = np.nanmin(scores) if better == "lower" else np.nanmax(scores)
+    return finite & np.isclose(scores, best)
 
 
 def compare_to_reference(
@@ -518,11 +565,13 @@ def compare_to_reference(
                 (study["variant"] == scenario["variant"])
                 & (study["aggregation"] == scenario["aggregation"])
             ]
-            common_models = sorted(set(reference["model"]) & set(alternative["model"]))
+            finite_reference = reference[np.isfinite(reference["score"].to_numpy(float))]
+            finite_alternative = alternative[np.isfinite(alternative["score"].to_numpy(float))]
+            common_models = sorted(set(finite_reference["model"]) & set(finite_alternative["model"]))
             if len(common_models) < 2:
                 continue
-            ref = _rank_frame(reference[reference["model"].isin(common_models)])
-            alt = _rank_frame(alternative[alternative["model"].isin(common_models)])
+            ref = _rank_frame(finite_reference[finite_reference["model"].isin(common_models)])
+            alt = _rank_frame(finite_alternative[finite_alternative["model"].isin(common_models)])
             if ref["model"].duplicated().any() or alt["model"].duplicated().any():
                 raise ValueError("each model must have exactly one aggregate score per scenario")
             paired = ref[["model", "score", "rank"]].merge(
@@ -534,8 +583,18 @@ def compare_to_reference(
             reference_ranks = paired["rank_reference"].to_numpy(float)
             alternative_ranks = paired["rank_alternative"].to_numpy(float)
             spearman, kendall = _rank_correlations(reference_ranks, alternative_ranks)
-            reference_winners = sorted(paired.loc[paired["rank_reference"] == 1, "model"])
-            alternative_winners = sorted(paired.loc[paired["rank_alternative"] == 1, "model"])
+            reference_winners = sorted(
+                paired.loc[
+                    _winner_mask(paired["score_reference"].to_numpy(float), ref["better"].iloc[0]),
+                    "model",
+                ]
+            )
+            alternative_winners = sorted(
+                paired.loc[
+                    _winner_mask(paired["score_alternative"].to_numpy(float), alt["better"].iloc[0]),
+                    "model",
+                ]
+            )
             for row in paired.itertuples(index=False):
                 rank_rows.append(
                     {
@@ -593,6 +652,23 @@ def _quantiles(values: list[float]) -> tuple[float, float, float]:
     return tuple(float(value) for value in np.nanquantile(array, [0.025, 0.5, 0.975]))
 
 
+def _bootstrap_cluster(perturbation: str, held_out_context: object) -> str:
+    """Return the perturbation identity shared across held-out contexts."""
+    context = "" if pd.isna(held_out_context) else str(held_out_context)
+    prefix = f"{context}::" if context else ""
+    return perturbation[len(prefix) :] if prefix and perturbation.startswith(prefix) else perturbation
+
+
+def _with_bootstrap_clusters(detail: pd.DataFrame) -> pd.DataFrame:
+    result = detail.copy()
+    contexts = result.get("held_out_context", pd.Series(index=result.index, dtype=object))
+    result["bootstrap_cluster"] = [
+        _bootstrap_cluster(str(perturbation), context)
+        for perturbation, context in zip(result["perturbation"], contexts, strict=True)
+    ]
+    return result
+
+
 def paired_perturbation_bootstrap(
     detail: pd.DataFrame,
     *,
@@ -601,12 +677,13 @@ def paired_perturbation_bootstrap(
     reference_variant: str = "reference",
     reference_aggregation: str = "mean",
 ) -> tuple[pd.DataFrame, pd.DataFrame]:
-    """Bootstrap perturbations jointly across models and reference/alternative scores."""
+    """Bootstrap perturbation identities jointly while retaining all of their contexts."""
     if n_bootstrap < 1:
         raise ValueError("n_bootstrap must be positive")
     keys = ["model", "dataset", "split", "capability", "variant", "factor", "level", "protocol", "better"]
-    per_perturbation = (
-        detail.groupby([*keys, "perturbation"], as_index=False, dropna=False)
+    clustered_detail = _with_bootstrap_clusters(detail)
+    per_population = (
+        clustered_detail.groupby([*keys, "perturbation", "bootstrap_cluster"], as_index=False, dropna=False)
         .agg(score=("score", "mean"), effect_strength=("effect_strength", "first"))
     )
     scenario_summary = summarize_evaluations(detail)
@@ -617,7 +694,7 @@ def paired_perturbation_bootstrap(
     )
     model_rows: list[dict] = []
     comparison_rows: list[dict] = []
-    for (dataset, split), study in per_perturbation.groupby(["dataset", "split"], dropna=False):
+    for (dataset, split), study in per_population.groupby(["dataset", "split"], dropna=False):
         reference = study[study["variant"] == reference_variant]
         for scenario in scenarios[1:]:
             alternative = study[study["variant"] == scenario["variant"]]
@@ -642,11 +719,33 @@ def paired_perturbation_bootstrap(
                 .set_index("perturbation")
                 .reindex(matrix.index)["effect_strength"]
             )
-            finite = np.isfinite(matrix.to_numpy(float)).all(axis=1) & np.isfinite(effects.to_numpy(float))
+            clusters = (
+                pd.concat(
+                    [
+                        ref[["perturbation", "bootstrap_cluster"]],
+                        alt[["perturbation", "bootstrap_cluster"]],
+                    ]
+                )
+                .drop_duplicates("perturbation")
+                .set_index("perturbation")
+                .reindex(matrix.index)["bootstrap_cluster"]
+            )
+            finite = (
+                np.isfinite(matrix.to_numpy(float)).all(axis=1)
+                & np.isfinite(effects.to_numpy(float))
+                & clusters.notna().to_numpy()
+            )
             matrix = matrix.loc[finite]
             effects = effects.loc[finite]
+            clusters = clusters.loc[finite]
             if matrix.empty:
                 continue
+
+            cluster_ids = sorted(clusters.astype(str).unique())
+            cluster_positions = {
+                cluster: np.flatnonzero(clusters.astype(str).to_numpy() == cluster)
+                for cluster in cluster_ids
+            }
 
             rng = _seed(seed, f"{dataset}|{split}|{scenario['id']}")
             rank_changes = {model: [] for model in common_models}
@@ -658,7 +757,10 @@ def paired_perturbation_bootstrap(
             effect_values = effects.to_numpy(float)
             column_index = {column: index for index, column in enumerate(matrix.columns)}
             for _ in range(n_bootstrap):
-                sampled = rng.integers(0, len(matrix), size=len(matrix))
+                sampled_clusters = rng.integers(0, len(cluster_ids), size=len(cluster_ids))
+                sampled = np.concatenate(
+                    [cluster_positions[cluster_ids[index]] for index in sampled_clusters]
+                )
                 sampled_effects = effect_values[sampled]
                 reference_scores = np.array(
                     [
@@ -681,10 +783,10 @@ def paired_perturbation_bootstrap(
                     ]
                 )
                 reference_ranks = pd.Series(reference_scores).rank(
-                    method="min", ascending=ref_direction[0] == "lower"
+                    method="average", ascending=ref_direction[0] == "lower"
                 ).to_numpy(float)
                 alternative_ranks = pd.Series(alternative_scores).rank(
-                    method="min", ascending=alt_direction[0] == "lower"
+                    method="average", ascending=alt_direction[0] == "lower"
                 ).to_numpy(float)
                 for index, model in enumerate(common_models):
                     rank_changes[model].append(alternative_ranks[index] - reference_ranks[index])
@@ -692,7 +794,9 @@ def paired_perturbation_bootstrap(
                 spearman_values.append(spearman)
                 kendall_values.append(kendall)
                 reversal_values.append(_pairwise_reversal_fraction(reference_ranks, alternative_ranks))
-                winner_changes.append(float(set(np.where(reference_ranks == 1)[0]) != set(np.where(alternative_ranks == 1)[0])))
+                reference_winners = set(np.flatnonzero(_winner_mask(reference_scores, str(ref_direction[0]))))
+                alternative_winners = set(np.flatnonzero(_winner_mask(alternative_scores, str(alt_direction[0]))))
+                winner_changes.append(float(reference_winners != alternative_winners))
 
             for model, values in rank_changes.items():
                 low, median, high = _quantiles(values)
@@ -705,7 +809,8 @@ def paired_perturbation_bootstrap(
                         "level": scenario["level"],
                         "stratum": scenario["stratum"],
                         "model": model,
-                        "n_perturbations": len(matrix),
+                        "n_perturbations": len(cluster_ids),
+                        "n_evaluation_populations": len(matrix),
                         "n_bootstrap": n_bootstrap,
                         "rank_change_median": median,
                         "rank_change_ci_low": low,
@@ -727,7 +832,8 @@ def paired_perturbation_bootstrap(
                     "level": scenario["level"],
                     "stratum": scenario["stratum"],
                     "n_models": len(common_models),
-                    "n_perturbations": len(matrix),
+                    "n_perturbations": len(cluster_ids),
+                    "n_evaluation_populations": len(matrix),
                     "n_bootstrap": n_bootstrap,
                     "spearman_median": spearman_median,
                     "spearman_ci_low": spearman_low,
@@ -742,6 +848,81 @@ def paired_perturbation_bootstrap(
                 }
             )
     return pd.DataFrame(model_rows), pd.DataFrame(comparison_rows)
+
+
+def _holm_adjust(pvalues: np.ndarray) -> np.ndarray:
+    """Return Holm-adjusted p-values in the original order."""
+    order = np.argsort(pvalues)
+    adjusted = np.empty(len(pvalues), dtype=float)
+    running = 0.0
+    for position, index in enumerate(order):
+        running = max(running, (len(pvalues) - position) * pvalues[index])
+        adjusted[index] = min(running, 1.0)
+    return adjusted
+
+
+def paired_model_wilcoxon(detail: pd.DataFrame) -> pd.DataFrame:
+    """Compare models within each fixed variant using context-clustered paired scores."""
+    clustered = _with_bootstrap_clusters(detail)
+    keys = ["model", "dataset", "split", "variant", "factor", "level", "protocol", "better"]
+    per_cluster = (
+        clustered.groupby([*keys, "bootstrap_cluster"], as_index=False, dropna=False)
+        .agg(score=("score", "mean"))
+    )
+    rows: list[dict] = []
+    group_keys = ["dataset", "split", "variant", "factor", "level", "protocol", "better"]
+    for values, group in per_cluster.groupby(group_keys, sort=False, dropna=False):
+        base = dict(zip(group_keys, values, strict=True))
+        models = sorted(group["model"].unique())
+        start = len(rows)
+        for model_a, model_b in combinations(models, 2):
+            left = group[group["model"] == model_a].set_index("bootstrap_cluster")["score"]
+            right = group[group["model"] == model_b].set_index("bootstrap_cluster")["score"]
+            paired = pd.concat([left.rename("a"), right.rename("b")], axis=1).dropna()
+            finite = np.isfinite(paired.to_numpy(float)).all(axis=1)
+            paired = paired.loc[finite]
+            if paired.empty:
+                continue
+            direction = 1.0 if base["better"] == "higher" else -1.0
+            differences = direction * (paired["a"].to_numpy(float) - paired["b"].to_numpy(float))
+            if np.allclose(differences, 0.0):
+                statistic, pvalue = 0.0, 1.0
+            else:
+                result = wilcoxon(differences, alternative="two-sided", zero_method="wilcox")
+                statistic, pvalue = float(result.statistic), float(result.pvalue)
+            rows.append(
+                {
+                    **base,
+                    "model_a": model_a,
+                    "model_b": model_b,
+                    "n_perturbations": len(paired),
+                    "median_oriented_difference": float(np.median(differences)),
+                    "model_a_better_fraction": float(np.mean(differences > 0)),
+                    "wilcoxon_statistic": statistic,
+                    "pvalue": pvalue,
+                }
+            )
+        if len(rows) > start:
+            pvalues = np.asarray([row["pvalue"] for row in rows[start:]], dtype=float)
+            adjusted = _holm_adjust(pvalues)
+            for row, value in zip(rows[start:], adjusted, strict=True):
+                row["pvalue_holm"] = float(value)
+    return pd.DataFrame(rows)
+
+
+def select_showcase_scenarios(comparisons: pd.DataFrame) -> pd.DataFrame:
+    """Select reproducible profile and population examples without manual cherry-picking."""
+    rows = []
+    for (dataset, split), group in comparisons.groupby(["dataset", "split"], sort=False):
+        profile = group[group["stratum"] == "profile"]
+        winner_changes = profile[profile["winner_changed"]]
+        candidates = winner_changes if not winner_changes.empty else profile
+        if not candidates.empty:
+            rows.append(candidates.sort_values("pairwise_reversal_fraction", ascending=False).iloc[0])
+        population = group[group["stratum"] == "population"]
+        if not population.empty:
+            rows.append(population.sort_values("pairwise_reversal_fraction", ascending=False).iloc[0])
+    return pd.DataFrame(rows).reset_index(drop=True)
 
 
 def main() -> int:
@@ -760,6 +941,7 @@ def main() -> int:
 
     aggregate = subparsers.add_parser("aggregate")
     aggregate.add_argument("inputs", type=Path, nargs="+")
+    aggregate.add_argument("--grid", type=Path)
     aggregate.add_argument("--detail-output", type=Path, required=True)
     aggregate.add_argument("--summary-output", type=Path, required=True)
     aggregate.add_argument("--ranking-output", type=Path, required=True)
@@ -767,6 +949,8 @@ def main() -> int:
     aggregate.add_argument("--comparison-output", type=Path)
     aggregate.add_argument("--bootstrap-rank-output", type=Path)
     aggregate.add_argument("--bootstrap-comparison-output", type=Path)
+    aggregate.add_argument("--pairwise-test-output", type=Path)
+    aggregate.add_argument("--showcase-output", type=Path)
     aggregate.add_argument("--bootstrap-replicates", type=int, default=1000)
     aggregate.add_argument("--bootstrap-seed", type=int, default=42)
     args = parser.parse_args()
@@ -787,6 +971,8 @@ def main() -> int:
         print(f"wrote {len(detail)} per-perturbation scores to {args.output}")
     else:
         detail = pd.concat([pd.read_csv(path) for path in args.inputs], ignore_index=True)
+        if args.grid is not None:
+            detail = apply_score_conventions(detail, json.loads(args.grid.read_text()))
         summary = summarize_evaluations(detail)
         ranking = rank_models(summary)
         rank_changes, comparisons = compare_to_reference(summary)
@@ -795,12 +981,16 @@ def main() -> int:
             n_bootstrap=args.bootstrap_replicates,
             seed=args.bootstrap_seed,
         )
+        pairwise_tests = paired_model_wilcoxon(detail)
+        showcase_scenarios = select_showcase_scenarios(comparisons)
         outputs = [args.detail_output, args.summary_output, args.ranking_output]
         optional_outputs = {
             args.rank_change_output: rank_changes,
             args.comparison_output: comparisons,
             args.bootstrap_rank_output: bootstrap_ranks,
             args.bootstrap_comparison_output: bootstrap_comparisons,
+            args.pairwise_test_output: pairwise_tests,
+            args.showcase_output: showcase_scenarios,
         }
         for path in [*outputs, *(path for path in optional_outputs if path is not None)]:
             path.parent.mkdir(parents=True, exist_ok=True)

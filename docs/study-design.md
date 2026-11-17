@@ -302,7 +302,28 @@ saved predictions.
 
 For each variant report model ranks, rank changes relative to the reference,
 Spearman and Kendall agreement, pairwise-order or winner reversals, and paired
-perturbation-bootstrap uncertainty.
+perturbation-bootstrap uncertainty. Exact score ties receive average ranks.
+Genuinely missing outputs remain missing and are excluded from the affected
+comparison rather than being assigned last place. The no-change baseline's
+structurally undefined control-centered Pearson correlation is defined as zero,
+because its predicted effect is the constant zero vector. This convention is
+applied only where at least one other model has a finite score for the same
+evaluation population, so an empty gene subset remains genuinely missing.
+
+Bootstrap draws use perturbation identity as the independent unit and apply the
+same draw to every model. Genetic context transfer samples 480 target genes and
+retains all four contexts for every sampled target; chemical context transfer
+samples 33 drug-dose conditions and retains all three cell lines. Thus every
+replicate remains context balanced while avoiding treating repeated contexts as
+independent observations. Essential-screen draws sample target genes directly.
+
+Showcase panels are selected mechanically: for each task, choose the
+winner-changing profile variant with the largest pairwise reversal fraction (or
+the largest reversal overall if no winner changes), plus the population variant
+with the largest reversal. Supplementary paired Wilcoxon tests first average
+contexts within perturbation identity and use Holm correction across model pairs
+within each task and evaluation variant. The main figures emphasize bootstrap
+intervals and winner probabilities rather than significance stars.
 
 ## Hyperparameter and compute policy
 
