@@ -52,7 +52,7 @@ def materialize_one(
     seed: int,
     truth_path: Path,
     split_path: Path,
-    truth_sha256: str,
+    truth_identity: str,
     split_sha256: str,
 ) -> tuple[str, int, bool]:
     run = project_root / "runs" / run_id / model / fold_id / f"seed-{seed}"
@@ -65,7 +65,7 @@ def materialize_one(
     if manifest_is_current(
         output_manifest_path,
         source_prediction_sha256=source_sha256,
-        truth_sha256=truth_sha256,
+        truth_identity=truth_identity,
         split_manifest_sha256=split_sha256,
     ):
         manifest = json.loads(output_manifest_path.read_text())
@@ -89,7 +89,7 @@ def materialize_one(
         fold=fold_index,
         seed=seed,
         source_prediction_sha256=source_sha256,
-        truth_sha256=truth_sha256,
+        truth_identity=truth_identity,
         split_manifest_sha256=split_sha256,
     )
     temporary_manifest = output_manifest_path.with_suffix(".tmp")
@@ -119,9 +119,10 @@ def main() -> int:
             continue
         truth_manifest = track.truth.with_suffix(".manifest.json")
         if truth_manifest.is_file():
-            truth_sha256 = json.loads(truth_manifest.read_text())["artifact"]["sha256"]
+            truth_identity = f"sha256:{json.loads(truth_manifest.read_text())['artifact']['sha256']}"
         else:
-            truth_sha256 = file_checksum(track.truth)
+            status = track.truth.stat()
+            truth_identity = f"stat-v1:{status.st_size}:{status.st_mtime_ns}"
         split_sha256 = file_checksum(track.split_manifest)
         for model in track.models:
             if args.model and model not in set(args.model):
@@ -153,7 +154,7 @@ def main() -> int:
                             "seed": seed,
                             "truth_path": track.truth,
                             "split_path": track.split_manifest,
-                            "truth_sha256": truth_sha256,
+                            "truth_identity": truth_identity,
                             "split_sha256": split_sha256,
                         }
                     )

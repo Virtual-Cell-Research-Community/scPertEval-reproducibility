@@ -164,7 +164,7 @@ def lifted_manifest(
     fold: int,
     seed: int,
     source_prediction_sha256: str | None = None,
-    truth_sha256: str | None = None,
+    truth_identity: str | None = None,
     split_manifest_sha256: str | None = None,
 ) -> dict:
     """Build the small provenance manifest consumed by the evaluation driver."""
@@ -193,7 +193,7 @@ def lifted_manifest(
         },
         "source": {
             "prediction_sha256": source_prediction_sha256 or file_checksum(source_prediction_path),
-            "truth_sha256": truth_sha256 or file_checksum(truth_path),
+            "truth_identity": truth_identity or f"sha256:{file_checksum(truth_path)}",
         },
         "artifact": {
             "path": output_path.name,
@@ -210,7 +210,7 @@ def manifest_is_current(
     manifest_path: Path,
     *,
     source_prediction_sha256: str,
-    truth_sha256: str,
+    truth_identity: str,
     split_manifest_sha256: str,
 ) -> bool:
     """Return whether a completed lift still matches all three source artifacts."""
@@ -222,7 +222,7 @@ def manifest_is_current(
         return (
             output_path.is_file()
             and manifest["source"]["prediction_sha256"] == source_prediction_sha256
-            and manifest["source"]["truth_sha256"] == truth_sha256
+            and manifest["source"]["truth_identity"] == truth_identity
             and manifest["split"]["manifest_sha256"] == split_manifest_sha256
         )
     except (KeyError, OSError, json.JSONDecodeError):
