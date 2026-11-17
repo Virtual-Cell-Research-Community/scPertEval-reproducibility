@@ -32,7 +32,7 @@ def test_point_predictions_lift_to_deterministic_centroid_preserving_populations
         var=pd.DataFrame(index=["a", "b"]),
     )
     point = AnnData(
-        X=np.asarray([[4.0, 3.0], [2.5, 3.5]], dtype=np.float32),
+        X=np.asarray([[4.0, 3.0], [-0.5, 3.5]], dtype=np.float32),
         obs=pd.DataFrame(
             {"perturbation": ["G1", "G2"]},
             index=["prediction-G1", "prediction-G2"],
@@ -63,7 +63,7 @@ def test_point_predictions_lift_to_deterministic_centroid_preserving_populations
     )
     np.testing.assert_allclose(
         np.asarray(first[first.obs["perturbation"] == "G2"].X).mean(axis=0),
-        point.X[1],
+        np.maximum(point.X[1], 0),
         rtol=1e-6,
     )
     assert np.asarray(first.X).min() >= 0

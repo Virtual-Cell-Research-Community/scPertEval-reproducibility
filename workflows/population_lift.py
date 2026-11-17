@@ -121,8 +121,9 @@ def lift_prediction_population(
             raise ValueError(f"prediction contains no rows for {condition!r}")
 
         point = _dense(prediction.X[point_indices]).mean(axis=0, dtype=np.float64)
-        if np.any(point < 0) or not np.isfinite(point).all():
-            raise ValueError(f"prediction centroid for {condition!r} is not finite nonnegative expression")
+        if not np.isfinite(point).all():
+            raise ValueError(f"prediction centroid for {condition!r} contains non-finite expression")
+        point = np.maximum(point, 0)
         selected = _sample_indices(
             local.obs,
             control_indices,
@@ -190,6 +191,7 @@ def lifted_manifest(
             "construction": "centroid-preserving-control-residual-lift",
             "control_sampling_seed": seed,
             "batch_matched_when_available": True,
+            "negative_centroid_values": "clip-to-zero-before-lift",
         },
         "source": {
             "prediction_sha256": source_prediction_sha256 or file_checksum(source_prediction_path),

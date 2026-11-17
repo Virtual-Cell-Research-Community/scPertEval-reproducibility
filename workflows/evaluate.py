@@ -288,6 +288,7 @@ def evaluate_bundle(
     capability: str,
     fold: int,
     seed: int = 42,
+    profile_prediction_path: Path | None = None,
 ) -> pd.DataFrame:
     """Evaluate one fixed model/fold bundle; no training or prediction occurs here."""
     split = json.loads(split_manifest_path.read_text())
@@ -301,9 +302,13 @@ def evaluate_bundle(
         )
     profile_conditions = expected_test_conditions(split, fold, profile_capability)
     truth_labels = truth.obs["perturbation"].astype(str)
-    prediction_labels = prediction.obs["perturbation"].astype(str)
+    if profile_prediction_path is not None and profile_prediction_path != prediction_path:
+        profile_source = _load_prediction_for_evaluation(profile_prediction_path)
+    else:
+        profile_source = prediction
+    prediction_labels = profile_source.obs["perturbation"].astype(str)
     profile_truth = truth[truth_labels.isin(["control", *profile_conditions])].copy()
-    profile_prediction = prediction[prediction_labels.isin(profile_conditions)].copy()
+    profile_prediction = profile_source[prediction_labels.isin(profile_conditions)].copy()
     observed_profile_conditions = sorted(
         profile_prediction.obs["perturbation"].astype(str).unique().tolist()
     )

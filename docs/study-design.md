@@ -95,8 +95,10 @@ perturbation cohort differs from its competitors.
   applied.
 - Point predictions are expanded for population metrics with a shared control-residual lift:
   sample held-out-context controls, center their residuals, and add the model's predicted
-  centroid. The construction preserves the point prediction exactly as the lifted population
-  mean while making the inherited-versus-learned heterogeneity limitation measurable.
+  centroid. The construction preserves every nonnegative point prediction as the lifted
+  population mean; invalid negative log-expression values are clipped only in the lifted
+  population. This makes the inherited-versus-learned heterogeneity limitation measurable
+  without altering the original artifact used for profile metrics.
 - Every trainable model uses the single training seed 42. The several held-out
   folds provide the replication needed for this compact evaluation-sensitivity
   study; the study does not claim to estimate initialization variance.

@@ -58,6 +58,8 @@ class EvaluationJob:
     grid: Path
     prediction: Path
     prediction_manifest: Path
+    profile_prediction: Path
+    profile_prediction_manifest: Path
     output: Path
 
 
@@ -148,6 +150,8 @@ def _completion_record(job: EvaluationJob) -> dict:
         "inputs": {
             "prediction_sha256": _json(job.prediction_manifest)["artifact"]["sha256"],
             "prediction_manifest_sha256": _manifest_sha256(job.prediction_manifest),
+            "profile_prediction_sha256": _json(job.profile_prediction_manifest)["artifact"]["sha256"],
+            "profile_prediction_manifest_sha256": _manifest_sha256(job.profile_prediction_manifest),
             "split_manifest_sha256": _manifest_sha256(job.split_manifest),
             "evaluation_grid_sha256": _manifest_sha256(job.grid),
         },
@@ -192,6 +196,8 @@ def discover_jobs(
                         raise FileNotFoundError(f"run is not complete: {run}")
                     if not prediction.is_file() or not prediction_manifest.is_file():
                         raise FileNotFoundError(f"run has no prediction bundle: {run}")
+                    profile_prediction = prediction
+                    profile_prediction_manifest = prediction_manifest
                     lifted = run / "predictions" / "population-lifted.h5ad"
                     lifted_manifest = lifted.with_suffix(".manifest.json")
                     if lifted.is_file() and lifted_manifest.is_file():
@@ -211,6 +217,8 @@ def discover_jobs(
                             grid=grid,
                             prediction=prediction,
                             prediction_manifest=prediction_manifest,
+                            profile_prediction=profile_prediction,
+                            profile_prediction_manifest=profile_prediction_manifest,
                             output=(
                                 results_root
                                 / "details"
@@ -237,6 +245,7 @@ def evaluate_job(job: EvaluationJob) -> tuple[str, int, bool]:
         capability=job.capability,
         fold=job.fold_index,
         seed=job.seed,
+        profile_prediction_path=job.profile_prediction,
     )
     detail["track"] = job.track
     detail["fold_id"] = job.fold_id
