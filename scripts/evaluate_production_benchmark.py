@@ -192,6 +192,11 @@ def discover_jobs(
                         raise FileNotFoundError(f"run is not complete: {run}")
                     if not prediction.is_file() or not prediction_manifest.is_file():
                         raise FileNotFoundError(f"run has no prediction bundle: {run}")
+                    lifted = run / "predictions" / "population-lifted.h5ad"
+                    lifted_manifest = lifted.with_suffix(".manifest.json")
+                    if lifted.is_file() and lifted_manifest.is_file():
+                        prediction = lifted
+                        prediction_manifest = lifted_manifest
                     manifest = _json(prediction_manifest)
                     jobs.append(
                         EvaluationJob(

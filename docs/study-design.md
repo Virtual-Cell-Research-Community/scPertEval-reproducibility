@@ -93,7 +93,10 @@ perturbation cohort differs from its competitors.
 - Distributional metrics compare each complete observed population with its
   equally sized predicted population. No fixed-size evaluation subsampling is
   applied.
-- Point predictions remain eligible only for profile metrics.
+- Point predictions are expanded for population metrics with a shared control-residual lift:
+  sample held-out-context controls, center their residuals, and add the model's predicted
+  centroid. The construction preserves the point prediction exactly as the lifted population
+  mean while making the inherited-versus-learned heterogeneity limitation measurable.
 - Every trainable model uses the single training seed 42. The several held-out
   folds provide the replication needed for this compact evaluation-sensitivity
   study; the study does not claim to estimate initialization variance.
@@ -118,8 +121,11 @@ available.
   perturbation; eligible for both profile and distributional metrics.
 
 The common profile leaderboard aggregates genuine population predictions to a
-mean profile. Population metrics are reported in a separate capability stratum.
-Unsupported results remain missing rather than being imputed.
+mean profile. For population metrics, centroid-only outputs use the same deterministic,
+batch-matched-when-available control-residual lift. The released TxPert workflow uses
+batch-average controls, so its batch-centroid outputs use this lift as well. This is a declared
+evaluation construction, not a claim that centroid models learn perturbation-dependent
+single-cell heterogeneity.
 
 ## Model panels
 

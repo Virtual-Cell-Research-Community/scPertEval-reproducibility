@@ -14,6 +14,12 @@ Figure-specific scripts remain under `analyses/`. Do not add a pass-through
 wrapper for every existing script: the workflow should earn its seam by
 validating manifests, enforcing dependencies, and producing complete artifacts.
 
+Before population evaluation, `scripts/lift_production_predictions.py` materializes a
+centroid-preserving population for every point model by adding its predicted effect to a shared,
+deterministic sample of held-out controls. The same construction is applied to TxPert's released
+batch-average-control workflow. Generated `population-lifted.h5ad` bundles sit beside the native
+prediction and are preferred automatically by the production evaluation driver.
+
 `workflows.evaluate aggregate` keeps the one-factor-at-a-time design explicit:
 protocol variants use the reference mean aggregation, while median and
 effect-weighted aggregation use the reference protocol. In addition to tidy
