@@ -5,11 +5,16 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 
 import anndata as ad
+
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+if str(REPOSITORY_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPOSITORY_ROOT))
 
 from scripts.evaluate_production_benchmark import _tracks
 from workflows.evaluate import apply_prediction_evaluation_transform
