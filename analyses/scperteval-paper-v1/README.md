@@ -106,6 +106,22 @@ wessels23. That writeup documents the per-dataset AUCC, the root cause (a weak c
 Cas13 screen where the parametric t-test and rank-based MWU genuinely disagree), and the
 artifact checks ruling out an implementation or precision bug.
 
+## Ranking-sensitivity figures
+
+After aggregating the retained production predictions, render the main figure,
+the complete sensitivity map, and the multipage slope-plot supplement with:
+
+```bash
+python ranking_sensitivity_figure.py \
+    --results ../../results/ranking-sensitivity-v1 \
+    --output figures/ranking-sensitivity-v1
+```
+
+The main figure combines cluster-bootstrap reversal intervals with four examples
+selected by the rule frozen in `configs/evaluation/ranking-sensitivity-v1.json`.
+The supplement contains every task and evaluation-choice slope plot; examples
+are not selected manually.
+
 ## License
 
 MIT — see `LICENSE`.

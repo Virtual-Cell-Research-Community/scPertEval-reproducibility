@@ -682,8 +682,11 @@ def paired_perturbation_bootstrap(
         raise ValueError("n_bootstrap must be positive")
     keys = ["model", "dataset", "split", "capability", "variant", "factor", "level", "protocol", "better"]
     clustered_detail = _with_bootstrap_clusters(detail)
+    population_keys = [*keys, "perturbation", "bootstrap_cluster"]
+    if "held_out_context" in clustered_detail:
+        population_keys.append("held_out_context")
     per_population = (
-        clustered_detail.groupby([*keys, "perturbation", "bootstrap_cluster"], as_index=False, dropna=False)
+        clustered_detail.groupby(population_keys, as_index=False, dropna=False)
         .agg(score=("score", "mean"), effect_strength=("effect_strength", "first"))
     )
     scenario_summary = summarize_evaluations(detail)
@@ -741,7 +744,17 @@ def paired_perturbation_bootstrap(
             if matrix.empty:
                 continue
 
-            cluster_ids = sorted(clusters.astype(str).unique())
+            expected_contexts = max(1, int(study.get("held_out_context", pd.Series(dtype=object)).nunique()))
+            cluster_counts = clusters.astype(str).value_counts()
+            complete_clusters = cluster_counts[cluster_counts == expected_contexts].index
+            complete = clusters.astype(str).isin(complete_clusters)
+            matrix = matrix.loc[complete]
+            effects = effects.loc[complete]
+            clusters = clusters.loc[complete]
+            if matrix.empty:
+                continue
+
+            cluster_ids = sorted(complete_clusters)
             cluster_positions = {
                 cluster: np.flatnonzero(clusters.astype(str).to_numpy() == cluster)
                 for cluster in cluster_ids
@@ -811,6 +824,7 @@ def paired_perturbation_bootstrap(
                         "model": model,
                         "n_perturbations": len(cluster_ids),
                         "n_evaluation_populations": len(matrix),
+                        "n_contexts_per_perturbation": expected_contexts,
                         "n_bootstrap": n_bootstrap,
                         "rank_change_median": median,
                         "rank_change_ci_low": low,
@@ -834,6 +848,7 @@ def paired_perturbation_bootstrap(
                     "n_models": len(common_models),
                     "n_perturbations": len(cluster_ids),
                     "n_evaluation_populations": len(matrix),
+                    "n_contexts_per_perturbation": expected_contexts,
                     "n_bootstrap": n_bootstrap,
                     "spearman_median": spearman_median,
                     "spearman_ci_low": spearman_low,
@@ -865,22 +880,38 @@ def paired_model_wilcoxon(detail: pd.DataFrame) -> pd.DataFrame:
     """Compare models within each fixed variant using context-clustered paired scores."""
     clustered = _with_bootstrap_clusters(detail)
     keys = ["model", "dataset", "split", "variant", "factor", "level", "protocol", "better"]
-    per_cluster = (
-        clustered.groupby([*keys, "bootstrap_cluster"], as_index=False, dropna=False)
+    population_keys = [*keys, "perturbation", "bootstrap_cluster"]
+    if "held_out_context" in clustered:
+        population_keys.append("held_out_context")
+    per_population = (
+        clustered.groupby(population_keys, as_index=False, dropna=False)
         .agg(score=("score", "mean"))
     )
     rows: list[dict] = []
     group_keys = ["dataset", "split", "variant", "factor", "level", "protocol", "better"]
-    for values, group in per_cluster.groupby(group_keys, sort=False, dropna=False):
+    for values, group in per_population.groupby(group_keys, sort=False, dropna=False):
         base = dict(zip(group_keys, values, strict=True))
         models = sorted(group["model"].unique())
+        expected_contexts = max(1, int(group.get("held_out_context", pd.Series(dtype=object)).nunique()))
         start = len(rows)
         for model_a, model_b in combinations(models, 2):
-            left = group[group["model"] == model_a].set_index("bootstrap_cluster")["score"]
-            right = group[group["model"] == model_b].set_index("bootstrap_cluster")["score"]
-            paired = pd.concat([left.rename("a"), right.rename("b")], axis=1).dropna()
-            finite = np.isfinite(paired.to_numpy(float)).all(axis=1)
-            paired = paired.loc[finite]
+            columns = ["perturbation", "bootstrap_cluster", "score"]
+            left = group[group["model"] == model_a][columns].rename(columns={"score": "a"})
+            right = group[group["model"] == model_b][columns].rename(columns={"score": "b"})
+            populations = left.merge(
+                right,
+                on=["perturbation", "bootstrap_cluster"],
+                how="inner",
+                validate="one_to_one",
+            ).dropna()
+            finite = np.isfinite(populations[["a", "b"]].to_numpy(float)).all(axis=1)
+            populations = populations.loc[finite]
+            cluster_counts = populations["bootstrap_cluster"].astype(str).value_counts()
+            complete_clusters = cluster_counts[cluster_counts == expected_contexts].index
+            populations = populations[
+                populations["bootstrap_cluster"].astype(str).isin(complete_clusters)
+            ]
+            paired = populations.groupby("bootstrap_cluster")[["a", "b"]].mean()
             if paired.empty:
                 continue
             direction = 1.0 if base["better"] == "higher" else -1.0
@@ -896,6 +927,7 @@ def paired_model_wilcoxon(detail: pd.DataFrame) -> pd.DataFrame:
                     "model_a": model_a,
                     "model_b": model_b,
                     "n_perturbations": len(paired),
+                    "n_contexts_per_perturbation": expected_contexts,
                     "median_oriented_difference": float(np.median(differences)),
                     "model_a_better_fraction": float(np.mean(differences > 0)),
                     "wilcoxon_statistic": statistic,
