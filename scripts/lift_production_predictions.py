@@ -76,9 +76,12 @@ def materialize_one(
         source,
         str(source_manifest.get("expression", {}).get("evaluation_transform", "identity")),
     )
-    truth = ad.read_h5ad(truth_path)
+    truth = ad.read_h5ad(truth_path, backed="r")
     split = json.loads(split_path.read_text())
-    lifted = lift_prediction_population(truth, source, split, fold_index, seed=seed)
+    try:
+        lifted = lift_prediction_population(truth, source, split, fold_index, seed=seed)
+    finally:
+        truth.file.close()
     _atomic_write_h5ad(lifted, output_path)
     manifest = lifted_manifest(
         output_path=output_path,

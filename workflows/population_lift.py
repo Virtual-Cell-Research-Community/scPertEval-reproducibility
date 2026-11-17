@@ -19,6 +19,10 @@ def _dense(matrix) -> np.ndarray:
     return matrix.toarray() if sp.issparse(matrix) else np.asarray(matrix)
 
 
+def _memory_copy(data: ad.AnnData) -> ad.AnnData:
+    return data.to_memory() if data.isbacked else data.copy()
+
+
 def _rng(seed: int, *labels: str) -> np.random.Generator:
     entropy = [seed, *(zlib.crc32(label.encode()) for label in labels)]
     return np.random.default_rng(np.asarray(entropy, dtype=np.uint32))
@@ -94,7 +98,7 @@ def lift_prediction_population(
         if missing:
             raise ValueError(f"context-transfer truth is missing obs fields: {', '.join(missing)}")
         context_mask = truth.obs["context"].astype(str) == str(fold_spec["test_context"])
-        local = truth[context_mask.to_numpy(), prediction.var_names].copy()
+        local = _memory_copy(truth[context_mask.to_numpy(), prediction.var_names])
         labels = local.obs["evaluation_condition"].astype(str).to_numpy()
     else:
         if "perturbation" not in truth.obs:
@@ -102,7 +106,7 @@ def lift_prediction_population(
     conditions = expected_test_conditions(split, fold, "population")
     if "test_context" not in fold_spec:
         eligible = truth.obs["perturbation"].astype(str).isin(["control", *conditions])
-        local = truth[eligible.to_numpy(), prediction.var_names].copy()
+        local = _memory_copy(truth[eligible.to_numpy(), prediction.var_names])
         labels = local.obs["perturbation"].astype(str).to_numpy()
 
     control_indices = np.flatnonzero(labels == "control")
