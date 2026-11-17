@@ -29,7 +29,7 @@ SCENARIOS = [
     ("metric-mse", "MSE"),
     ("metric-r2", "R²"),
     ("aggregation-median", "Median aggregation"),
-    ("population-mmd-top50", "MMD · top-50"),
+    ("population-mmd-top50", "MMD · top-50 effect genes"),
 ]
 BASELINES = {"fold-mean", "linear", "no-change"}
 
