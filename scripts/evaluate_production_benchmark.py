@@ -250,8 +250,18 @@ def evaluate_job(job: EvaluationJob) -> tuple[str, int, bool]:
     return str(job.output), len(detail), False
 
 
-def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replicates: int) -> None:
-    missing = [job.output for job in jobs if not _output_is_current(job)]
+def aggregate(
+    results_root: Path,
+    jobs: list[EvaluationJob],
+    *,
+    bootstrap_replicates: int,
+    reuse_detail_scores: bool,
+) -> None:
+    missing = [
+        job.output
+        for job in jobs
+        if not (job.output.is_file() if reuse_detail_scores else _output_is_current(job))
+    ]
     if missing:
         raise RuntimeError(f"cannot aggregate with {len(missing)} missing or stale detail outputs")
     detail = pd.concat([pd.read_csv(job.output) for job in jobs], ignore_index=True)
@@ -286,6 +296,7 @@ def aggregate(results_root: Path, jobs: list[EvaluationJob], *, bootstrap_replic
         "n_bundles": len(jobs),
         "n_detail_rows": len(detail),
         "bootstrap_replicates": bootstrap_replicates,
+        "reused_detail_scores": reuse_detail_scores,
         "outputs": {name: file_checksum(results_root / name) for name in frames},
     }
     _atomic_bytes(
@@ -308,6 +319,11 @@ def main() -> int:
     parser.add_argument("--aggregate", action="store_true")
     parser.add_argument("--aggregate-only", action="store_true")
     parser.add_argument("--bootstrap-replicates", type=int, default=1000)
+    parser.add_argument(
+        "--reuse-detail-scores",
+        action="store_true",
+        help="reuse existing per-bundle score tables when only aggregation policy changed",
+    )
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
@@ -329,7 +345,12 @@ def main() -> int:
                 print(f"{state} {job.track}/{job.model}/{job.fold_id}/seed-{job.seed}: {rows} rows -> {path}", flush=True)
 
     if args.aggregate or args.aggregate_only:
-        aggregate(results_root, jobs, bootstrap_replicates=args.bootstrap_replicates)
+        aggregate(
+            results_root,
+            jobs,
+            bootstrap_replicates=args.bootstrap_replicates,
+            reuse_detail_scores=args.reuse_detail_scores,
+        )
         print(f"wrote aggregate ranking-sensitivity results to {results_root}", flush=True)
     return 0
 
