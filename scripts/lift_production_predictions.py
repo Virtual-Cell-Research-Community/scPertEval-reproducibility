@@ -30,6 +30,19 @@ from workflows.preparation_utils import file_checksum
 FORCE_LIFT = {"txpert-public"}
 
 
+def _truth_identity(truth_path: Path) -> str:
+    """Return a stable identity for prepared truth across manifest schemas."""
+    truth_manifest = truth_path.with_suffix(".manifest.json")
+    if truth_manifest.is_file():
+        manifest = json.loads(truth_manifest.read_text())
+        for key in ("artifact", "output"):
+            checksum = manifest.get(key, {}).get("sha256")
+            if checksum:
+                return f"sha256:{checksum}"
+    status = truth_path.stat()
+    return f"stat-v1:{status.st_size}:{status.st_mtime_ns}"
+
+
 def _atomic_write_h5ad(data: ad.AnnData, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temporary = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}.", suffix=".h5ad")
@@ -120,12 +133,7 @@ def main() -> int:
     for track_id, track in _tracks(project_root).items():
         if track_id not in selected:
             continue
-        truth_manifest = track.truth.with_suffix(".manifest.json")
-        if truth_manifest.is_file():
-            truth_identity = f"sha256:{json.loads(truth_manifest.read_text())['artifact']['sha256']}"
-        else:
-            status = track.truth.stat()
-            truth_identity = f"stat-v1:{status.st_size}:{status.st_mtime_ns}"
+        truth_identity = _truth_identity(track.truth)
         split_sha256 = file_checksum(track.split_manifest)
         for model in track.models:
             if args.model and model not in set(args.model):

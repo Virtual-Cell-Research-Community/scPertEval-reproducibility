@@ -2,9 +2,34 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import pytest
 from anndata import AnnData
 
+from scripts.lift_production_predictions import _truth_identity
 from workflows.population_lift import lift_prediction_population
+
+
+@pytest.mark.parametrize("manifest_key", ["artifact", "output"])
+def test_truth_identity_accepts_both_prepared_data_manifest_schemas(
+    tmp_path, manifest_key: str
+) -> None:
+    truth = tmp_path / "raw.h5ad"
+    truth.write_bytes(b"truth")
+    checksum = "a" * 64
+    truth.with_suffix(".manifest.json").write_text(
+        f'{{"{manifest_key}": {{"sha256": "{checksum}"}}}}\n'
+    )
+
+    assert _truth_identity(truth) == f"sha256:{checksum}"
+
+
+def test_truth_identity_falls_back_to_file_stat_without_manifest_checksum(tmp_path) -> None:
+    truth = tmp_path / "raw.h5ad"
+    truth.write_bytes(b"truth")
+    truth.with_suffix(".manifest.json").write_text('{"schema_version": 1}\n')
+
+    status = truth.stat()
+    assert _truth_identity(truth) == f"stat-v1:{status.st_size}:{status.st_mtime_ns}"
 
 
 def test_point_predictions_lift_to_deterministic_centroid_preserving_populations() -> None:
