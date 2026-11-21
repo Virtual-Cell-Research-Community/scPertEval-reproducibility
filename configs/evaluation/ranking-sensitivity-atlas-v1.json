@@ -49,9 +49,9 @@
     "computed_without_model_predictions": true,
     "pairwise_matching": "intersection_within_task_and_fold",
     "same_evaluation_units_for_both_protocols": true,
-    "candidate_minimum_common_fraction": 0.9,
-    "candidate_is_frozen": false,
-    "freeze_after": "ground-truth-only coverage audit and before model ranks are inspected",
+    "candidate_minimum_common_fraction": 0.75,
+    "candidate_is_frozen": true,
+    "freeze_after": "frozen on 2026-11-21 after the ground-truth-only coverage audit and before model ranks were inspected",
     "allowed_undefined_reasons": [
       "constant_truth",
       "no_ground_truth_positives",

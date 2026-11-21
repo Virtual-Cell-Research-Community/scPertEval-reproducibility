@@ -43,7 +43,10 @@ def config(tmp_path: Path) -> Path:
         json.dumps(
             {
                 "tasks": [{"id": "task", "folds": {"fold": 3}}],
-                "ground_truth_coverage": {"candidate_minimum_common_fraction": 0.9},
+                "ground_truth_coverage": {
+                    "candidate_minimum_common_fraction": 0.75,
+                    "candidate_is_frozen": True,
+                },
             }
         )
     )
@@ -107,7 +110,7 @@ def test_run_audit_writes_reproducible_source_tables(tmp_path: Path) -> None:
     output = tmp_path / "output"
     summary = run_audit(availability_path, config(tmp_path), output)
 
-    assert summary["candidate_is_frozen"] is False
+    assert summary["candidate_is_frozen"] is True
     assert summary["tasks"]["task"]["n_protocol_pairs"] == 3
     assert (output / "protocol-coverage-by-fold.csv").is_file()
     assert (output / "pairwise-coverage-by-fold.csv").is_file()

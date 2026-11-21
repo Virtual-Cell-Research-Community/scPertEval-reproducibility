@@ -224,7 +224,12 @@ def summarize_protocol_pairs(fold_coverage: pd.DataFrame, candidate_threshold: f
     return pd.DataFrame(rows)
 
 
-def coverage_summary(pair_summary: pd.DataFrame, candidate_threshold: float) -> dict[str, Any]:
+def coverage_summary(
+    pair_summary: pd.DataFrame,
+    candidate_threshold: float,
+    *,
+    candidate_is_frozen: bool = False,
+) -> dict[str, Any]:
     tasks: dict[str, Any] = {}
     for task, group in pair_summary.groupby("task", sort=True):
         values = group["minimum_fold_common_fraction"].to_numpy(float)
@@ -241,7 +246,7 @@ def coverage_summary(pair_summary: pd.DataFrame, candidate_threshold: float) -> 
     return {
         "schema_version": 1,
         "candidate_minimum_common_fraction": candidate_threshold,
-        "candidate_is_frozen": False,
+        "candidate_is_frozen": candidate_is_frozen,
         "tasks": tasks,
     }
 
@@ -307,7 +312,11 @@ def run_audit(availability_path: Path, config_path: Path, output_dir: Path) -> d
     individual = protocol_coverage(frame)
     pairs_by_fold = pairwise_coverage_by_fold(frame, threshold)
     pair_summary = summarize_protocol_pairs(pairs_by_fold, threshold)
-    summary = coverage_summary(pair_summary, threshold)
+    summary = coverage_summary(
+        pair_summary,
+        threshold,
+        candidate_is_frozen=bool(config["ground_truth_coverage"].get("candidate_is_frozen", False)),
+    )
     summary["inputs"] = {
         "availability": str(availability_path),
         "availability_sha256": hashlib.sha256(availability_path.read_bytes()).hexdigest(),
