@@ -73,6 +73,8 @@ example:
 ```bash
 python scripts/evaluate_atlas_production_benchmark.py \
   --project-root /path/to/scPertEval-reproducibility \
+  --model-data-root /fast/local/cache/models/data \
+  --runs-root /shared/sds/scPertEval-reproducibility/runs \
   --results-root /path/to/results/ranking-sensitivity-atlas-v1 \
   --track chemical-context \
   --fold holdout-a549 \
@@ -85,6 +87,8 @@ native population prediction. Centroid protocols therefore preserve the exact
 point prediction while population and DE protocols receive matched cell
 populations. Each model/fold output has a checksum-bound completion record and
 is skipped safely on restart.
+The optional data and runs roots keep large truth reads on a workstation-local
+cache while predictions and authoritative results remain on SDS.
 
 # Ranking-sensitivity figures
 

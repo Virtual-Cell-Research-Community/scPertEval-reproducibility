@@ -65,9 +65,9 @@ def _atomic_csv(frame: pd.DataFrame, path: Path) -> None:
     _atomic_bytes(path, frame.to_csv(index=False).encode())
 
 
-def tracks(project_root: Path) -> dict[str, Track]:
+def tracks(project_root: Path, model_data_root: Path | None = None) -> dict[str, Track]:
     experiments = project_root / "configs" / "experiments"
-    model_data = project_root / "models" / "data"
+    model_data = model_data_root or project_root / "models" / "data"
     specs = {
         "essential": (
             "essential_perturbation_generalization",
@@ -109,8 +109,8 @@ def tracks(project_root: Path) -> dict[str, Track]:
     return resolved
 
 
-def _run_directory(project_root: Path, track: Track, model: str, fold_id: str, seed: int) -> Path:
-    return project_root / "runs" / track.run_id / model / fold_id / f"seed-{seed}"
+def _run_directory(runs_root: Path, track: Track, model: str, fold_id: str, seed: int) -> Path:
+    return runs_root / track.run_id / model / fold_id / f"seed-{seed}"
 
 
 def _prediction_bundle(run: Path) -> tuple[Path, Path]:
@@ -189,6 +189,7 @@ def _output_is_current(
 def evaluate_fold(
     *,
     project_root: Path,
+    runs_root: Path,
     results_root: Path,
     track: Track,
     fold_id: str,
@@ -217,7 +218,7 @@ def evaluate_fold(
         raise ValueError(f"models are not part of {track.key}: {unknown}")
     for model in models:
         for seed in track.seeds:
-            run = _run_directory(project_root, track, model, fold_id, seed)
+            run = _run_directory(runs_root, track, model, fold_id, seed)
             completion = run / "completion.json"
             if not completion.is_file() or _json(completion).get("status") != "complete":
                 raise FileNotFoundError(f"production run is not complete: {run}")
@@ -269,6 +270,16 @@ def evaluate_fold(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--project-root", type=Path, required=True)
+    parser.add_argument(
+        "--model-data-root",
+        type=Path,
+        help="directory containing prepared dataset subdirectories (default: PROJECT_ROOT/models/data)",
+    )
+    parser.add_argument(
+        "--runs-root",
+        type=Path,
+        help="authoritative production runs directory (default: PROJECT_ROOT/runs)",
+    )
     parser.add_argument("--results-root", type=Path, required=True)
     parser.add_argument("--track", choices=["essential", "genetic-context", "chemical-context"], required=True)
     parser.add_argument("--fold", action="append", help="fold id; repeat to select multiple (default: every fold)")
@@ -277,11 +288,14 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
-    track = tracks(project_root)[args.track]
+    model_data_root = args.model_data_root.resolve() if args.model_data_root else None
+    runs_root = args.runs_root.resolve() if args.runs_root else project_root / "runs"
+    track = tracks(project_root, model_data_root)[args.track]
     folds = args.fold or list(track.fold_ids)
     for fold_id in folds:
         evaluate_fold(
             project_root=project_root,
+            runs_root=runs_root,
             results_root=args.results_root.resolve(),
             track=track,
             fold_id=fold_id,
