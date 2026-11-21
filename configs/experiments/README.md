@@ -9,11 +9,12 @@ An experiment declaration freezes training-affecting choices:
 - training seeds; and
 - the native-output-to-evaluation-space conversion contract.
 
-The post-training evaluation grid is separately versioned. It may be extended
-from saved predictions without retraining, but the complete grid must be
-reported; variants are not split into privileged primary and inferior
-exploratory groups. A named reference variant is retained only as an anchor for
-describing rank changes.
+The post-training evaluation policy is separately versioned. The current
+ranking-sensitivity study derives eligible atomic protocols from the frozen
+PerturbationEvaluationAtlas snapshot and compares protocol pairs without a
+privileged reference protocol. Saved predictions permit additional evaluations
+without retraining, but any extension receives a new versioned declaration and
+its complete source table is reported.
 
 The frozen population-size policy is `match-observed`: for each held-out
 condition, population-capable models archive the same number of predictions as

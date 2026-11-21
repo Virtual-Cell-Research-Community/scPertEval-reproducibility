@@ -230,6 +230,29 @@ def family_record(family: Family, config: Mapping[str, Any]) -> dict[str, str | 
     return record
 
 
+def task_protocol_records(eligible_records: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize the semicolon-delimited task applicability into one row per task/family."""
+
+    records = []
+    for record in eligible_records:
+        for task in str(record["applicable_tasks"]).split(";"):
+            if not task:
+                continue
+            records.append(
+                {
+                    "task": task,
+                    "protocol_id": record["family_id"],
+                    "population": record["population"],
+                    "space": record["space"],
+                    "metric_family": record["metric_family"],
+                    "target_operation": record["target_operation"],
+                    "implementation_status": record["implementation_status"],
+                    "required_extensions": record["required_extensions"],
+                }
+            )
+    return sorted(records, key=lambda record: (str(record["task"]), str(record["protocol_id"])))
+
+
 def de_method_audit(
     rows: Iterable[Mapping[str, str]],
     config: Mapping[str, Any],
@@ -376,6 +399,7 @@ Explicit target operations apply only to genetic tasks and require an unambiguou
 ## Files
 
 - `atlas-protocol-eligibility-v1.csv`: included families only.
+- `atlas-task-protocol-manifest-v1.csv`: one row per applicable task and included family.
 - `atlas-protocol-scope-audit-v1.csv`: every literature-eligible family and its inclusion/exclusion reason.
 - `atlas-de-method-audit-v1.csv`: DE caller usage and current scPertEval support.
 """
@@ -406,8 +430,10 @@ def build_audit(atlas_repo: Path, config_path: Path, output_dir: Path, summary_p
         for protocol_id in family.protocol_ids
     }
     de_records = de_method_audit(rows, config, in_scope_protocol_ids=in_scope_protocol_ids)
+    task_records = task_protocol_records(eligible_records)
 
     write_csv(output_dir / "atlas-protocol-eligibility-v1.csv", eligible_records)
+    write_csv(output_dir / "atlas-task-protocol-manifest-v1.csv", task_records)
     write_csv(output_dir / "atlas-protocol-scope-audit-v1.csv", all_records)
     write_csv(output_dir / "atlas-de-method-audit-v1.csv", de_records)
     write_summary(

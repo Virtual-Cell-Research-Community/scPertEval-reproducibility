@@ -301,47 +301,58 @@ conversion rule is recorded in each prediction manifest.
 
 ## Sensitivity panel
 
-The versioned grid varies:
-
-- gene set;
-- absolute versus control-centered representation;
-- control construction;
-- metric;
-- uniform versus observed-effect-strength perturbation weighting; and
-- mean, median, or effect-strength-weighted aggregation across perturbations.
+The executable protocol universe is frozen from PerturbationEvaluationAtlas
+commit `6f6e858097c0d8135d27c609040906d73d35ce55`. An operational family is
+eligible when it occurs in at least two independent works. Literature frequency
+selects families but does not weight them. Ranking-equivalent variants receive
+one vote, reporting aggregation is separated from atomic protocol identity, and
+the approved scope excludes retrieval, cross-perturbation metrics, new
+population-distance implementations, curated composite panels, and
+effect-weighted perturbation aggregation. Limma-dependent evaluation is
+postponed. The resulting primary universe contains 99 families, normalized by
+task in `configs/evaluation/atlas-task-protocol-manifest-v1.csv`.
 
 Metrics remain separate; no cross-metric composite or global leaderboard is
-constructed. The reference variant is an interpretive anchor, not a privileged
-primary analysis. Additional reasonable evaluation variants may be added from
-the saved predictions without retraining, and the complete versioned grid is
-reported rather than dividing results into primary and exploratory classes.
-The exact grid does not block model training and can be decided later from the
-saved predictions.
+constructed. Tasks also remain separate. The global analysis is reference-free:
+it reports fractional winner share, disagreement of winners across all eligible
+protocol pairs, and winner-change rates for evaluation factors and concrete
+factor contrasts. Selected bump plots illustrate especially clear, reasonable
+ranking changes but do not define the global conclusion. Their selection is
+disclosed and the complete candidate table is exported.
 
-For each variant report model ranks, rank changes relative to the reference,
-Spearman and Kendall agreement, pairwise-order or winner reversals, and paired
-perturbation-bootstrap uncertainty. Exact score ties receive average ranks.
-Genuinely missing outputs remain missing and are excluded from the affected
-comparison rather than being assigned last place. The no-change baseline's
-structurally undefined control-centered Pearson correlation is defined as zero,
-because its predicted effect is the constant zero vector. This convention is
-applied only where at least one other model has a finite score for the same
-evaluation population, so an empty gene subset remains genuinely missing.
+The primary perturbation reduction is the equal mean. Median aggregation is a
+separate literature-supported sensitivity factor. Effect-strength weighting is
+excluded. Exact score ties receive average ranks and tied winners split winner
+credit fractionally.
 
-Bootstrap draws use perturbation identity as the independent unit and apply the
-same draw to every model. Genetic context transfer samples 480 target genes and
-retains all four contexts for every sampled target; chemical context transfer
-samples 33 drug-dose conditions and retains all three cell lines. Thus every
-replicate remains context balanced while avoiding treating repeated contexts as
-independent observations. Essential-screen draws sample target genes directly.
+Undefined scores follow explicit semantic rules. A constant prediction against
+varying truth receives zero for Pearson or cosine, because it contains no
+association or directional information. Constant truth remains undefined for
+those metrics. When truth contains positives and prediction contains none,
+recall, precision, and F1 use zero. Recall and precision-recall metrics remain
+undefined when truth contains no positives, and AUROC remains undefined when
+truth contains only one class. Explicit set comparisons assign one to two empty
+sets and zero when exactly one set is empty. Invalid model output is a
+model-protocol failure, not a missing value to discard; insufficient observed
+cells are a ground-truth eligibility failure.
 
-Showcase panels are selected mechanically: for each task, choose the
-winner-changing profile variant with the largest pairwise reversal fraction (or
-the largest reversal overall if no winner changes), plus the population variant
-with the largest reversal. Supplementary paired Wilcoxon tests first average
-contexts within perturbation identity and use Holm correction across model pairs
-within each task and evaluation variant. The main figures emphasize bootstrap
-intervals and winner probabilities rather than significance stars.
+Every protocol pair is compared within task and fold on the intersection of
+evaluation units for which both protocols are ground-truth-defined. Both
+protocols and every model use that identical set. A model-specific failure may
+not shrink the set for its competitors. The audit records the total, individual
+defined counts, common count, common fraction, and structured undefined reasons.
+The candidate headline threshold is 90% common coverage in every fold, but this
+number is not frozen until the ground-truth-only audit is complete and before
+model ranks are inspected. Winner-share summaries include only protocols passing
+the eventual coverage rule and display their coverage.
+
+Bootstrap analysis is supplementary. It uses 1,000 paired perturbation-identity
+draws and applies the same draw to every model and protocol. Genetic transfer
+resamples 480 target genes and retains all four contexts; chemical transfer
+resamples 33 drug-dose conditions and retains all three contexts; the essential
+screen resamples target genes directly. Illustrative bump plots are selected
+after primary scores exist; the figure legend states that they are selected
+examples, and the complete candidate ranking is exported.
 
 ## Hyperparameter and compute policy
 

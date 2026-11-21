@@ -9,6 +9,7 @@ from analyses.ranking_sensitivity.atlas_protocol_audit import (
     group_families,
     scope_decision,
     target_operation,
+    task_protocol_records,
 )
 
 CONFIG = json.loads(Path("configs/evaluation/atlas-protocol-eligibility-v1.json").read_text())
@@ -112,3 +113,25 @@ def test_limma_only_family_is_postponed_but_remains_auditable() -> None:
         CONFIG,
     )[0]
     assert scope_decision(family, CONFIG) == ("excluded", "de_method_postponed")
+
+
+def test_task_manifest_expands_applicability_without_duplicate_votes() -> None:
+    records = task_protocol_records(
+        [
+            {
+                "family_id": "family",
+                "applicable_tasks": "genetic_context_transfer;essential_perturbation_generalization",
+                "population": "PBULK",
+                "space": "GEX",
+                "metric_family": "pearson",
+                "target_operation": "exclude_own_target",
+                "implementation_status": "selector_or_composition",
+                "required_extensions": "target_gene_policy",
+            }
+        ]
+    )
+    assert [record["task"] for record in records] == [
+        "essential_perturbation_generalization",
+        "genetic_context_transfer",
+    ]
+    assert {record["protocol_id"] for record in records} == {"family"}

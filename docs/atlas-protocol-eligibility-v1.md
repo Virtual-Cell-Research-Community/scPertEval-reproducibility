@@ -66,5 +66,6 @@ Explicit target operations apply only to genetic tasks and require an unambiguou
 ## Files
 
 - `atlas-protocol-eligibility-v1.csv`: included families only.
+- `atlas-task-protocol-manifest-v1.csv`: one row per applicable task and included family.
 - `atlas-protocol-scope-audit-v1.csv`: every literature-eligible family and its inclusion/exclusion reason.
 - `atlas-de-method-audit-v1.csv`: DE caller usage and current scPertEval support.
