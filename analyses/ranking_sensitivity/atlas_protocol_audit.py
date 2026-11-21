@@ -314,7 +314,11 @@ def write_csv(path: Path, records: Sequence[Mapping[str, Any]]) -> None:
     if not records:
         raise ValueError(f"Refusing to write empty audit: {path}")
     with path.open("w", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(records[0]))
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=list(records[0]),
+            lineterminator="\n",
+        )
         writer.writeheader()
         writer.writerows(records)
 

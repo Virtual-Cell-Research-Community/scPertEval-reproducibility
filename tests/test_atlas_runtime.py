@@ -8,9 +8,9 @@ from analyses.ranking_sensitivity.atlas_runtime import build_protocols, load_eli
 def test_every_eligible_family_resolves_to_one_concrete_protocol():
     families = load_eligible_families()
     protocols = build_protocols()
-    assert len(protocols) == 99
+    assert len(protocols) == 101
     assert [protocol.name for protocol in protocols] == families["family_id"].tolist()
-    assert len({protocol.name for protocol in protocols}) == 99
+    assert len({protocol.name for protocol in protocols}) == 101
     assert all(not protocol.parameterised for protocol in protocols)
 
 

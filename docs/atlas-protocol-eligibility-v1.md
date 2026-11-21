@@ -1,7 +1,7 @@
 # Atlas protocol eligibility audit v1
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
-commit `6f6e858097c0d8135d27c609040906d73d35ce55` and `data/protocols.csv` SHA-256 `3ae18cd1f7ea336c359cbbbfd9c575e4c88469ac046b8ecf02733e0a3779eedd`.
+commit `0be116b2a871132c2b3f0c9e896e2fb544a41fe5` and `data/protocols.csv` SHA-256 `cbd088852e213efc92c6af3c633a46fb0eef31efd14667b3d200da6e039f2280`.
 
 Eligibility means that an operationally distinct family occurs in at least
 2 independent works. Reporting aggregation and DE caller are
@@ -10,39 +10,39 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 
 ## Result
 
-- Literature-eligible operational families before scope exclusions: 137
-- Families in the approved ranking-sensitivity scope: 99
-- Families excluded by the approved scope: 38
+- Literature-eligible operational families before scope exclusions: 142
+- Families in the approved ranking-sensitivity scope: 101
+- Families excluded by the approved scope: 41
 
 ### Included by representation
 
 - `DE`: 33
-- `PBULK`: 56
-- `SC`: 10
+- `PBULK`: 57
+- `SC`: 11
 
 ### Included by target operation
 
 - `exclude_own_target`: 2
 - `force_include_target`: 2
-- `no_target_operation`: 95
+- `no_target_operation`: 97
 
 ### Implementation status
 
 - `de_recovery_module`: 22
 - `direct_after_public_api`: 28
-- `multiple_extensions`: 17
+- `multiple_extensions`: 18
 - `new_scalar_metric`: 14
-- `selector_or_composition`: 18
+- `selector_or_composition`: 19
 
 ### Scope exclusions
 
 - `centering_out_of_scope`: 1
 - `de_method_postponed`: 1
 - `feature_set_out_of_scope`: 5
-- `metric_out_of_scope`: 8
+- `metric_out_of_scope`: 9
 - `pooled_or_cross_perturbation`: 16
 - `population_out_of_scope`: 3
-- `reference_population_out_of_scope`: 4
+- `reference_population_out_of_scope`: 6
 
 ## DE caller audit
 
@@ -53,11 +53,11 @@ pipeline worth discussing before implementation.
 Limma-dependent families remain visible in the scope audit but are postponed from the executable primary
 universe under the frozen DE-method policy.
 
-- `limma`: 3 works globally, 0 supporting included families; scPertEval `not_implemented`
-- `other`: 6 works globally, 5 supporting included families; scPertEval `not_actionable`
-- `rank_sum`: 41 works globally, 28 supporting included families; scPertEval `existing`
-- `t_test`: 24 works globally, 21 supporting included families; scPertEval `existing`
-- `unspecified`: 107 works globally, 81 supporting included families; scPertEval `use_family_canonical_backend`
+- `limma`: 2 works globally, 0 supporting included families; scPertEval `not_implemented`
+- `other`: 6 works globally, 4 supporting included families; scPertEval `not_actionable`
+- `rank_sum`: 43 works globally, 29 supporting included families; scPertEval `existing`
+- `t_test`: 25 works globally, 21 supporting included families; scPertEval `existing`
+- `unspecified`: 106 works globally, 80 supporting included families; scPertEval `use_family_canonical_backend`
 
 DE-based metrics are applicable to all three benchmark tasks because each has observed and predicted
 cell populations (including the already-defined control-lifted population view for point models).

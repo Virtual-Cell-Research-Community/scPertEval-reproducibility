@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "atlas-protocol-eligibility-v1",
   "atlas": {
-    "revision": "6f6e858097c0d8135d27c609040906d73d35ce55",
+    "revision": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
     "source_path": "data/protocols.csv",
     "minimum_independent_works": 2,
     "required_columns": [

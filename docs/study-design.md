@@ -302,14 +302,14 @@ conversion rule is recorded in each prediction manifest.
 ## Sensitivity panel
 
 The executable protocol universe is frozen from PerturbationEvaluationAtlas
-commit `6f6e858097c0d8135d27c609040906d73d35ce55`. An operational family is
+commit `0be116b2a871132c2b3f0c9e896e2fb544a41fe5`. An operational family is
 eligible when it occurs in at least two independent works. Literature frequency
 selects families but does not weight them. Ranking-equivalent variants receive
 one vote, reporting aggregation is separated from atomic protocol identity, and
 the approved scope excludes retrieval, cross-perturbation metrics, new
 population-distance implementations, curated composite panels, and
 effect-weighted perturbation aggregation. Limma-dependent evaluation is
-postponed. The resulting primary universe contains 99 families, normalized by
+postponed. The resulting primary universe contains 101 families, normalized by
 task in `configs/evaluation/atlas-task-protocol-manifest-v1.csv`.
 
 Metrics remain separate; no cross-metric composite or global leaderboard is

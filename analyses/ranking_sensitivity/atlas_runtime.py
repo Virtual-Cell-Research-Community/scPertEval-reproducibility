@@ -39,8 +39,8 @@ TARGET_POLICIES = {
 def load_eligible_families(path: Path = DEFAULT_ELIGIBILITY) -> pd.DataFrame:
     """Load and minimally validate the frozen executable family table."""
     frame = pd.read_csv(path, keep_default_na=False)
-    if len(frame) != 99 or frame["family_id"].nunique() != 99:
-        raise ValueError(f"expected 99 unique eligible Atlas families, found {len(frame)} rows")
+    if len(frame) != 101 or frame["family_id"].nunique() != 101:
+        raise ValueError(f"expected 101 unique eligible Atlas families, found {len(frame)} rows")
     if set(frame["scope_decision"]) != {"included"}:
         raise ValueError("eligibility table contains non-included families")
     return frame

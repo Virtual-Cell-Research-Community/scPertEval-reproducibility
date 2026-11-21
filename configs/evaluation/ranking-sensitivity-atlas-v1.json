@@ -5,10 +5,10 @@
   "protocol_universe": {
     "eligibility_config": "configs/evaluation/atlas-protocol-eligibility-v1.json",
     "eligible_families": "configs/evaluation/atlas-protocol-eligibility-v1.csv",
-    "eligible_families_sha256": "86411b19c250b78ed0c43f67a49afa52312f5c101a51f839cff9a8fbe4c37a59",
+    "eligible_families_sha256": "f6768e21a80f3ef0ce4811010e1dd69ab64db07086658add9cba0ba96ea0a9b8",
     "task_manifest": "configs/evaluation/atlas-task-protocol-manifest-v1.csv",
-    "task_manifest_sha256": "6d9a8c7c79d20de20c89dc95f89afb3a66e877e91ecdf807d7d9c751ccfda5bf",
-    "n_families": 99,
+    "task_manifest_sha256": "0de9de7c451b1f7b5c58d26a4bc7a0e74e36530535abec1469048c425a781126",
+    "n_families": 101,
     "vote_weighting": "equal",
     "literature_frequency_used_only_for_eligibility": true
   },
