@@ -107,7 +107,17 @@ def _contrast_text_color(color: str | tuple[float, float, float, float]) -> str:
     return "#171717" if luminance > 0.62 else "#FFFFFF"
 
 
-def _winner_share_panel(ax: plt.Axes, shares: pd.DataFrame, colors: dict[str, str]) -> None:
+def _panel_label(ax: plt.Axes, panel: str | None) -> None:
+    if panel is not None:
+        ax.text(0, 1.02, panel, transform=ax.transAxes, ha="left", va="bottom", fontsize=9, fontweight="bold")
+
+
+def _winner_share_panel(
+    ax: plt.Axes,
+    shares: pd.DataFrame,
+    colors: dict[str, str],
+    panel: str | None = None,
+) -> None:
     models = sorted(shares["model"].unique(), key=lambda model: (model in BASELINES, model))
     for y, task in enumerate(TASK_ORDER):
         task_rows = shares[shares["task"] == task].set_index("model")
@@ -143,7 +153,7 @@ def _winner_share_panel(ax: plt.Axes, shares: pd.DataFrame, colors: dict[str, st
     ax.set_xlabel("Share of literature-eligible protocols won")
     ax.invert_yaxis()
     ax.grid(axis="x", linewidth=0.6)
-    ax.set_title("a  Different models win under different protocols", loc="left", fontweight="bold")
+    _panel_label(ax, panel)
     handles = [
         Line2D([0], [0], marker="s", linestyle="", color=MODEL_COLORS.get(model, colors["muted"]), label=model)
         for model in models
@@ -152,7 +162,12 @@ def _winner_share_panel(ax: plt.Axes, shares: pd.DataFrame, colors: dict[str, st
     ax.legend(handles=handles, frameon=False, ncol=4, fontsize=6.1, loc="upper center", bbox_to_anchor=(0.5, -0.24))
 
 
-def _disagreement_panel(ax: plt.Axes, summary: pd.DataFrame, colors: dict[str, str]) -> None:
+def _disagreement_panel(
+    ax: plt.Axes,
+    summary: pd.DataFrame,
+    colors: dict[str, str],
+    panel: str | None = None,
+) -> None:
     task_colors = ["#56B4E9", "#E69F00", "#00CC96"]
     rows = summary.set_index("task").reindex(TASK_ORDER)
     values = rows["winner_disagreement_rate"].to_numpy(float)
@@ -171,11 +186,16 @@ def _disagreement_panel(ax: plt.Axes, summary: pd.DataFrame, colors: dict[str, s
     ax.set_xticks(range(3), [TASK_LABELS[task] for task in TASK_ORDER])
     ax.set_ylabel("Protocol pairs selecting different winners")
     ax.grid(axis="y", linewidth=0.6)
-    ax.set_title("b  Winner disagreement is reference-free", loc="left", fontweight="bold")
+    _panel_label(ax, panel)
     ax.spines["left"].set_color(colors["foreground"])
 
 
-def _factor_panel(ax: plt.Axes, factors: pd.DataFrame, colors: dict[str, str]) -> None:
+def _factor_panel(
+    ax: plt.Axes,
+    factors: pd.DataFrame,
+    colors: dict[str, str],
+    panel: str | None = None,
+) -> None:
     factor_order = [factor for factor in FACTOR_LABELS if factor in set(factors["factor"])]
     matrix = np.full((len(factor_order), len(TASK_ORDER)), np.nan)
     counts = np.zeros_like(matrix)
@@ -204,13 +224,18 @@ def _factor_panel(ax: plt.Axes, factors: pd.DataFrame, colors: dict[str, str]) -
                 )
     ax.set_xticks(range(len(TASK_ORDER)), [TASK_LABELS[task] for task in TASK_ORDER])
     ax.set_yticks(range(len(factor_order)), [FACTOR_LABELS[factor] for factor in factor_order])
-    ax.set_title("c  Which evaluation choices change the winner?", loc="left", fontweight="bold")
+    _panel_label(ax, panel)
     colorbar = ax.figure.colorbar(image, ax=ax, fraction=0.035, pad=0.025)
     colorbar.set_label("Winner-change rate")
     colorbar.ax.yaxis.set_tick_params(color=colors["foreground"])
 
 
-def _contrast_panel(ax: plt.Axes, contrasts: pd.DataFrame, colors: dict[str, str]) -> None:
+def _contrast_panel(
+    ax: plt.Axes,
+    contrasts: pd.DataFrame,
+    colors: dict[str, str],
+    panel: str | None = None,
+) -> None:
     plotted = contrasts[contrasts["n_backgrounds"] >= 2].copy()
     plotted = plotted.sort_values(
         ["n_backgrounds", "winner_change_rate", "maximum_pairwise_reversal_fraction"],
@@ -235,7 +260,7 @@ def _contrast_panel(ax: plt.Axes, contrasts: pd.DataFrame, colors: dict[str, str
     ax.set_xlim(-0.02, min(1.0, max(0.35, float(plotted["winner_change_rate"].max()) * 1.12)))
     ax.set_xlabel("Winner-change rate across matched backgrounds")
     ax.grid(axis="x", linewidth=0.6)
-    ax.set_title("d  Most replicated concrete contrasts", loc="left", fontweight="bold")
+    _panel_label(ax, panel)
 
 
 def global_figure(source: Path, output: Path, *, dark: bool) -> None:
@@ -247,10 +272,10 @@ def global_figure(source: Path, output: Path, *, dark: bool) -> None:
     with theme(dark) as colors:
         figure = plt.figure(figsize=(11.2, 9.2), constrained_layout=True)
         grid = figure.add_gridspec(2, 2, width_ratios=[1.25, 1], height_ratios=[1, 1.2])
-        _winner_share_panel(figure.add_subplot(grid[0, 0]), shares, colors)
-        _disagreement_panel(figure.add_subplot(grid[0, 1]), disagreement, colors)
-        _factor_panel(figure.add_subplot(grid[1, 0]), factors, colors)
-        _contrast_panel(figure.add_subplot(grid[1, 1]), contrasts, colors)
+        _winner_share_panel(figure.add_subplot(grid[0, 0]), shares, colors, "a")
+        _disagreement_panel(figure.add_subplot(grid[0, 1]), disagreement, colors, "b")
+        _factor_panel(figure.add_subplot(grid[1, 0]), factors, colors, "c")
+        _contrast_panel(figure.add_subplot(grid[1, 1]), contrasts, colors, "d")
         _save(figure, output, "ranking-sensitivity-global", mode)
 
 
@@ -327,14 +352,7 @@ def _bump_panel(ax: plt.Axes, rows: pd.DataFrame, colors: dict[str, str], panel:
     ax.set_xticks([0, 1], [str(first["level_a"]), str(first["level_b"])], fontsize=6.2)
     ax.set_yticks([])
     ax.spines[["left", "bottom"]].set_visible(False)
-    title = TASK_LABELS[str(first["task"])].replace("\n", " ")
-    ax.set_title(
-        f"{panel}  {title}\n{first['pairwise_reversal_fraction']:.1%} pairwise reversals; "
-        f"{first['winners_a']} → {first['winners_b']}",
-        loc="left",
-        fontsize=7.4,
-        fontweight="bold",
-    )
+    _panel_label(ax, panel)
 
 
 def bump_figure(source: Path, output: Path, *, dark: bool) -> None:
