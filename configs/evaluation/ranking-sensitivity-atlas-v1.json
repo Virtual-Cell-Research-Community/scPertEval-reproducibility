@@ -57,7 +57,9 @@
       "no_ground_truth_positives",
       "single_ground_truth_class",
       "empty_feature_set",
-      "insufficient_observed_cells"
+      "insufficient_observed_cells",
+      "target_gene_not_measured",
+      "non_finite_ground_truth_de_statistic"
     ],
     "report": [
       "n_total",

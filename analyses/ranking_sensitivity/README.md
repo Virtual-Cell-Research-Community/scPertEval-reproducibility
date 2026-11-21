@@ -36,7 +36,19 @@ The current analysis policy is
 `configs/evaluation/ranking-sensitivity-atlas-v1.json`. Before any model ranks
 are inspected, produce a complete ground-truth availability table with columns
 `task`, `fold`, `protocol_id`, `evaluation_unit`, `ground_truth_defined`, and
-`undefined_reason`, then run:
+`undefined_reason`. Each fold is truth-self-evaluated through the exact concrete
+protocols built by `atlas_runtime.py`; no model predictions are read. For example:
+
+```bash
+python -m analyses.ranking_sensitivity.truth_coverage_runtime \
+  --task essential_perturbation_generalization \
+  --truth models/data/replogle-weissman-2022-k562-essential/raw.h5ad \
+  --split-manifest models/data/replogle-weissman-2022-k562-essential/split_manifest.json \
+  --fold 0 --fold-label fold-0 \
+  --out results/ground-truth-coverage/fold-0.csv
+```
+
+Concatenate the fold CSVs without changing rows, then run:
 
 ```bash
 python -m analyses.ranking_sensitivity.ground_truth_coverage \
