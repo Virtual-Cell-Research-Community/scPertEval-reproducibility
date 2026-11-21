@@ -1,0 +1,172 @@
+{
+  "schema_version": 1,
+  "id": "atlas-protocol-eligibility-v1",
+  "atlas": {
+    "revision": "6f6e858097c0d8135d27c609040906d73d35ce55",
+    "source_path": "data/protocols.csv",
+    "minimum_independent_works": 2,
+    "required_columns": [
+      "protocol_id",
+      "work_id",
+      "target_gene_policy",
+      "ranking_equivalence_family",
+      "wide_display_family"
+    ]
+  },
+  "identity": {
+    "exclude_reporting_aggregation": true,
+    "fields": [
+      "population",
+      "space",
+      "centering",
+      "reference_population",
+      "feature_set",
+      "feature_ranking_basis",
+      "feature_k_bin",
+      "feature_universe_set",
+      "feature_universe_k",
+      "feature_universe_ranking",
+      "target_operation",
+      "weighting",
+      "weight_source",
+      "weight_reference",
+      "weight_transform",
+      "metric_family",
+      "cross_perturbation_group",
+      "evaluation_sampling"
+    ]
+  },
+  "target_policy": {
+    "ordinary": "no_target_operation",
+    "unspecified": "no_target_operation",
+    "not_applicable": "no_target_operation",
+    "force_include_target": "force_include_target",
+    "exclude_own_target": "exclude_own_target",
+    "exclude_all_panel_targets": "exclude_all_panel_targets"
+  },
+  "metric_equivalence_overrides": {
+    "absolute-error": "MAE",
+    "MAE": "MAE",
+    "mse": "squared-error",
+    "MSE": "squared-error",
+    "squared-error": "squared-error",
+    "euclidean-l2": "squared-error",
+    "l2-distance": "squared-error",
+    "topk-precision": "topk-overlap",
+    "topk-overlap": "topk-overlap",
+    "mmd": "mmd-rbf",
+    "mmd-rbf": "mmd-rbf",
+    "biased-multibandwidth-rbf-MMD": "mmd-rbf"
+  },
+  "canonical_parameters": {
+    "feature_k_by_bin": {
+      "": "all",
+      "1-50": 50,
+      "51-250": 100,
+      "251-1000": 1000,
+      ">1000": 2000,
+      "truth-set-sized": "truth_set_size",
+      "variable": "reported_variable"
+    },
+    "pca_components": 50,
+    "deg_adjusted_p_value_max": 0.05,
+    "deg_rank_by": "absolute_effect",
+    "population_metrics": {
+      "energy-distance": "scPertEval existing implementation",
+      "mmd-rbf": "scPertEval existing implementation",
+      "sinkhorn-divergence": "scPertEval existing implementation"
+    }
+  },
+  "scope": {
+    "allowed_feature_sets": ["All", "HVG", "HEG", "DEG"],
+    "allowed_centering": ["uncentered", "control-centered", "pert-centered"],
+    "allowed_reference_populations": ["control", "none"],
+    "allowed_by_population": {
+      "PBULK": {
+        "spaces": ["GEX"],
+        "metrics": [
+          "pearson",
+          "r2",
+          "squared-error",
+          "MAE",
+          "cosine",
+          "spearman",
+          "explained-variance",
+          "squared-pearson",
+          "clipped-r2",
+          "direction-concordance"
+        ]
+      },
+      "DE": {
+        "spaces": ["GEX"],
+        "metrics": [
+          "average-precision",
+          "deg-identification-auprc",
+          "auroc",
+          "topk-overlap",
+          "direction-concordance",
+          "set-overlap-at-truth-size",
+          "set-overlap-at-n",
+          "jaccard",
+          "f1",
+          "macro-f1",
+          "mean-rowwise-rmse",
+          "spearman",
+          "balanced-accuracy",
+          "class-precision",
+          "class-recall",
+          "class-f1",
+          "deg-set-intersection",
+          "MAE",
+          "squared-error"
+        ]
+      },
+      "SC": {
+        "spaces": ["GEX", "PCA"],
+        "metrics": ["energy-distance", "mmd-rbf", "sinkhorn-divergence"]
+      }
+    },
+    "excluded_target_operations": ["exclude_all_panel_targets"],
+    "require_empty_cross_perturbation_group": true,
+    "excluded_categories": [
+      "retrieval",
+      "pooled_or_cross_perturbation",
+      "neighborhood_or_anchor",
+      "new_population_or_optimal_transport_metrics",
+      "curated_pathway_or_biological_spaces",
+      "benchmark_specific_composite_panels",
+      "effect_weighted_perturbation_aggregation"
+    ]
+  },
+  "de_method_aliases": {
+    "wilcoxon_rank_sum": "rank_sum",
+    "mann_whitney_u": "rank_sum",
+    "t_test": "t_test",
+    "limma": "limma",
+    "deseq2": "deseq2",
+    "other": "other",
+    "unknown": "unspecified",
+    "": "unspecified"
+  },
+  "scperteval_de_support": {
+    "rank_sum": "existing",
+    "t_test": "existing",
+    "limma": "not_implemented",
+    "deseq2": "not_implemented",
+    "other": "not_actionable",
+    "unspecified": "use_family_canonical_backend"
+  },
+  "task_applicability": {
+    "tasks": [
+      "essential_perturbation_generalization",
+      "genetic_context_transfer",
+      "chemical_context_transfer"
+    ],
+    "de_metrics": "all_tasks",
+    "explicit_target_operations": [
+      "essential_perturbation_generalization",
+      "genetic_context_transfer"
+    ],
+    "target_mapping_requirement": "unambiguous_measured_gene"
+  }
+}

@@ -14,6 +14,23 @@ python -m analyses.ranking_sensitivity.figure \
 
 The frozen original-paper reproduction remains under
 `analyses/scperteval-paper-v1/`; new benchmark figures must not be added there.
+
+## Atlas-derived protocol universe
+
+The literature-eligible protocol universe is generated independently of the
+older hand-written pilot grid:
+
+```bash
+python -m analyses.ranking_sensitivity.atlas_protocol_audit \
+  --atlas-repo /path/to/PerturbationEvaluationAtlas
+```
+
+The generator reads the exact Atlas revision pinned in
+`configs/evaluation/atlas-protocol-eligibility-v1.json` with `git show`, so a
+newer Atlas working tree cannot silently change the audit. It writes the
+included universe, the complete scope audit, the separate DE-caller audit, and
+the human-readable summary. Reporting aggregation and DE caller are deliberately
+not part of atomic-family identity.
 # Ranking-sensitivity figures
 
 This package renders the benchmark ranking-sensitivity analysis from retained
