@@ -14,7 +14,7 @@ dependencies = [
   "rdkit>=2024.9",
   "requests>=2.32",
   "scanpy>=1.10,<1.13",
-  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@76ce7b0",
+  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@badc3e7",
   "scipy>=1.12",
 ]
 
