@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "status": "selected-after-primary-analysis",
+  "selection_policy": "Transparent illustrative examples chosen after inspecting the complete candidate table; not used for headline inference.",
+  "examples": [
+    {
+      "comparison_id": "essential_perturbation_generalization|atlas-2941cd03a59a|atlas-9d5a81b78415",
+      "rationale": "Perturbation-generalization example contrasting all genes with the top 50 significance-ranked DEGs."
+    },
+    {
+      "comparison_id": "genetic_context_transfer|atlas-3d0c98d117ec|atlas-943d06b9f50a",
+      "rationale": "Genetic context-transfer example contrasting control-centered effects with uncentered expression."
+    },
+    {
+      "comparison_id": "chemical_context_transfer|atlas-727bef1a4b26|atlas-cd1d5e56afac",
+      "rationale": "Chemical context-transfer example contrasting pseudobulk Pearson with population MMD in the frozen PCA-50 space."
+    },
+    {
+      "comparison_id": "chemical_context_transfer|aggregation|atlas-9d5a81b78415",
+      "rationale": "Chemical context-transfer example contrasting mean and median perturbation aggregation."
+    }
+  ]
+}

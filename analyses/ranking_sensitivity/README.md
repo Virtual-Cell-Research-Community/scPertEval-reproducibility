@@ -90,6 +90,42 @@ is skipped safely on restart.
 The optional data and runs roots keep large truth reads on a workstation-local
 cache while predictions and authoritative results remain on SDS.
 
+## Atlas production analysis
+
+After all checksum-bound detail bundles and the independent ground-truth
+coverage audit are complete, assemble the canonical score table and calculate
+the reference-free headline summaries:
+
+```bash
+python -m analyses.ranking_sensitivity.atlas_analysis \
+  --details-root results/ranking-sensitivity-atlas-v1/details \
+  --availability results/ground-truth-coverage-v1/availability.csv \
+  --pair-coverage results/ground-truth-coverage-v1/pairwise-coverage-summary.csv \
+  --output results/ranking-sensitivity-atlas-v1/analysis-v1
+```
+
+The analysis keeps the three tasks separate. Winner shares use the standard
+mean reduction, equal protocol votes, and fractional credit for ties. Every
+unordered protocol pair is compared on the ground-truth-defined evaluation-unit
+intersection within each fold and must meet the frozen 75% minimum-fold
+coverage rule. Factor sensitivity uses only protocol pairs that differ in one
+semantic factor; mean-versus-median aggregation is evaluated separately.
+
+Render all global and selected bump figures in both light and dark mode:
+
+```bash
+python -m analyses.ranking_sensitivity.atlas_figures \
+  --source-data results/ranking-sensitivity-atlas-v1/analysis-v1/source-data \
+  --output results/ranking-sensitivity-atlas-v1/analysis-v1/figures
+```
+
+Every figure reads an exported CSV in `source-data/`. The compressed
+`canonical-scores.csv.gz` preserves the complete validated long-form analysis
+input without duplicating it across figure-specific tables.
+The four post-hoc illustrative examples are frozen with explicit rationales in
+`configs/evaluation/ranking-sensitivity-atlas-examples-v1.json`; the complete
+ranked candidate table remains available as `bump-plot-candidates.csv`.
+
 # Ranking-sensitivity figures
 
 This package renders the benchmark ranking-sensitivity analysis from retained
