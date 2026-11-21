@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "protocol-behavior-data-v2",
+  "canonical_datasets": [
+    "replogle-weissman-2022-k562-essential",
+    "replogle-weissman-2022-rpe1",
+    "nadig-oconner-2024-hepg2",
+    "nadig-oconner-2024-jurkat",
+    "srivatsan-trapnell-2020-sciplex3"
+  ],
+  "views": [
+    {
+      "id": "replogle-weissman-2022-k562-essential",
+      "builder": "perturbation",
+      "inputs": [
+        "replogle-weissman-2022-k562-essential"
+      ],
+      "config": "configs/experiments/replogle-weissman-2022-k562-essential-perturbation-generalization.json",
+      "output": "models/data/replogle-weissman-2022-k562-essential/raw.h5ad",
+      "perturbation_key": "perturbation",
+      "control_key": "is_control",
+      "cell_type": "K562"
+    },
+    {
+      "id": "replogle-nadig-four-context-50-cell",
+      "builder": "context",
+      "inputs": [
+        "replogle-weissman-2022-k562-essential",
+        "replogle-weissman-2022-rpe1",
+        "nadig-oconner-2024-hepg2",
+        "nadig-oconner-2024-jurkat"
+      ],
+      "config": "configs/experiments/replogle-nadig-four-context-50-cell.json",
+      "output": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "counts_output": "models/data/replogle-nadig-four-context-50-cell/counts.h5ad"
+    },
+    {
+      "id": "sciplex3-nine-drug-context-transfer",
+      "builder": "context",
+      "inputs": [
+        "srivatsan-trapnell-2020-sciplex3"
+      ],
+      "config": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
+      "output": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "counts_output": "models/data/sciplex3-nine-drug-context-transfer/counts.h5ad"
+    }
+  ],
+  "derived_from": "protocol-behavior-data-v1"
+}

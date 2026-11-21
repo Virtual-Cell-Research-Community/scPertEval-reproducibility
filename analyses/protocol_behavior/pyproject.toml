@@ -1,0 +1,32 @@
+[project]
+name = "scperteval-protocol-behavior"
+version = "0.1.0"
+description = "Isolated environment for the versioned protocol-behavior and DEG analyses"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "anndata>=0.10,<0.13",
+  "geomloss==0.2.6",
+  "h5py>=3.11",
+  "matplotlib>=3.8",
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "scipy>=1.12",
+  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@89fc21f3e59673651b3162355d9a32495e274253",
+  "torch==2.5.1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8",
+  "ruff>=0.12",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["../.."]
+
+[tool.ruff]
+line-length = 120

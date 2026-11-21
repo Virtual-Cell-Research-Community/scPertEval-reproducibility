@@ -22,7 +22,12 @@ research artifacts.
 - `models/` — isolated model environments, data preparation, training and
   prediction adapters, baselines, and cluster jobs.
 - `analyses/scperteval-paper-v1/` — scripts, notebook, and reference outputs for
-  reproducing the original paper figures.
+  reproducing the original paper figures in their frozen historical environment.
+- `analyses/protocol_behavior/` — the maintained, manifest-driven DRF and DEG
+  protocol-behavior analysis. Its separate UV project pins the review-pending
+  scPertEval DE implementation without changing the benchmark environment.
+- `analyses/ranking_sensitivity/` — figures built from retained benchmark
+  predictions and tidy evaluation results.
 - `configs/` — versioned dataset, model, and experiment declarations.
 - `data/` — download and raw-to-analysis workflow documentation; generated data
   are ignored.

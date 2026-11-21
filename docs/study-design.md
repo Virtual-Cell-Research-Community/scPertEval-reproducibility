@@ -15,6 +15,16 @@ Models are trained once per prespecified split at the single training seed 42. G
 for scoring, representation, controls, metrics, weighting, and aggregation are
 varied only after predictions have been saved.
 
+## Related protocol-behavior analysis
+
+The DRF/DE protocol-behavior study is versioned separately from model training.
+Its completed `production-v1` result uses GWPS K562 and is retained unchanged as
+historical production evidence. Planned `production-v2` replaces that unit with
+the current K562 Essential benchmark while retaining the genetic and chemical
+context units. V2 is not launched until the pinned scPertEval DE revision has
+completed review; this review gate does not block model prediction generation or
+the ranking-sensitivity evaluation.
+
 ## Benchmark tracks
 
 The study contains both generalization axes; neither is optional.

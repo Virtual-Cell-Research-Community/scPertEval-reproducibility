@@ -55,6 +55,18 @@ Analysis code must not load model checkpoints or recreate predictions. That
 keeps figure reproduction cheap and makes the archived prediction bundle
 sufficient for reviewers.
 
+The analysis layer has three explicit generations and roles:
+
+- `analyses/scperteval-paper-v1` is a frozen historical reproduction;
+- `analyses/protocol_behavior` owns the maintained DRF and DEG protocol study;
+- `analyses/ranking_sensitivity` consumes current benchmark results.
+
+Protocol behavior has an additional dependency seam: its nested UV project pins
+the exact scPertEval Git revision used for target-versus-reference DE exports.
+The production manifest records that revision, and stages reject a mismatched
+installation. The review-pending DE branch therefore does not leak into model
+training or the root benchmark environment.
+
 ## Dependency direction
 
 ```text
@@ -76,9 +88,10 @@ outside this runtime graph.
 
 ## Migration rule
 
-The existing `models/` and `analyses/scperteval-paper-v1/` workflows remain
-operational while they are refactored. Replace old entry points only after an
-end-to-end vertical-slice test exists at the new artifact interfaces. The
-interface is the test surface; tests should validate observable artifacts rather
-than internal model state.
+The existing `models/` workflows remain operational while they are refactored.
+`analyses/scperteval-paper-v1/` is retained as immutable historical evidence,
+not as an extension point. Replace old entry points only after an end-to-end
+vertical-slice test exists at the new artifact interfaces. The interface is the
+test surface; tests should validate observable artifacts rather than internal
+model state.
 
