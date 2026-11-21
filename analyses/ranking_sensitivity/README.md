@@ -59,6 +59,10 @@ python -m analyses.ranking_sensitivity.ground_truth_coverage \
 The command rejects model or score columns. It reports protocol coverage and
 the matched common set for every unordered protocol pair. The candidate 90%
 headline threshold remains explicitly unfrozen until these results are reviewed.
+The completed v1 audit and its checksummed SDS result bundle are summarized in
+`docs/ground-truth-coverage-audit-v1.md` and
+`configs/evaluation/atlas-ground-truth-coverage-audit-v1.json`.
+
 # Ranking-sensitivity figures
 
 This package renders the benchmark ranking-sensitivity analysis from retained

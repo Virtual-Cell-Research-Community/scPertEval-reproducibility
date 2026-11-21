@@ -341,10 +341,14 @@ evaluation units for which both protocols are ground-truth-defined. Both
 protocols and every model use that identical set. A model-specific failure may
 not shrink the set for its competitors. The audit records the total, individual
 defined counts, common count, common fraction, and structured undefined reasons.
-The candidate headline threshold is 90% common coverage in every fold, but this
-number is not frozen until the ground-truth-only audit is complete and before
-model ranks are inspected. Winner-share summaries include only protocols passing
-the eventual coverage rule and display their coverage.
+The candidate headline threshold is 90% common coverage in every fold. The
+ground-truth-only v1 audit is complete and recorded in
+`docs/ground-truth-coverage-audit-v1.md`: all essential-screen pairs pass, while
+92.0% of genetic and 91.7% of chemical pairs pass. The threshold remains
+unfrozen because applying 90% would exclude all four explicit genetic
+target-policy protocols. This final design choice must be made before model
+ranks are inspected. Winner-share summaries include only protocols passing the
+eventual coverage rule and display their coverage.
 
 Bootstrap analysis is supplementary. It uses 1,000 paired perturbation-identity
 draws and applies the same draw to every model and protocol. Genetic transfer
