@@ -271,11 +271,13 @@ def global_figure(source: Path, output: Path, *, dark: bool) -> None:
     mode = "dark" if dark else "light"
     with theme(dark) as colors:
         figure = plt.figure(figsize=(11.2, 9.2), constrained_layout=True)
-        grid = figure.add_gridspec(2, 2, width_ratios=[1.25, 1], height_ratios=[1, 1.2])
-        _winner_share_panel(figure.add_subplot(grid[0, 0]), shares, colors, "a")
-        _disagreement_panel(figure.add_subplot(grid[0, 1]), disagreement, colors, "b")
-        _factor_panel(figure.add_subplot(grid[1, 0]), factors, colors, "c")
-        _contrast_panel(figure.add_subplot(grid[1, 1]), contrasts, colors, "d")
+        rows = figure.add_gridspec(2, 1, height_ratios=[1, 1.2])
+        top = rows[0].subgridspec(1, 2, width_ratios=[1, 1.25])
+        bottom = rows[1].subgridspec(1, 2, width_ratios=[1.25, 1])
+        _disagreement_panel(figure.add_subplot(top[0, 0]), disagreement, colors, "a")
+        _winner_share_panel(figure.add_subplot(top[0, 1]), shares, colors, "b")
+        _factor_panel(figure.add_subplot(bottom[0, 0]), factors, colors, "c")
+        _contrast_panel(figure.add_subplot(bottom[0, 1]), contrasts, colors, "d")
         _save(figure, output, "ranking-sensitivity-global", mode)
 
 
