@@ -4,24 +4,24 @@
   "generated_on": "2026-11-21",
   "reproducibility_repository_commit": "b6d6170",
   "scperteval_commit": "3950557",
-  "atlas_commit": "6f6e858097c0d8135d27c609040906d73d35ce55",
+  "atlas_commit": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
   "authoritative_result_directory": "/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v1",
   "availability": {
-    "rows": 333333,
-    "defined_rows": 329972,
-    "undefined_rows": 3361,
-    "sha256": "dc39c2af4cf1b76cf20bb6fe2921be30c28b28cdd221cdc1bdd6a410f5e14f4a"
+    "rows": 340075,
+    "defined_rows": 336647,
+    "undefined_rows": 3428,
+    "sha256": "d0b037497ded25e2762c679fc533fa7b60dede0adb259a0df5eab0ca372d5499"
   },
   "output_sha256": {
-    "protocol-coverage-by-fold.csv": "1f1dd0532ea0f8ef1b3661c9862b08b2aa5fef15a065d440bd43316d3e9c339a",
-    "pairwise-coverage-by-fold.csv": "fd21098331bd6859c88aa66051cc7fd89b700b58c46b76a3541c6ba38bacc1ac",
-    "pairwise-coverage-summary.csv": "1e24bf7386083337950531eef2a38aea060dd75d03fb79e41cca1d6a0e929b71",
-    "coverage-summary.json": "ec7e955a67c89cbff9c784ed5342293e1221925f11894cd0972e95c36bf34531"
+    "protocol-coverage-by-fold.csv": "a634349e7114e1334e91ee17ef424dabb750bef69eb1f3a269b3ae6edc1d716b",
+    "pairwise-coverage-by-fold.csv": "cde16feb07ecabba08b6d21de38c74cdd132315941595eb4af996d81dbd5ae90",
+    "pairwise-coverage-summary.csv": "9bed9a253c165384da19cb07433875c0a74e3d747b0f1da95fc4c8b8e174ae9d",
+    "coverage-summary.json": "90a5b10d73fd6a56a0ff200f9fe7fa9be5d6bc4cd1bdc113a09a6f4a762503bb"
   },
   "undefined_reason_counts": {
     "target_gene_not_measured": 1392,
-    "empty_feature_set": 967,
-    "constant_truth": 649,
+    "empty_feature_set": 1005,
+    "constant_truth": 678,
     "no_ground_truth_positives": 334,
     "single_ground_truth_class": 19
   },
@@ -30,20 +30,20 @@
   "tasks": {
     "essential_perturbation_generalization": {
       "folds": 5,
-      "protocols": 99,
+      "protocols": 101,
       "evaluation_units": 1352,
-      "protocol_pairs": 4851,
-      "pairs_meeting_candidate": 4851,
+      "protocol_pairs": 5050,
+      "pairs_meeting_candidate": 5050,
       "fraction_meeting_candidate": 1.0,
       "minimum_fold_common_fraction": 0.9666666666666667,
       "median_minimum_fold_common_fraction": 1.0
     },
     "genetic_context_transfer": {
       "folds": 4,
-      "protocols": 99,
+      "protocols": 101,
       "evaluation_units": 1920,
-      "protocol_pairs": 4851,
-      "pairs_meeting_candidate": 4851,
+      "protocol_pairs": 5050,
+      "pairs_meeting_candidate": 5050,
       "fraction_meeting_candidate": 1.0,
       "minimum_fold_common_fraction": 0.775,
       "median_minimum_fold_common_fraction": 0.98125,
@@ -52,11 +52,11 @@
     },
     "chemical_context_transfer": {
       "folds": 3,
-      "protocols": 95,
+      "protocols": 97,
       "evaluation_units": 99,
-      "protocol_pairs": 4465,
-      "pairs_meeting_candidate": 4371,
-      "fraction_meeting_candidate": 0.9789473684210527,
+      "protocol_pairs": 4656,
+      "pairs_meeting_candidate": 4560,
+      "fraction_meeting_candidate": 0.979381443298969,
       "minimum_fold_common_fraction": 0.6363636363636364,
       "median_minimum_fold_common_fraction": 1.0
     }

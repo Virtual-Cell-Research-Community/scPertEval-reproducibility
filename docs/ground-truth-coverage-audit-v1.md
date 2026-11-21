@@ -2,10 +2,10 @@
 
 The ground-truth-only audit completed on 2026-11-21 before model ranks were
 inspected. It truth-self-evaluated every task-applicable protocol built from the
-99 frozen Atlas semantic families using scPertEval commit `3950557`. The 75%
+101 frozen Atlas semantic families using scPertEval commit `3950557`. The 75%
 coverage decision was frozen in reproducibility repository commit `b6d6170`.
 
-The authoritative 71 MB result bundle is retained at:
+The authoritative 72 MB result bundle is retained at:
 
 ```text
 /home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v1
@@ -17,17 +17,17 @@ recorded in
 
 ## Completeness
 
-The audit contains 333,333 protocol/evaluation-unit rows across all 12 folds:
+The audit contains 340,075 protocol/evaluation-unit rows across all 12 folds:
 
 | Task | Folds | Applicable protocols | Evaluation units |
 |---|---:|---:|---:|
-| Essential perturbation generalization | 5 | 99 | 1,352 |
-| Genetic context transfer | 4 | 99 | 1,920 (480 per fold) |
-| Chemical context transfer | 3 | 95 | 99 (33 per fold) |
+| Essential perturbation generalization | 5 | 101 | 1,352 |
+| Genetic context transfer | 4 | 101 | 1,920 (480 per fold) |
+| Chemical context transfer | 3 | 97 | 99 (33 per fold) |
 
-Of these rows, 329,972 are defined and 3,361 are undefined for an approved,
-structured reason: 1,392 unmeasured target genes, 967 empty truth-derived
-feature sets, 649 constant truth vectors, 334 cases with no ground-truth
+Of these rows, 336,647 are defined and 3,428 are undefined for an approved,
+structured reason: 1,392 unmeasured target genes, 1,005 empty truth-derived
+feature sets, 678 constant truth vectors, 334 cases with no ground-truth
 positives, and 19 single-class truth sets.
 
 ## Matched protocol-pair coverage
@@ -37,9 +37,9 @@ the threshold in every fold.
 
 | Task | Protocol pairs | Pairs at frozen 75% | Fraction | Minimum | Median |
 |---|---:|---:|---:|---:|---:|
-| Essential perturbation generalization | 4,851 | 4,851 | 100.0% | 96.7% | 100.0% |
-| Genetic context transfer | 4,851 | 4,851 | 100.0% | 77.5% | 98.1% |
-| Chemical context transfer | 4,465 | 4,371 | 97.9% | 63.6% | 100.0% |
+| Essential perturbation generalization | 5,050 | 5,050 | 100.0% | 96.7% | 100.0% |
+| Genetic context transfer | 5,050 | 5,050 | 100.0% | 77.5% | 98.1% |
+| Chemical context transfer | 4,656 | 4,560 | 97.9% | 63.6% | 100.0% |
 
 The audit exposed two scientifically interpretable coverage limitations rather
 than runtime failures:
@@ -56,7 +56,7 @@ than runtime failures:
 
 The minimum shared coverage is frozen at 75% in every fold. This retains every
 essential and genetic protocol pair, including the prespecified target-policy
-factor, and 97.9% of chemical pairs. The 94 failing chemical pairs are exactly
+factor, and 97.9% of chemical pairs. The 96 failing chemical pairs are exactly
 the comparisons involving the weakest chemical protocol. That protocol is
 excluded from headline winner shares and pairwise analyses, while its results
 and structured missingness remain in the source tables. The threshold was
