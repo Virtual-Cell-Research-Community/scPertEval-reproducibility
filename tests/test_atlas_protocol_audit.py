@@ -98,3 +98,17 @@ def test_de_audit_aliases_wilcoxon_and_mann_whitney() -> None:
 def test_de_audit_does_not_count_missing_definitions_as_unspecified_callers() -> None:
     records = de_method_audit([row()], CONFIG)
     assert records == []
+
+
+def test_limma_only_family_is_postponed_but_remains_auditable() -> None:
+    family = group_families(
+        [
+            row(
+                population="DE",
+                wide_display_family="mean-rowwise-rmse",
+                de_definition=json.dumps({"method": "limma"}),
+            )
+        ],
+        CONFIG,
+    )[0]
+    assert scope_decision(family, CONFIG) == ("excluded", "de_method_postponed")

@@ -122,6 +122,12 @@ def scope_decision(family: Family, config: Mapping[str, Any]) -> tuple[str, str]
     if identity["target_operation"] in scope["excluded_target_operations"]:
         return "excluded", "target_operation_out_of_scope"
 
+    reported_de_methods = set(de_methods(family.rows, config))
+    actionable_de_methods = reported_de_methods - {"other", "unspecified"}
+    postponed_de_methods = set(config["de_method_policy"]["postponed_methods"])
+    if actionable_de_methods and actionable_de_methods <= postponed_de_methods:
+        return "excluded", "de_method_postponed"
+
     population_scope = scope["allowed_by_population"].get(identity["population"])
     if population_scope is None:
         return "excluded", "population_out_of_scope"
@@ -357,6 +363,9 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 The DE caller does not define atomic-family eligibility in this version. Existing scPertEval callers remain the
 canonical implementations unless the literature audit below reveals a missing, sufficiently common
 pipeline worth discussing before implementation.
+
+Limma-dependent families remain visible in the scope audit but are postponed from the executable primary
+universe under the frozen DE-method policy.
 
 {chr(10).join(method_lines)}
 

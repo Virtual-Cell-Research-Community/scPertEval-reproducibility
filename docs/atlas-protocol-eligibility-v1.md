@@ -11,12 +11,12 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 ## Result
 
 - Literature-eligible operational families before scope exclusions: 137
-- Families in the approved ranking-sensitivity scope: 100
-- Families excluded by the approved scope: 37
+- Families in the approved ranking-sensitivity scope: 99
+- Families excluded by the approved scope: 38
 
 ### Included by representation
 
-- `DE`: 34
+- `DE`: 33
 - `PBULK`: 56
 - `SC`: 10
 
@@ -24,11 +24,11 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 
 - `exclude_own_target`: 2
 - `force_include_target`: 2
-- `no_target_operation`: 96
+- `no_target_operation`: 95
 
 ### Implementation status
 
-- `de_recovery_module`: 23
+- `de_recovery_module`: 22
 - `direct_after_public_api`: 28
 - `multiple_extensions`: 17
 - `new_scalar_metric`: 14
@@ -37,6 +37,7 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 ### Scope exclusions
 
 - `centering_out_of_scope`: 1
+- `de_method_postponed`: 1
 - `feature_set_out_of_scope`: 5
 - `metric_out_of_scope`: 8
 - `pooled_or_cross_perturbation`: 16
@@ -49,11 +50,14 @@ The DE caller does not define atomic-family eligibility in this version. Existin
 canonical implementations unless the literature audit below reveals a missing, sufficiently common
 pipeline worth discussing before implementation.
 
-- `limma`: 3 works globally, 2 supporting included families; scPertEval `not_implemented`
+Limma-dependent families remain visible in the scope audit but are postponed from the executable primary
+universe under the frozen DE-method policy.
+
+- `limma`: 3 works globally, 0 supporting included families; scPertEval `not_implemented`
 - `other`: 6 works globally, 5 supporting included families; scPertEval `not_actionable`
 - `rank_sum`: 41 works globally, 28 supporting included families; scPertEval `existing`
 - `t_test`: 24 works globally, 21 supporting included families; scPertEval `existing`
-- `unspecified`: 107 works globally, 82 supporting included families; scPertEval `use_family_canonical_backend`
+- `unspecified`: 107 works globally, 81 supporting included families; scPertEval `use_family_canonical_backend`
 
 DE-based metrics are applicable to all three benchmark tasks because each has observed and predicted
 cell populations (including the already-defined control-lifted population view for point models).

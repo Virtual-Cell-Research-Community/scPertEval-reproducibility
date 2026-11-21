@@ -156,6 +156,10 @@
     "other": "not_actionable",
     "unspecified": "use_family_canonical_backend"
   },
+  "de_method_policy": {
+    "postponed_methods": ["limma"],
+    "reason": "A limma integration is postponed; families whose only specified actionable caller is limma remain in the audit but are excluded from the executable primary universe."
+  },
   "task_applicability": {
     "tasks": [
       "essential_perturbation_generalization",
