@@ -2,7 +2,7 @@
   "schema_version": 1,
   "status": "complete",
   "generated_on": "2026-11-21",
-  "reproducibility_repository_commit": "c54d791",
+  "reproducibility_repository_commit": "b6d6170",
   "scperteval_commit": "3950557",
   "atlas_commit": "6f6e858097c0d8135d27c609040906d73d35ce55",
   "authoritative_result_directory": "/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v1",
@@ -14,9 +14,9 @@
   },
   "output_sha256": {
     "protocol-coverage-by-fold.csv": "1f1dd0532ea0f8ef1b3661c9862b08b2aa5fef15a065d440bd43316d3e9c339a",
-    "pairwise-coverage-by-fold.csv": "e998efd078a2ea8ff8ad4e5d750ce8140ca8d0b42a4f8d40c04cf651cc1fd142",
-    "pairwise-coverage-summary.csv": "1fe830d0bcd00c8fe877a38602c32723cb92e29121b2f7a055eb098ae1a80f6a",
-    "coverage-summary.json": "9fde67305c405ddd8ee27c01a9224d6a11a35e0d1ec3ad70bbd54fd01088ea76"
+    "pairwise-coverage-by-fold.csv": "fd21098331bd6859c88aa66051cc7fd89b700b58c46b76a3541c6ba38bacc1ac",
+    "pairwise-coverage-summary.csv": "1e24bf7386083337950531eef2a38aea060dd75d03fb79e41cca1d6a0e929b71",
+    "coverage-summary.json": "ec7e955a67c89cbff9c784ed5342293e1221925f11894cd0972e95c36bf34531"
   },
   "undefined_reason_counts": {
     "target_gene_not_measured": 1392,
@@ -25,8 +25,8 @@
     "no_ground_truth_positives": 334,
     "single_ground_truth_class": 19
   },
-  "candidate_minimum_common_fraction": 0.9,
-  "candidate_is_frozen": false,
+  "candidate_minimum_common_fraction": 0.75,
+  "candidate_is_frozen": true,
   "tasks": {
     "essential_perturbation_generalization": {
       "folds": 5,
@@ -43,8 +43,8 @@
       "protocols": 99,
       "evaluation_units": 1920,
       "protocol_pairs": 4851,
-      "pairs_meeting_candidate": 4465,
-      "fraction_meeting_candidate": 0.9204287775716347,
+      "pairs_meeting_candidate": 4851,
+      "fraction_meeting_candidate": 1.0,
       "minimum_fold_common_fraction": 0.775,
       "median_minimum_fold_common_fraction": 0.98125,
       "measured_targets_per_fold": 393,
@@ -55,8 +55,8 @@
       "protocols": 95,
       "evaluation_units": 99,
       "protocol_pairs": 4465,
-      "pairs_meeting_candidate": 4095,
-      "fraction_meeting_candidate": 0.9171332586786114,
+      "pairs_meeting_candidate": 4371,
+      "fraction_meeting_candidate": 0.9789473684210527,
       "minimum_fold_common_fraction": 0.6363636363636364,
       "median_minimum_fold_common_fraction": 1.0
     }
