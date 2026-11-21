@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "ranking-sensitivity-atlas-v1",
-  "status": "design-frozen-coverage-threshold-pending-audit",
+  "status": "design-frozen-ready-for-retained-prediction-scoring",
   "protocol_universe": {
     "eligibility_config": "configs/evaluation/atlas-protocol-eligibility-v1.json",
     "eligible_families": "configs/evaluation/atlas-protocol-eligibility-v1.csv",

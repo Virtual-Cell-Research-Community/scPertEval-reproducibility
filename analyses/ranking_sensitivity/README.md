@@ -64,6 +64,28 @@ The completed v1 audit and its checksummed SDS result bundle are summarized in
 `docs/ground-truth-coverage-audit-v1.md` and
 `configs/evaluation/atlas-ground-truth-coverage-audit-v1.json`.
 
+## Retained-prediction scoring
+
+Production scoring is fold-scoped so truth-derived DE results, feature panels,
+and PCA bases are prepared once and reused across all models in the fold. For
+example:
+
+```bash
+python scripts/evaluate_atlas_production_benchmark.py \
+  --project-root /path/to/scPertEval-reproducibility \
+  --results-root /path/to/results/ranking-sensitivity-atlas-v1 \
+  --track chemical-context \
+  --fold holdout-a549 \
+  --workers 16
+```
+
+The evaluator reads only completed retained prediction bundles. It prefers a
+frozen control-residual population lift when present and otherwise uses the
+native population prediction. Centroid protocols therefore preserve the exact
+point prediction while population and DE protocols receive matched cell
+populations. Each model/fold output has a checksum-bound completion record and
+is skipped safely on restart.
+
 # Ranking-sensitivity figures
 
 This package renders the benchmark ranking-sensitivity analysis from retained
