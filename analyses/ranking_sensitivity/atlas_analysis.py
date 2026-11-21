@@ -57,8 +57,8 @@ OPERATIONAL_COLUMNS = [
     "metric_family",
     "canonical_feature_k",
 ]
+METRIC_COMPONENT_COLUMNS = ("population", "space", "metric_family")
 FACTOR_COLUMNS = {
-    "metric": ("population", "space", "metric_family"),
     "feature_panel": ("feature_set", "feature_ranking_basis", "canonical_feature_k"),
     "centering": ("centering", "reference_population"),
     "target_policy": ("target_operation",),
@@ -224,9 +224,13 @@ def compare_rankings(first: ProtocolRanking, second: ProtocolRanking) -> dict[st
 
 
 def _factor_level(row: pd.Series, factor: str) -> str:
+    if factor == "evaluation_family":
+        return str(row["population"])
+    if factor == "score_function":
+        return str(row["metric_family"])
+    if factor == "expression_space":
+        return str(row["space"])
     values = [str(row[column]) for column in FACTOR_COLUMNS[factor]]
-    if factor == "metric":
-        return f"{values[0]} · {values[1]} · {values[2]}"
     if factor == "feature_panel":
         ranking = f"/{values[1]}" if values[1] else ""
         return f"{values[0]}{ranking} · k={values[2]}"
@@ -239,15 +243,29 @@ def _factor_level(row: pd.Series, factor: str) -> str:
 
 
 def factor_for_pair(first: pd.Series, second: pd.Series) -> tuple[str, str, str] | None:
-    """Return the sole differing evaluation factor, or ``None`` for multi-factor pairs."""
+    """Classify an interpretable matched evaluation contrast.
+
+    Evaluation-family changes may necessarily bring a compatible score function or expression
+    space with them. Score-function and expression-space contrasts remain strictly one-factor.
+    """
 
     changed = []
     for factor, columns in FACTOR_COLUMNS.items():
         if tuple(str(first[column]) for column in columns) != tuple(str(second[column]) for column in columns):
             changed.append(factor)
-    if len(changed) != 1:
+    metric_changes = {column: str(first[column]) != str(second[column]) for column in METRIC_COMPONENT_COLUMNS}
+    if changed:
+        if len(changed) != 1 or any(metric_changes.values()):
+            return None
+        factor = changed[0]
+    elif metric_changes["population"]:
+        factor = "evaluation_family"
+    elif metric_changes["space"] and not metric_changes["metric_family"]:
+        factor = "expression_space"
+    elif metric_changes["metric_family"] and not metric_changes["space"]:
+        factor = "score_function"
+    else:
         return None
-    factor = changed[0]
     level_a = _factor_level(first, factor)
     level_b = _factor_level(second, factor)
     return factor, level_a, level_b
@@ -742,6 +760,12 @@ def analyse(
         "winner_tie_credit": "fractional",
         "primary_aggregation": "mean within fold, then equal mean across folds",
         "pair_matching": "ground-truth-defined intersection within each task and fold",
+        "factor_semantics": {
+            "evaluation_family": "profile, population, or DE representation; compatible space and score may change",
+            "score_function": "score function changes within a fixed representation and expression space",
+            "expression_space": "expression space changes with representation and score function fixed",
+            "other_factors": "strictly one-factor matched contrasts",
+        },
         "tasks_pooled": False,
         "n_detail_rows": len(details),
         "n_detail_bundles": len(list(details_root.glob("*/*/*/seed-*.complete.json"))),

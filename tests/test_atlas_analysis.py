@@ -45,9 +45,14 @@ def test_compare_rankings_counts_strict_pairwise_reversals() -> None:
     assert comparison["pairwise_reversal_fraction"] == 1.0
 
 
-def test_factor_pair_requires_exactly_one_semantic_factor_change() -> None:
-    metric_change = factor_for_pair(family(), family(metric_family="r2"))
-    assert metric_change == ("metric", "PBULK · GEX · pearson", "PBULK · GEX · r2")
+def test_factor_pair_separates_evaluation_family_score_and_space() -> None:
+    score_change = factor_for_pair(family(), family(metric_family="r2"))
+    assert score_change == ("score_function", "pearson", "r2")
+    family_change = factor_for_pair(family(), family(population="SC", metric_family="mmd-rbf"))
+    assert family_change == ("evaluation_family", "PBULK", "SC")
+    space_change = factor_for_pair(family(metric_family="mmd-rbf"), family(metric_family="mmd-rbf", space="PCA"))
+    assert space_change == ("expression_space", "GEX", "PCA")
+    assert factor_for_pair(family(), family(space="PCA", metric_family="mmd-rbf")) is None
     assert factor_for_pair(family(), family(metric_family="r2", feature_set="HVG")) is None
 
 
@@ -61,10 +66,10 @@ def test_select_bump_examples_covers_tasks_then_adds_a_factor() -> None:
     for index, task in enumerate(tasks):
         rows.append(
             {
-                "comparison_id": f"{task}|metric",
+                "comparison_id": f"{task}|score-function",
                 "task": task,
                 "analysis_eligible": True,
-                "factor": "metric",
+                "factor": "score_function",
                 "winner_changed": True,
                 "pairwise_reversal_fraction": 0.8 - index * 0.1,
                 "minimum_fold_common_fraction": 1.0,
@@ -85,4 +90,4 @@ def test_select_bump_examples_covers_tasks_then_adds_a_factor() -> None:
     chosen = selected[selected["selected"]]
     assert len(chosen) == 4
     assert set(chosen["task"]) == set(tasks)
-    assert set(chosen["factor"]) == {"metric", "centering"}
+    assert set(chosen["factor"]) == {"score_function", "centering"}

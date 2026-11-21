@@ -108,8 +108,13 @@ The analysis keeps the three tasks separate. Winner shares use the standard
 mean reduction, equal protocol votes, and fractional credit for ties. Every
 unordered protocol pair is compared on the ground-truth-defined evaluation-unit
 intersection within each fold and must meet the frozen 75% minimum-fold
-coverage rule. Factor sensitivity uses only protocol pairs that differ in one
-semantic factor; mean-versus-median aggregation is evaluated separately.
+coverage rule. Factor sensitivity separates evaluation family (profile,
+population, or DE), score function within a fixed family and space, and
+expression space. An evaluation-family transition may necessarily change to a
+compatible score function; all other factors are strict one-factor contrasts.
+Mean-versus-median aggregation is evaluated separately. The main figure shows
+only task-level factor estimates supported by at least 10 matched contrasts;
+the complete source table retains sparser comparisons for audit.
 
 Render all global and selected bump figures in both light and dark mode:
 

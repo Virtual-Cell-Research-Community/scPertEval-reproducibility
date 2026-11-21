@@ -23,13 +23,16 @@ TASK_LABELS = {
     "chemical_context_transfer": "Chemical context\ntransfer",
 }
 FACTOR_LABELS = {
-    "metric": "Metric and output representation",
+    "evaluation_family": "Evaluation family",
+    "score_function": "Score function",
+    "expression_space": "Expression space",
     "feature_panel": "Gene selection",
     "centering": "Centering and reference",
     "target_policy": "Target-gene policy",
     "weighting": "Gene weighting",
     "aggregation": "Perturbation aggregation",
 }
+MIN_FACTOR_CONTRASTS = 10
 BASELINES = {"no-change", "fold-mean", "linear"}
 MODEL_COLORS = {
     "gears": "#0072B2",
@@ -196,15 +199,18 @@ def _factor_panel(
     colors: dict[str, str],
     panel: str | None = None,
 ) -> None:
-    factor_order = [factor for factor in FACTOR_LABELS if factor in set(factors["factor"])]
+    displayed = factors[factors["n_matched_contrasts"] >= MIN_FACTOR_CONTRASTS]
+    factor_order = [factor for factor in FACTOR_LABELS if factor in set(displayed["factor"])]
     matrix = np.full((len(factor_order), len(TASK_ORDER)), np.nan)
     counts = np.zeros_like(matrix)
+    changes = np.zeros_like(matrix)
     for row, factor in enumerate(factor_order):
         for column, task in enumerate(TASK_ORDER):
             match = factors[(factors["factor"] == factor) & (factors["task"] == task)]
-            if len(match) == 1:
+            if len(match) == 1 and int(match.iloc[0]["n_matched_contrasts"]) >= MIN_FACTOR_CONTRASTS:
                 matrix[row, column] = float(match.iloc[0]["winner_change_rate"])
                 counts[row, column] = int(match.iloc[0]["n_matched_contrasts"])
+                changes[row, column] = int(match.iloc[0]["n_winner_changes"])
     maximum = max(0.5, float(np.nanmax(matrix)))
     color_map = plt.get_cmap("magma").copy()
     color_map.set_bad(colors["background"])
@@ -216,7 +222,7 @@ def _factor_panel(
                 ax.text(
                     column,
                     row,
-                    f"{matrix[row, column]:.1%}\nn={int(counts[row, column])}",
+                    f"{matrix[row, column]:.1%}\n{int(changes[row, column])}/{int(counts[row, column])}",
                     ha="center",
                     va="center",
                     color=color,
@@ -243,7 +249,8 @@ def _contrast_panel(
     ).head(12)
     plotted = plotted.iloc[::-1]
     labels = [
-        f"{row.factor}: {row.level_a} ↔ {row.level_b}\n{TASK_LABELS[row.task].replace(chr(10), ' ')}"
+        f"{FACTOR_LABELS.get(row.factor, row.factor.replace('_', ' '))}: {row.level_a} ↔ {row.level_b}\n"
+        f"{TASK_LABELS[row.task].replace(chr(10), ' ')}"
         for row in plotted.itertuples(index=False)
     ]
     y = np.arange(len(plotted))
