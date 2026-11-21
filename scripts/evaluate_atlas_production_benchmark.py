@@ -198,24 +198,11 @@ def evaluate_fold(
 ) -> None:
     if fold_id not in track.fold_ids:
         raise ValueError(f"unknown fold {fold_id!r} for {track.key}; expected {track.fold_ids}")
-    fold_index = track.fold_ids.index(fold_id)
-    split = _json(track.split_manifest)
-    truth, expected_units = load_truth_fold(track.truth, split, fold_index if track.key == "essential" else fold_id)
-    protocols = task_protocols(track.task)
-    prepared = prepare_prediction_fold(
-        truth,
-        task=track.task,
-        fold_label=fold_id,
-        protocols=protocols,
-        workers=workers,
-    )
-    fold_spec = split["folds"][fold_index]
-    held_out_context = fold_spec.get("test_context")
-
     models = [model for model in track.models if selected_models is None or model in selected_models]
     unknown = sorted((selected_models or set()) - set(track.models))
     if unknown:
         raise ValueError(f"models are not part of {track.key}: {unknown}")
+    pending: list[tuple[str, int, Path, Path, Path]] = []
     for model in models:
         for seed in track.seeds:
             run = _run_directory(runs_root, track, model, fold_id, seed)
@@ -235,36 +222,55 @@ def evaluate_fold(
             ):
                 print(f"current {track.task}/{model}/{fold_id}/seed-{seed}", flush=True)
                 continue
-            prediction = _load_prediction_for_evaluation(prediction_path)
-            detail = evaluate_prediction(
-                prepared,
-                prediction,
-                task=track.task,
-                fold_label=fold_id,
-                model=model,
-                training_seed=seed,
-                expected_units=expected_units,
-                protocols=protocols,
-                held_out_context=held_out_context,
-            )
-            _atomic_csv(detail, output)
-            record = _completion_record(
-                track=track,
-                model=model,
-                fold_id=fold_id,
-                seed=seed,
-                prediction_manifest=prediction_manifest,
-                output=output,
-                project_root=project_root,
-            )
-            _atomic_bytes(
-                output.with_suffix(".complete.json"),
-                (json.dumps(record, indent=2, sort_keys=True) + "\n").encode(),
-            )
-            print(
-                f"completed {track.task}/{model}/{fold_id}/seed-{seed}: {len(detail):,} rows",
-                flush=True,
-            )
+            pending.append((model, seed, prediction_path, prediction_manifest, output))
+    if not pending:
+        return
+
+    fold_index = track.fold_ids.index(fold_id)
+    split = _json(track.split_manifest)
+    truth, expected_units = load_truth_fold(track.truth, split, fold_index if track.key == "essential" else fold_id)
+    protocols = task_protocols(track.task)
+    prepared = prepare_prediction_fold(
+        truth,
+        task=track.task,
+        fold_label=fold_id,
+        protocols=protocols,
+        workers=workers,
+    )
+    fold_spec = split["folds"][fold_index]
+    held_out_context = fold_spec.get("test_context")
+
+    for model, seed, prediction_path, prediction_manifest, output in pending:
+        prediction = _load_prediction_for_evaluation(prediction_path)
+        detail = evaluate_prediction(
+            prepared,
+            prediction,
+            task=track.task,
+            fold_label=fold_id,
+            model=model,
+            training_seed=seed,
+            expected_units=expected_units,
+            protocols=protocols,
+            held_out_context=held_out_context,
+        )
+        _atomic_csv(detail, output)
+        record = _completion_record(
+            track=track,
+            model=model,
+            fold_id=fold_id,
+            seed=seed,
+            prediction_manifest=prediction_manifest,
+            output=output,
+            project_root=project_root,
+        )
+        _atomic_bytes(
+            output.with_suffix(".complete.json"),
+            (json.dumps(record, indent=2, sort_keys=True) + "\n").encode(),
+        )
+        print(
+            f"completed {track.task}/{model}/{fold_id}/seed-{seed}: {len(detail):,} rows",
+            flush=True,
+        )
 
 
 def main() -> int:
