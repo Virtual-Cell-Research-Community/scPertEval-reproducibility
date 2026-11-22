@@ -1,19 +1,42 @@
 # Ground-truth protocol coverage audit
 
-The coverage audit spans all 111 protocol families. It consists of the prespecified audit of the
-101 original families (completed 2026-11-21, before model ranks were inspected) and the
-truth-self-evaluation of the ten retrieval-rank families added post hoc on 2026-11-22
-(`docs/ranking-sensitivity-atlas-scope-change.md`). The frozen 75% rule was not changed.
-Machine-readable provenance, checksums and summary values are in
-`configs/evaluation/atlas-ground-truth-coverage-audit.json`; the combined result bundle is at:
+The current audit covers the 115-family universe derived from Atlas `0b0fca9`, truth-self-evaluated
+at scPertEval `774e600` on all 12 folds in one pass (2026-11-22). The frozen 75% rule was not
+changed; this audit was computed after model ranks over earlier universes had been inspected
+(`docs/ranking-sensitivity-atlas-scope-change.md`). Machine-readable provenance, checksums and
+summary values are in `configs/evaluation/atlas-ground-truth-coverage-audit.json`; the result
+bundle is at:
 
 ```text
-/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v2
+/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-atlas-0b0fca9-scperteval-774e600
 ```
 
-## Current audit (111 families)
+## Current audit (115 families)
 
-The combined availability table has 373,488 protocol/evaluation-unit rows (the 340,075 rows of the
+The availability table has 386,576 protocol/evaluation-unit rows. 381,579 rows are defined and
+4,997 are undefined: 3,132 unmeasured target genes, 678 constant truth vectors, 587 empty
+truth-derived feature sets, 543 cases with no ground-truth positives, and 57 single-class truth
+sets. Unmeasured targets arise only in genetic context transfer (87 of 480 targets per fold), under
+nine target-including or target-excluding protocols (348 rows each).
+
+| Task | Applicable protocols | Protocol pairs | Pairs at frozen 75% | Fraction | Minimum | Median |
+|---|---:|---:|---:|---:|---:|---:|
+| Essential perturbation generalization | 115 | 6,555 | 6,555 | 100.0% | 96.7% | 100.0% |
+| Genetic context transfer | 115 | 6,555 | 6,555 | 100.0% | 77.5% | 98.1% |
+| Chemical context transfer | 104 | 5,356 | 5,253 | 98.1% | 63.6% | 100.0% |
+
+Minimum and median are taken over each pair's worst fold. As in every earlier audit, the 103
+failing chemical pairs are exactly the comparisons involving the uncentred top-50 DEG Pearson
+protocol (`atlas-dc86e02d8006`, 63.6% coverage in its weakest fold), so 103 chemical protocols
+enter the headline analyses. The weakest genetic protocols cover 79–82% of units in their worst
+fold, including the new target-excluding HVG retrieval families (81.9%), and pass the rule.
+
+## Previous universe (111 families)
+
+Recorded before the Atlas update, at Atlas `0be116b` and scPertEval `58ccc91`
+(`results/ground-truth-coverage-v2` on SDS):
+
+Its combined availability table has 373,488 protocol/evaluation-unit rows (the 340,075 rows of the
 prespecified audit unchanged, plus 33,413 retrieval rows). 369,883 rows are defined and 3,605 are
 undefined: 1,740 unmeasured target genes, 678 constant truth vectors, 587 empty truth-derived
 feature sets, 543 cases with no ground-truth positives, and 57 single-class truth sets. All 348
@@ -33,7 +56,7 @@ limit as the other target-policy protocols, and passes the rule.
 ## Prespecified audit (101 families)
 
 The audit below is reproduced as recorded before the retrieval families were added. It was run
-at scPertEval commit `3950557`. The current table uses the same 340,075 rows re-evaluated at
+at scPertEval commit `3950557`. The 111-family table above uses the same 340,075 rows re-evaluated at
 scPertEval `58ccc91` (`docs/scperteval-main-ranking-migration.md`). That re-evaluation has 3,257
 undefined rows rather than the 3,428 listed below, and its pair counts are unchanged.
 

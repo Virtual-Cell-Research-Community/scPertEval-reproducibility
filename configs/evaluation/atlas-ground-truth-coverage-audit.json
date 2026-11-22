@@ -2,42 +2,37 @@
   "schema_version": 1,
   "status": "complete",
   "generated_on": "2026-11-22",
-  "reproducibility_repository_commit": "caee425",
-  "scperteval_commit": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
-  "atlas_commit": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
+  "reproducibility_repository_commit": "021b41c",
+  "scperteval_commit": "774e6001b09f889905c353a8fd4022a36482eb80",
+  "atlas_commit": "0b0fca9dc997fd531c686fedeb95aa66c68c4d24",
   "execution_host": "beauty",
-  "construction": "Prespecified-universe availability (results/ground-truth-coverage-v1/availability.csv, 340,075 rows, unchanged) plus truth-self-evaluation of the 10 retrieval-rank families on all 12 folds",
-  "post_hoc_note": "The 75% rule was frozen before model ranks were inspected; the retrieval families' coverage was computed after model ranks over the prespecified universe had been inspected.",
-  "authoritative_result_directory": "/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v2",
+  "construction": "Truth-self-evaluation of all 115 families on all 12 folds in one pass; no rows reused from earlier universes",
+  "post_hoc_note": "The 75% rule was frozen on 2026-11-21, before model ranks were inspected, and is unchanged. This audit was computed after model ranks over earlier universes had been inspected.",
+  "authoritative_result_directory": "/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-atlas-0b0fca9-scperteval-774e600",
   "availability": {
-    "rows": 373488,
-    "prespecified_rows": 340075,
-    "added_rows": 33413,
-    "defined_rows": 369883,
-    "undefined_rows": 3605,
-    "added_undefined_rows": 348,
-    "sha256": "aa698292e9863e513e8e16df4b7f2e9ad8b3da3c32a84a994a9b989a7dd0ec71"
+    "rows": 386576,
+    "defined_rows": 381579,
+    "undefined_rows": 4997,
+    "sha256": "e176ef41b9377e71ad025425947d8ef702047e6998af8e2885d4c876208f07e7"
   },
   "output_sha256": {
-    "protocol-coverage-by-fold.csv": "fe05c1a5e313d9d3eb6df4f4b1ae9946cb638e598d083c78f7c009da748e93e0",
-    "pairwise-coverage-by-fold.csv": "b5a8738df7feb1e77495f8c493b92eb8b066d368874e2ef29910f967809dbe8c",
-    "pairwise-coverage-summary.csv": "8e66a8a92fac6e8f15e46465c99b05ac70ef1fc26321f3968fbe1484cbd024d8",
-    "coverage-summary.json": "20668cd34f3696d691bf98b544d1557599554f8e201fa35bc1c3b2591f1db1fd"
+    "protocol-coverage-by-fold.csv": "305b46af45785d3374cc7319731d9b7f0a2f62384382a808428d6ed2a9d25f0a",
+    "pairwise-coverage-by-fold.csv": "6bc769b65ef6b96a8aaa1eb83874f59d683f5d3292b74b6fc90bababec7a2b9e",
+    "pairwise-coverage-summary.csv": "91314b83f0ef001f497030214f30398db9099152091992c6fea78e32ef95d839",
+    "coverage-summary.json": "b83a6e22a2542251036da183e2b346c4632f8ecae05b567fdda40b238f4f4776"
   },
   "undefined_reason_counts": {
-    "target_gene_not_measured": 1740,
+    "target_gene_not_measured": 3132,
     "constant_truth": 678,
     "empty_feature_set": 587,
     "no_ground_truth_positives": 543,
     "single_ground_truth_class": 57
   },
-  "added_undefined_reason_counts": {
-    "target_gene_not_measured": 348
-  },
   "candidate_minimum_common_fraction": 0.75,
   "candidate_is_frozen": true,
   "tasks": {
     "chemical_context_transfer": {
+      "protocols": 104,
       "protocol_pairs": 5356,
       "pairs_meeting_candidate": 5253,
       "fraction_meeting_candidate": 0.9807692307692307,
@@ -45,18 +40,72 @@
       "median_minimum_fold_common_fraction": 1.0
     },
     "essential_perturbation_generalization": {
-      "protocol_pairs": 6105,
-      "pairs_meeting_candidate": 6105,
+      "protocols": 115,
+      "protocol_pairs": 6555,
+      "pairs_meeting_candidate": 6555,
       "fraction_meeting_candidate": 1.0,
       "minimum_fold_common_fraction": 0.9666666666666667,
       "median_minimum_fold_common_fraction": 1.0
     },
     "genetic_context_transfer": {
-      "protocol_pairs": 6105,
-      "pairs_meeting_candidate": 6105,
+      "protocols": 115,
+      "protocol_pairs": 6555,
+      "pairs_meeting_candidate": 6555,
       "fraction_meeting_candidate": 1.0,
       "minimum_fold_common_fraction": 0.775,
       "median_minimum_fold_common_fraction": 0.98125
     }
-  }
+  },
+  "failing_pairs_protocols": {
+    "atlas-dc86e02d8006": 103,
+    "atlas-041947cf5408": 1,
+    "atlas-08fea847a3af": 1
+  },
+  "weakest_protocols": [
+    {
+      "task": "chemical_context_transfer",
+      "protocol_id": "atlas-dc86e02d8006",
+      "defined_fraction": 0.6363636363636364
+    },
+    {
+      "task": "chemical_context_transfer",
+      "protocol_id": "atlas-b2b255232404",
+      "defined_fraction": 0.7878787878787878
+    },
+    {
+      "task": "chemical_context_transfer",
+      "protocol_id": "atlas-d7c932284737",
+      "defined_fraction": 0.7878787878787878
+    },
+    {
+      "task": "genetic_context_transfer",
+      "protocol_id": "atlas-d34cbc452d3b",
+      "defined_fraction": 0.7916666666666666
+    },
+    {
+      "task": "genetic_context_transfer",
+      "protocol_id": "atlas-46baa69377a8",
+      "defined_fraction": 0.81875
+    },
+    {
+      "task": "genetic_context_transfer",
+      "protocol_id": "atlas-2715e9a4439c",
+      "defined_fraction": 0.81875
+    },
+    {
+      "task": "essential_perturbation_generalization",
+      "protocol_id": "atlas-be231ecb7069",
+      "defined_fraction": 0.966789667896679
+    },
+    {
+      "task": "essential_perturbation_generalization",
+      "protocol_id": "atlas-0be15139ac03",
+      "defined_fraction": 0.966789667896679
+    },
+    {
+      "task": "essential_perturbation_generalization",
+      "protocol_id": "atlas-d34cbc452d3b",
+      "defined_fraction": 0.9814814814814816
+    }
+  ]
 }
