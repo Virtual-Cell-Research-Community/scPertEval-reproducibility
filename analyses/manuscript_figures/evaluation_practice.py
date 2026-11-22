@@ -359,7 +359,7 @@ def render(census: Path, ranking: Path, output: Path, scope_audit: Path = SCOPE_
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--census", type=Path, default=Path("figures/protocol-diversity-v1/source-data"))
+    parser.add_argument("--census", type=Path, default=Path("figures/protocol-diversity/source-data"))
     parser.add_argument("--ranking", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()

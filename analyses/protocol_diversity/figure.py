@@ -62,7 +62,7 @@ from analyses.vocabulary import ATLAS_AXES, AXIS_LABELS
 MIN_TASK_PAPERS = 20
 MIN_TABLE_DATASET_PAPERS = 10
 ALL_TASKS = "All papers"
-DEFAULT_OUTPUT = Path("figures/protocol-diversity-v1")
+DEFAULT_OUTPUT = Path("figures/protocol-diversity")
 
 
 def task_order(groups) -> list[str]:

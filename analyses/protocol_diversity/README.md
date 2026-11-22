@@ -42,7 +42,7 @@ not raise agreement: restricted to one dataset, pair sharing stays at 2–29%
 
 ## Outputs
 
-Written to `figures/protocol-diversity-v1/` (override with `--output`):
+Written to `figures/protocol-diversity/` (override with `--output`):
 
 - `source-data/`: `task-summary.csv`, `consensus-decay.csv`,
   `single-choice-agreement.csv`, `rank-frequency.csv`, `supplementary-table.csv`
