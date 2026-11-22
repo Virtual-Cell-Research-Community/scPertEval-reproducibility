@@ -124,7 +124,7 @@ def render_drf(manifest: dict[str, Any], output: Path, figures: Path) -> list[Pa
         csv_path = figures / f"drf_table_{statistic}.csv"
         png_path = figures / f"drf_table_{statistic}.png"
         table.to_csv(csv_path)
-        _save_table(table, png_path, title=f"Dataset-rescaling factor ({statistic})")
+        _save_table(table, png_path, title=f"Dynamic range fraction ({statistic})")
         written.extend((csv_path, png_path))
     timing_table = timing.pivot(index="protocol", columns="analysis_unit", values="seconds")
     timing_table["TOTAL"] = timing_table.sum(axis=1)
