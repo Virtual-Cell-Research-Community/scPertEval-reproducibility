@@ -6,7 +6,11 @@ from scperteval.blocks import spaces
 from scperteval.protocols import metrics
 from scperteval.types import Protocol
 
-from analyses.ranking_sensitivity.truth_coverage_runtime import evaluate_fold
+from analyses.ranking_sensitivity.truth_coverage_runtime import REASON_MAP, evaluate_fold
+
+
+def test_current_empty_gene_space_reason_maps_to_frozen_analysis_vocabulary():
+    assert REASON_MAP["empty_gene_space"] == "empty_feature_set"
 
 
 def test_evaluate_fold_emits_ground_truth_only_availability(monkeypatch):

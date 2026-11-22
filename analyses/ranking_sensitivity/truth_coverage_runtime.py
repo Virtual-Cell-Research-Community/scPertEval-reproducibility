@@ -22,6 +22,7 @@ REASON_MAP = {
     "constant_ground_truth_de_statistic": "constant_truth",
     "no_ground_truth_positive_degs": "no_ground_truth_positives",
     "single_ground_truth_class": "single_ground_truth_class",
+    "empty_gene_space": "empty_feature_set",
     "empty_truth_derived_gene_panel": "empty_feature_set",
     "target_gene_not_measured": "target_gene_not_measured",
     "non_finite_de_statistic": "non_finite_ground_truth_de_statistic",
