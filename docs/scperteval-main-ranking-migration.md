@@ -48,6 +48,32 @@ host-dependent floating-point behavior in Sinkhorn divergence (maximum absolute 
 should therefore run on Beauty only, or otherwise use one homogeneous execution host, so that
 near-tied model rankings cannot depend on CPU-specific Sinkhorn numerics.
 
+## Full production staging
+
+The complete migrated evaluation was run on Beauty on 2026-11-22 and retained in the separate SDS
+staging tree `results/ranking-sensitivity-atlas-scperteval-58ccc-production-staging`. All 120
+expected bundles are present and current:
+
+- 65 perturbation-generalization bundles;
+- 28 genetic-context-transfer bundles;
+- 27 chemical-context-transfer bundles.
+
+Together they contain 3,219,043 score rows. Every schema-v2 completion record matches the retained
+prediction checksum, manifests, exact scPertEval revision and evaluator source hash. The validation
+found no missing or invalid bundles, duplicate score keys, temporary files or logged execution
+errors.
+
+The reference-free analysis was regenerated from these details and the migrated ground-truth
+coverage audit. The winner identities for all 598 protocol/aggregation combinations, winner shares,
+23 factor-sensitivity estimates, 403 concrete contrasts and four selected bump examples are
+unchanged from the pre-migration analysis. The only headline-table numerical change is the genetic
+task's mean pairwise model-order reversal fraction (`0.325818` to `0.325903`); its winner-disagreement
+count remains 922 of 5,050 protocol pairs. The 36 light- and dark-mode figure files and their five
+direct source CSVs are mirrored under `figures/ranking-sensitivity-atlas-v1/`.
+
+This staging result has not replaced the authoritative pre-migration SDS result tree. Promotion is
+an explicit later decision after scientific review of the regenerated figures and source tables.
+
 ## Result-generation boundary
 
 The checked-in ground-truth coverage manifest and the current authoritative ranking score tree
