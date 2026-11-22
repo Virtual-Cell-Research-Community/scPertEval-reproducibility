@@ -213,6 +213,9 @@ and gene universe, then written to the same checksum-addressed `runs/<dataset>/<
 layout as the substantive models. Because these methods perform no model selection, fold-mean,
 linear, and the oracle use the complete train-plus-validation development pool, matching the
 frozen development-pool policy. Re-running skips only checksum-valid completed bundles.
+CellFlow, a fixed-budget model without validation-based selection, likewise fits the full
+development pool by default (`--development-pool train-plus-validation`, recorded in its
+resolved run configuration).
 
 The privileged `interpolated-technical-duplicate` oracle is deliberately excluded from the
 ranked defaults. Materialize it separately when the positive control is needed:

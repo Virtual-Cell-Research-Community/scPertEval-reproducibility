@@ -235,7 +235,14 @@ both embedding variants passed the same synthetic archival contract. GenePert
 may fit the full development pool, while fMLP retains the frozen validation
 perturbations for checkpoint selection;
 TxPert-public and CellFlow must record their exact native validation usage in
-their resolved run manifests before full launch.
+their resolved run manifests before full launch. CellFlow trains for a fixed
+200,000-iteration budget without checkpoint selection or early stopping, so it
+fits the full development pool (`development_pool = train-plus-validation`) and
+reports no held-out validation metrics. Its first production runs (revision
+`c12e6db`) fitted the training perturbations only and used the validation
+perturbations solely for end-of-training metrics. The development-pool
+retraining writes to a separate runs root, and the original runs stay unchanged
+for provenance.
 
 scLAMBDA uses all training cells. Its adapter vectorizes the upstream
 condition-by-cell embedding construction and omits target-coordinate arrays that

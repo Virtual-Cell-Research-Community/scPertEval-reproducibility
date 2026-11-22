@@ -3,6 +3,12 @@
 Unlike CellSimBench's reporting wrapper, this adapter retains native cell-level predictions.
 It samples the frozen 512-control test pool with replacement when necessary so every held-out
 perturbation has exactly as many predictions as observed treated cells.
+
+CellFlow trains for a fixed iteration budget and performs no validation-based checkpoint selection
+or early stopping. Following the frozen development-pool policy (``docs/study-design.md``), it
+therefore fits the complete train-plus-validation development pool by default, as the baselines,
+GenePert, and TabICLv2 do. ``--development-pool train`` reproduces the original train-only fit,
+which used the validation perturbations only for end-of-training diagnostics.
 """
 
 from __future__ import annotations
@@ -32,6 +38,15 @@ IMPLEMENTATION_REVISION = (
     "theislab/CellFlow@0f55ba20c49bcee60da979bd5a9fb4ab16420b1e"
 )
 ENVIRONMENT = "models/pixi.toml#cellflow"
+
+DEVELOPMENT_POOLS = ("train-plus-validation", "train")
+DEFAULT_DEVELOPMENT_POOL = "train-plus-validation"
+VALIDATION_USAGE = {
+    "train-plus-validation": (
+        "fitted as training perturbations; no checkpoint selection, early stopping, or held-out validation metrics"
+    ),
+    "train": "metrics at training end; not checkpoint selection",
+}
 
 MILLER_CONFIGURATION = {
     "n_pca_components": 50,
@@ -102,8 +117,18 @@ def split_cellflow_data(
     n_control_train: int,
     n_control_val: int,
     n_control_test: int,
+    development_pool: str = DEFAULT_DEVELOPMENT_POOL,
 ) -> tuple[ad.AnnData, ad.AnnData, ad.AnnData]:
-    """Reproduce Miller's independent seeded control subsamples and train/val split."""
+    """Reproduce Miller's independent seeded control subsamples and fit the development pool.
+
+    ``development_pool="train-plus-validation"`` adds the validation perturbations' treated cells
+    to the training set. The validation control subsample is drawn in either case, so the seeded
+    train and test control subsamples are identical across development pools. The returned
+    validation set (validation perturbations plus their control subsample) is only meaningful as
+    held-out data for ``development_pool="train"``.
+    """
+    if development_pool not in DEVELOPMENT_POOLS:
+        raise ValueError(f"unknown CellFlow development pool {development_pool!r}; expected {DEVELOPMENT_POOLS}")
     labels = data.obs["perturbation"].astype(str)
     controls = data.obs["is_control"].astype(bool).to_numpy()
     control_indices = np.flatnonzero(controls)
@@ -117,7 +142,8 @@ def split_cellflow_data(
     train_control = control_sample(n_control_train)
     val_control = control_sample(n_control_val)
     test_control = control_sample(n_control_test)
-    train_treated = np.flatnonzero((~controls) & labels.isin(fold["train"]).to_numpy())
+    fitted = [*fold["train"], *fold["val"]] if development_pool == "train-plus-validation" else fold["train"]
+    train_treated = np.flatnonzero((~controls) & labels.isin(fitted).to_numpy())
     val_treated = np.flatnonzero((~controls) & labels.isin(fold["val"]).to_numpy())
     return (
         data[np.concatenate([train_control, train_treated])].copy(),
@@ -262,6 +288,15 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=MILLER_CONFIGURATION["batch_size"])
     parser.add_argument("--valid-freq", type=int)
     parser.add_argument("--pca-components", type=int, default=MILLER_CONFIGURATION["n_pca_components"])
+    parser.add_argument(
+        "--development-pool",
+        choices=DEVELOPMENT_POOLS,
+        default=DEFAULT_DEVELOPMENT_POOL,
+        help=(
+            "perturbations fitted by CellFlow (default: train-plus-validation, since CellFlow performs "
+            "no validation-based selection; 'train' reproduces the original train-only fit)"
+        ),
+    )
     add_point_run_arguments(parser)
     args = parser.parse_args()
 
@@ -275,7 +310,8 @@ def main() -> None:
         "batch_size": args.batch_size,
         "valid_freq": args.valid_freq or args.num_iterations,
         "n_pca_components": args.pca_components,
-        "validation_usage": "metrics at training end; not checkpoint selection",
+        "development_pool": args.development_pool,
+        "validation_usage": VALIDATION_USAGE[args.development_pool],
         "population_size_policy": "match observed test cells",
     }
     run = begin_population_model_run(
@@ -305,13 +341,16 @@ def main() -> None:
         n_control_train=configuration["n_control_cells_train"],
         n_control_val=configuration["n_control_cells_val"],
         n_control_test=configuration["n_control_cells_test"],
+        development_pool=args.development_pool,
     )
 
     n_components = min(args.pca_components, train.n_obs - 1, train.n_vars - 1)
     if n_components < 2:
         raise ValueError("CellFlow requires at least two PCA components")
     centered_pca(train, method="scanpy", keep_centered_data=False, n_comps=n_components)
-    project_pca(validation, ref_adata=train)
+    held_out_validation = args.development_pool == "train"
+    if held_out_validation:
+        project_pca(validation, ref_adata=train)
 
     model = CellFlow(train, solver="otfm")
     model.prepare_data(
@@ -328,12 +367,15 @@ def main() -> None:
         n_conditions_on_log_iteration=1,
         n_conditions_on_train_end=1,
     )
-    model.prepare_validation_data(
-        validation,
-        name="val",
-        n_conditions_on_log_iteration=1,
-        n_conditions_on_train_end=1,
-    )
+    if held_out_validation:
+        # With the full development pool, the validation perturbations are training data, so
+        # held-out validation metrics would be in-sample; only the training diagnostics remain.
+        model.prepare_validation_data(
+            validation,
+            name="val",
+            n_conditions_on_log_iteration=1,
+            n_conditions_on_train_end=1,
+        )
     _prepare_model(model, configuration, args.seed)
     callbacks = [
         cellflow.training.Metrics(metrics=["mmd", "e_distance"]),

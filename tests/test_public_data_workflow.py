@@ -316,11 +316,94 @@ def test_cellflow_embeddings_annotations_and_frozen_split(tmp_path: Path) -> Non
         n_control_train=2,
         n_control_val=1,
         n_control_test=3,
+        development_pool="train",
     )
     assert train.obs["condition"].value_counts().to_dict() == {"control": 2, "A": 2}
     assert validation.obs["condition"].value_counts().to_dict() == {"B": 2, "control": 1}
     assert test_controls.n_obs == 3
     assert test_controls.obs["is_control"].all()
+
+
+def _cellflow_split_fixture() -> AnnData:
+    perturbations = ["control"] * 12 + ["A"] * 3 + ["B"] * 2 + ["C"] * 2
+    return AnnData(
+        X=sp.csr_matrix(np.eye(len(perturbations), dtype=np.float32)),
+        obs=pd.DataFrame(
+            {
+                "perturbation": perturbations,
+                "is_control": [label == "control" for label in perturbations],
+            },
+            index=[f"cell-{index}" for index in range(len(perturbations))],
+        ),
+    )
+
+
+def test_cellflow_fits_full_development_pool_with_unchanged_control_subsamples() -> None:
+    data = _cellflow_split_fixture()
+    fold = {"train": ["A"], "val": ["B"], "test": ["C"]}
+    sizes = {"n_control_train": 4, "n_control_val": 2, "n_control_test": 3}
+
+    default_train, _, default_test = split_cellflow_data(data, fold, seed=7, **sizes)
+    train_only, _, train_only_test = split_cellflow_data(data, fold, seed=7, development_pool="train", **sizes)
+
+    assert default_train.obs["perturbation"].value_counts().to_dict() == {"control": 4, "A": 3, "B": 2}
+    assert train_only.obs["perturbation"].value_counts().to_dict() == {"control": 4, "A": 3}
+    assert "C" not in set(default_train.obs["perturbation"])
+    control_names = default_train.obs_names[default_train.obs["is_control"].to_numpy()]
+    assert control_names.tolist() == train_only.obs_names[train_only.obs["is_control"].to_numpy()].tolist()
+    assert default_test.obs_names.tolist() == train_only_test.obs_names.tolist()
+    with pytest.raises(ValueError, match="unknown CellFlow development pool"):
+        split_cellflow_data(data, fold, seed=7, development_pool="validation", **sizes)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "pool", "usage_fragment"),
+    [
+        ([], "train-plus-validation", "fitted as training perturbations"),
+        (["--development-pool", "train"], "train", "metrics at training end"),
+    ],
+)
+def test_cellflow_records_development_pool_in_resolved_configuration(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arguments: list[str],
+    pool: str,
+    usage_fragment: str,
+) -> None:
+    import sys
+
+    import models.cellflow.train_predict as cellflow_adapter
+
+    cellflow = ModuleType("cellflow")
+    model_module = ModuleType("cellflow.model")
+    model_module.CellFlow = object  # type: ignore[attr-defined]
+    preprocessing = ModuleType("cellflow.preprocessing")
+    preprocessing.centered_pca = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    preprocessing.project_pca = lambda *args, **kwargs: None  # type: ignore[attr-defined]
+    for name, module in {
+        "cellflow": cellflow,
+        "cellflow.model": model_module,
+        "cellflow.preprocessing": preprocessing,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+    captured: dict = {}
+
+    def begin_run(args, **kwargs):
+        captured.update(kwargs["configuration"])
+        return SimpleNamespace(skipped=True, handle=SimpleNamespace(directory=tmp_path))
+
+    monkeypatch.setattr(cellflow_adapter, "begin_population_model_run", begin_run)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["train_predict.py", "--embedding-path", str(tmp_path / "esm2.pickle"), *arguments],
+    )
+    cellflow_adapter.main()
+
+    assert captured["development_pool"] == pool
+    assert usage_fragment in captured["validation_usage"]
+    assert captured["num_iterations"] == 200_000
+    assert captured["n_control_cells_val"] == 256
 
 
 def test_sams_vae_s_uses_joint_conditions_and_frozen_context_partitions() -> None:
