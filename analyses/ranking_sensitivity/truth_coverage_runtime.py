@@ -12,7 +12,8 @@ import scperteval as spe
 
 from workflows.predictions import expected_test_conditions
 
-from .atlas_runtime import build_protocols
+from .atlas_runtime import build_protocols, target_key_for_task
+from .engine import assert_scperteval_revision
 
 DEFAULT_TASK_MANIFEST = Path("configs/evaluation/atlas-task-protocol-manifest-v1.csv")
 
@@ -95,6 +96,7 @@ def evaluate_fold(
         seed=42,
         control_label="control",
         perturbation_key="perturbation",
+        target_key=target_key_for_task(task, truth.obs.columns),
         workers=workers,
         name=f"{task}__{fold_label}",
     )
@@ -129,6 +131,7 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
+    assert_scperteval_revision(Path.cwd())
     split = json.loads(args.split_manifest.read_text())
     fold: int | str = int(args.fold) if args.fold.isdigit() else args.fold
     truth, expected = load_truth_fold(args.truth, split, fold)

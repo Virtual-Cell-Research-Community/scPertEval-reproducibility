@@ -18,6 +18,10 @@ from pathlib import Path
 
 import pandas as pd
 
+from analyses.ranking_sensitivity.engine import (
+    assert_scperteval_revision,
+    expected_scperteval_revision,
+)
 from analyses.ranking_sensitivity.prediction_runtime import (
     evaluate_prediction,
     prepare_prediction_fold,
@@ -47,6 +51,20 @@ def _json(path: Path) -> dict:
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def _evaluator_sha256(project_root: Path) -> str:
+    digest = hashlib.sha256()
+    for relative in (
+        "analyses/ranking_sensitivity/atlas_runtime.py",
+        "analyses/ranking_sensitivity/prediction_runtime.py",
+    ):
+        path = project_root / relative
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
 
 
 def _atomic_bytes(path: Path, content: bytes) -> None:
@@ -135,7 +153,7 @@ def _completion_record(
 ) -> dict:
     prediction = _json(prediction_manifest)
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "status": "complete",
         "task": track.task,
         "model": model,
@@ -146,12 +164,12 @@ def _completion_record(
             "prediction_manifest_sha256": _sha256(prediction_manifest),
             "split_manifest_sha256": _sha256(track.split_manifest),
             "experiment_manifest_sha256": _sha256(track.experiment_manifest),
-            "eligible_families_sha256": _sha256(
-                project_root / "configs/evaluation/atlas-protocol-eligibility-v1.csv"
-            ),
+            "eligible_families_sha256": _sha256(project_root / "configs/evaluation/atlas-protocol-eligibility-v1.csv"),
             "task_protocol_manifest_sha256": _sha256(
                 project_root / "configs/evaluation/atlas-task-protocol-manifest-v1.csv"
             ),
+            "scperteval_revision": expected_scperteval_revision(project_root),
+            "evaluator_sha256": _evaluator_sha256(project_root),
         },
         "output_sha256": file_checksum(output),
     }
@@ -294,6 +312,7 @@ def main() -> int:
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
+    assert_scperteval_revision(project_root)
     model_data_root = args.model_data_root.resolve() if args.model_data_root else None
     runs_root = args.runs_root.resolve() if args.runs_root else project_root / "runs"
     track = tracks(project_root, model_data_root)[args.track]

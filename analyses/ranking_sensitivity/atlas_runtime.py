@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+from functools import partial
 from pathlib import Path
 
 import pandas as pd
-from scperteval.blocks.panels import GenePanel, panel_pca_space, panel_space
-from scperteval.blocks.spaces import SPACES
+from scperteval.blocks import spaces
+from scperteval.blocks.spaces import FeatureSpace, SubsetSpace
 from scperteval.protocols import metrics
-from scperteval.protocols.de_metrics import DEComparison
 from scperteval.types import Protocol
 
 DEFAULT_ELIGIBILITY = Path("configs/evaluation/atlas-protocol-eligibility-v1.csv")
@@ -30,9 +30,23 @@ POPULATION_METRICS = {
     "sinkhorn-divergence": metrics.sinkhorn_w2,
 }
 TARGET_POLICIES = {
-    "no_target_operation": "no_special",
-    "force_include_target": "force_include_target",
-    "exclude_own_target": "exclude_own_target",
+    "no_target_operation",
+    "force_include_target",
+    "exclude_own_target",
+}
+
+DE_METRICS = {
+    "average-precision": metrics.de_auprc,
+    "auroc": metrics.de_auroc,
+    "class-precision": metrics.de_precision,
+    "deg-identification-auprc": metrics.de_auprc,
+    "deg-set-intersection": metrics.de_recall,
+    "direction-concordance": metrics.de_direction_concordance,
+    "f1": metrics.de_f1,
+    "jaccard": metrics.de_jaccard,
+    "macro-f1": metrics.de_macro_f1,
+    "set-overlap-at-truth-size": metrics.de_overlap_at_truth_size,
+    "spearman": metrics.de_spearman,
 }
 
 
@@ -51,38 +65,83 @@ def _canonical_k(row: pd.Series) -> int | None:
     return int(value) if value.isdigit() else None
 
 
-def gene_panel(row: pd.Series) -> GenePanel:
-    """Resolve one row's truth-derived feature panel and target policy."""
+def _target_operation(space: SubsetSpace, operation: str) -> SubsetSpace:
+    """Apply one frozen target-gene operation to a subset space."""
+    if operation not in TARGET_POLICIES:
+        raise ValueError(f"unsupported target operation {operation!r}")
+    if operation == "force_include_target":
+        return space | spaces.own_target()
+    if operation == "exclude_own_target":
+        return space - spaces.own_target()
+    return space
+
+
+def gene_space(row: pd.Series) -> SubsetSpace:
+    """Resolve one row's truth-derived gene universe and target policy."""
     feature_set = str(row["feature_set"]).lower()
     if feature_set not in {"all", "deg", "hvg", "heg"}:
         raise ValueError(f"{row['family_id']}: unsupported feature set {row['feature_set']!r}")
     rank = str(row["feature_ranking_basis"])
-    rank_by = {"significance": "significance", "effect": "absolute_effect", "": None}[rank]
+    rank_by = {"significance": "significance", "effect": "absolute_effect", "": "absolute_effect"}[rank]
     top_k = _canonical_k(row)
-    return GenePanel(
-        feature_set=feature_set,
-        top_k=top_k,
-        padj_max=0.05 if feature_set == "deg" else None,
-        rank_by=rank_by,
-        target_policy=TARGET_POLICIES[str(row["target_operation"])],
-        reference="control",
-    )
+    if feature_set == "all":
+        base = spaces.full()
+    elif feature_set == "deg":
+        base = spaces.degs(padj=0.05, top_k=top_k, rank_by=rank_by, reference="control")
+    elif feature_set == "hvg":
+        base = spaces.hvg(top_k or 2000)
+    else:
+        base = spaces.heg(top_k or 1000)
+    return _target_operation(base, str(row["target_operation"]))
 
 
-def _space(row: pd.Series, panel: GenePanel) -> str:
+def _space(row: pd.Series, subset: SubsetSpace) -> FeatureSpace:
     if str(row["space"]) == "GEX":
-        return panel_space(panel)
+        return subset
     if str(row["space"]) != "PCA":
         raise ValueError(f"{row['family_id']}: unsupported space {row['space']!r}")
-    if panel.feature_set == "all" and panel.target_policy == "no_special":
-        return SPACES.instance("pca", 50)
-    return panel_pca_space(panel, 50)
+    if subset.cache_key == spaces.full().cache_key:
+        return spaces.pca(50)
+    return spaces.pca(50).on(subset)
+
+
+def _de_metric(row: pd.Series):
+    """Translate the former DEComparison semantics to one pure DE metric.
+
+    A DEG feature panel defined the positive/relevant genes inside the complete classification
+    universe in the old API.  Keep that universe complete here and bind the selector knobs to the
+    metric; applying ``spaces.degs`` first would remove all negatives and make AUROC undefined.
+    """
+    family_id = str(row["family_id"])
+    family = str(row["metric_family"])
+    top_k = _canonical_k(row)
+    rank = str(row["feature_ranking_basis"])
+    rank_by = {"significance": "significance", "effect": "absolute_effect", "": "absolute_effect"}[rank]
+    if family in {"set-overlap-at-n", "topk-overlap"}:
+        return partial(metrics.de_overlap, k=top_k or 50, rank_by=rank_by)
+    metric = DE_METRICS.get(family)
+    if metric is None:
+        raise ValueError(f"{family_id}: unsupported DE metric {family!r}")
+    kwargs: dict[str, object] = {"padj": 0.05, "top_k": top_k, "rank_by": rank_by}
+    if family == "spearman":
+        kwargs["degs_only"] = str(row["feature_set"]).lower() == "deg"
+    return partial(metric, **kwargs)
+
+
+def _de_space(row: pd.Series) -> SubsetSpace:
+    """Return the DE classification universe while preserving the old panel semantics."""
+    feature_set = str(row["feature_set"]).lower()
+    if feature_set == "deg":
+        if str(row["target_operation"]) != "no_target_operation":
+            raise ValueError("target operations on DEG-positive sets need an explicit label policy")
+        return spaces.full()
+    return gene_space(row)
 
 
 def build_protocol(row: pd.Series) -> Protocol:
     """Build one fully concrete protocol from its frozen semantic row."""
     family_id = str(row["family_id"])
-    panel = gene_panel(row)
+    subset = gene_space(row)
     population = str(row["population"])
     metric_family = str(row["metric_family"])
     centering = "control_mean" if str(row["centering"]) == "control-centered" else None
@@ -96,7 +155,7 @@ def build_protocol(row: pd.Series) -> Protocol:
             family_id,
             metric,
             representation="centroid",
-            space=_space(row, panel),
+            space=_space(row, subset),
             centering=centering,
             reference="control",
             better="lower" if lower else "higher",
@@ -111,7 +170,7 @@ def build_protocol(row: pd.Series) -> Protocol:
             family_id,
             metric,
             representation="population",
-            space=_space(row, panel),
+            space=_space(row, subset),
             reference="control",
             better="lower",
             perfect=0.0,
@@ -119,13 +178,11 @@ def build_protocol(row: pd.Series) -> Protocol:
             requires_extra="sinkhorn" if metric_family == "sinkhorn-divergence" else None,
         )
     if population == "DE":
-        top_k = _canonical_k(row)
-        metric = DEComparison(metric_family, panel=panel, padj_max=0.05, top_k=top_k)
         return Protocol(
             family_id,
-            metric,
+            _de_metric(row),
             representation="de",
-            space="full",
+            space=_de_space(row),
             reference="control",
             neg_reference="control",
             better="higher",
@@ -136,5 +193,20 @@ def build_protocol(row: pd.Series) -> Protocol:
 
 
 def build_protocols(path: Path = DEFAULT_ELIGIBILITY) -> list[Protocol]:
-    """Build all 99 concrete protocols in stable manifest order."""
+    """Build all 101 concrete protocols in stable manifest order."""
     return [build_protocol(row) for _, row in load_eligible_families(path).iterrows()]
+
+
+def target_key_for_task(task: str, obs_columns) -> str | None:
+    """Resolve the gene-target column needed by ``spaces.own_target``.
+
+    Essential-screen labels are bare gene symbols and need no separate key.  Genetic-context
+    labels are namespaced evaluation IDs, while ``model_perturbation`` retains the bare target.
+    Prefer an explicit ``target_gene`` column whenever a prepared view provides one.
+    """
+    columns = set(obs_columns)
+    if "target_gene" in columns:
+        return "target_gene"
+    if task == "genetic_context_transfer" and "model_perturbation" in columns:
+        return "model_perturbation"
+    return None

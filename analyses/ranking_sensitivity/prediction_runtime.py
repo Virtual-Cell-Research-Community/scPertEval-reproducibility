@@ -10,7 +10,7 @@ import pandas as pd
 import scperteval as spe
 from scperteval.types import Protocol
 
-from .atlas_runtime import build_protocols
+from .atlas_runtime import build_protocols, target_key_for_task
 from .truth_coverage_runtime import REASON_MAP, applicable_protocol_ids
 
 
@@ -40,6 +40,7 @@ def prepare_prediction_fold(
         seed=42,
         control_label="control",
         perturbation_key="perturbation",
+        target_key=target_key_for_task(task, truth.obs.columns),
         workers=workers,
         name=f"{task}__{fold_label}",
     )
@@ -76,9 +77,7 @@ def evaluate_prediction(
         result = spe.score(prepared, protocol, prediction, de_method="t-test")
         frame = result.per_perturbation[["perturbation", "score", "undefined_reason"]].copy()
         frame["undefined_reason"] = (
-            frame["undefined_reason"]
-            .fillna("")
-            .map(lambda reason: REASON_MAP.get(str(reason), str(reason)))
+            frame["undefined_reason"].fillna("").map(lambda reason: REASON_MAP.get(str(reason), str(reason)))
         )
         if sorted(frame["perturbation"].astype(str).tolist()) != expected:
             raise ValueError(f"{protocol.name} did not return the frozen evaluation-unit cohort")

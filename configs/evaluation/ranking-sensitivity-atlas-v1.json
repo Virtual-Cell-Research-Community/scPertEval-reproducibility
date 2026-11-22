@@ -2,6 +2,10 @@
   "schema_version": 1,
   "id": "ranking-sensitivity-atlas-v1",
   "status": "design-frozen-ready-for-retained-prediction-scoring",
+  "evaluation_engine": {
+    "package": "scperteval",
+    "revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+  },
   "protocol_universe": {
     "eligibility_config": "configs/evaluation/atlas-protocol-eligibility-v1.json",
     "eligible_families": "configs/evaluation/atlas-protocol-eligibility-v1.csv",

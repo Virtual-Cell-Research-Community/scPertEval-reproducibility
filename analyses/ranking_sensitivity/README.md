@@ -39,6 +39,10 @@ are inspected, produce a complete ground-truth availability table with columns
 `undefined_reason`. Each fold is truth-self-evaluated through the exact concrete
 protocols built by `atlas_runtime.py`; no model predictions are read. For example:
 
+The live builder is pinned to the exact scPertEval revision recorded under
+`evaluation_engine`. See `docs/scperteval-main-ranking-migration.md` for the API migration and
+the boundary between retained predictions, stale pre-migration scores, and recomputed outputs.
+
 ```bash
 python -m analyses.ranking_sensitivity.truth_coverage_runtime \
   --task essential_perturbation_generalization \

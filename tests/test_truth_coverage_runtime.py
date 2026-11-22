@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import anndata as ad
 import numpy as np
-from scperteval.blocks.panels import GenePanel, panel_space
+from scperteval.blocks import spaces
 from scperteval.protocols import metrics
 from scperteval.types import Protocol
 
@@ -23,7 +23,7 @@ def test_evaluate_fold_emits_ground_truth_only_availability(monkeypatch):
     dataset_adata.obs["perturbation"] = labels
     protocols = [
         Protocol("atlas-a", metrics.mse, representation="centroid", better="lower", perfect=0.0),
-        Protocol("atlas-b", metrics.pearson, representation="centroid", space=panel_space(GenePanel("all"))),
+        Protocol("atlas-b", metrics.pearson, representation="centroid", space=spaces.full()),
     ]
     monkeypatch.setattr(
         "analyses.ranking_sensitivity.truth_coverage_runtime.applicable_protocol_ids",
