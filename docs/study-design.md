@@ -308,18 +308,22 @@ conversion rule is recorded in each prediction manifest.
 
 ## Sensitivity panel
 
-The executable protocol universe is frozen from PerturbationEvaluationAtlas
-commit `0be116b2a871132c2b3f0c9e896e2fb544a41fe5`. An operational family is
+The executable protocol universe is derived from PerturbationEvaluationAtlas
+commit `0b0fca9dc997fd531c686fedeb95aa66c68c4d24` (prespecified against `0be116b`; see below).
+An operational family is
 eligible when it occurs in at least two independent works. Literature frequency
 selects families but does not weight them. Ranking-equivalent variants receive
 one vote, reporting aggregation is separated from atomic protocol identity, and
-the approved scope excludes retrieval, cross-perturbation metrics, new
+the approved scope excludes other cross-perturbation metrics (retrieval was excluded in the
+prespecified scope and admitted later), new
 population-distance implementations, curated composite panels, and
 effect-weighted perturbation aggregation. Limma-dependent evaluation is
-postponed. The resulting prespecified universe contained 101 families. After model ranks over it
-had been inspected, the ten recurring retrieval-rank families were added post hoc
-(`docs/ranking-sensitivity-atlas-scope-change.md`); the analysed universe contains 111 families,
-normalized by task in `configs/evaluation/atlas-task-protocol-manifest.csv`.
+postponed. The prespecified universe, derived from Atlas `0be116b`, contained 101 families. After
+model ranks over it had been inspected, two post-hoc changes followed
+(`docs/ranking-sensitivity-atlas-scope-change.md`): the recurring retrieval-rank families were
+admitted, and the universe was re-derived from the curated Atlas `0b0fca9` with every protocol
+rescored under scPertEval `774e600`. The analysed universe contains 115 families, normalized by
+task in `configs/evaluation/atlas-task-protocol-manifest.csv`.
 
 Metrics remain separate; no cross-metric composite or global leaderboard is
 constructed. Tasks also remain separate. The global analysis is reference-free:

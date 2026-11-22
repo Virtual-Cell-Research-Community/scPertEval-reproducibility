@@ -32,9 +32,11 @@ included universe, the complete scope audit, the separate DE-caller audit, and
 the human-readable summary. Reporting aggregation and DE caller are deliberately
 not part of atomic-family identity.
 
-The universe has 111 families (111, 111 and 104 per task). It includes ten
-retrieval-rank families (Atlas `cross_perturbation_group == identity_matching`),
-which were added post hoc to the prespecified 101 families; see
+The universe, derived from Atlas `0b0fca9`, has 115 families (115, 115 and 104 per
+task). It includes 13 retrieval-rank families (Atlas
+`cross_perturbation_group == identity_matching`). Retrieval admission and the
+re-derivation from the curated Atlas were both decided post hoc, after model ranks
+over the prespecified 101 families (Atlas `0be116b`) had been inspected; see
 `docs/ranking-sensitivity-atlas-scope-change.md` for the disclosure.
 Retrieval ranks are dataset-scope (the candidate set is every evaluation unit of
 the fold) and are implemented in `retrieval.py`.
@@ -109,19 +111,16 @@ the reference-free headline summaries:
 
 ```bash
 python -m analyses.ranking_sensitivity.atlas_analysis \
-  --details-root results/ranking-sensitivity-atlas-v1/details \
-  --details-root results/ranking-sensitivity-atlas-v2/details \
-  --availability results/ground-truth-coverage-v2/availability.csv \
-  --pair-coverage results/ground-truth-coverage-v2/pairwise-coverage-summary.csv \
-  --output results/ranking-sensitivity-atlas-v2/analysis-v2
+  --details-root results/ranking-sensitivity-atlas-0b0fca9-scperteval-774e600/details \
+  --availability results/ground-truth-coverage-atlas-0b0fca9-scperteval-774e600/availability.csv \
+  --pair-coverage results/ground-truth-coverage-atlas-0b0fca9-scperteval-774e600/pairwise-coverage-summary.csv \
+  --output results/ranking-sensitivity-atlas-0b0fca9-scperteval-774e600/analysis
 ```
 
-The SDS directory names are historical. The 101 prespecified protocols were
-scored into `ranking-sensitivity-atlas-v1/details` and the ten retrieval
-protocols into `ranking-sensitivity-atlas-v2/details`; `--details-root` is
+The SDS directories are named by their Atlas and scPertEval pins. All 115
+protocols of every bundle were scored into one root. `--details-root` remains
 repeatable and merges disjoint protocol sets only when every bundle binds the
-same prediction checksum. A fresh run of the scorer writes all 111 protocols
-into one root.
+same prediction checksum.
 
 The analysis keeps the three tasks separate. Winner shares use the standard
 mean reduction, equal protocol votes, and fractional credit for ties. Every
@@ -140,8 +139,8 @@ Render all global and selected bump figures in both light and dark mode:
 
 ```bash
 python -m analyses.ranking_sensitivity.atlas_figures \
-  --source-data results/ranking-sensitivity-atlas-v2/analysis-v2/source-data \
-  --output results/ranking-sensitivity-atlas-v2/analysis-v2/figures
+  --source-data results/ranking-sensitivity-atlas-0b0fca9-scperteval-774e600/analysis/source-data \
+  --output results/ranking-sensitivity-atlas-0b0fca9-scperteval-774e600/analysis/figures
 ```
 
 The rendering layer uses Plotnine and fixes the global figure at a 7.2-inch

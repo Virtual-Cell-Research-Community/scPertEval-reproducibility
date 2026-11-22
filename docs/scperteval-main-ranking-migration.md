@@ -83,7 +83,7 @@ after validation rather than archived.
 
 ## Result-generation boundary
 
-The authoritative ranking score and ground-truth coverage trees now derive from scPertEval commit
+The ranking score and ground-truth coverage trees of the 111-family universe derive from scPertEval commit
 `58ccc91095ccb30bbe8f4470dff8b398d2eb4525`. Completion records, analysis manifests and coverage
 summaries bind the relevant input checksums and evaluator provenance. The retained model
 predictions were not regenerated or modified during this evaluator migration.
@@ -91,3 +91,27 @@ predictions were not regenerated or modified during this evaluator migration.
 The maintained DRF/DEG protocol-behavior workflow is a separate workstream. The frozen
 `analyses/scperteval-paper-v1` and protocol-behavior `production-v1` environments are historical
 reproductions and retain their original dependency pins.
+
+## Update to scPertEval `774e600` (2026-11-22)
+
+All analyses now pin scPertEval `774e6001b09f889905c353a8fd4022a36482eb80` (PRs 45–47 on top of
+`58ccc91`). Two changes matter for the ranking evaluator:
+
+- `Protocol` now rejects `reference`/`neg_reference` on centroid and population protocols. In
+  `58ccc91` that field was read only by the DE view, so it was removed from the profile,
+  population and retrieval protocols without changing any score. DE protocols keep
+  `reference="control"` and `neg_reference="control"`; every DEG selector keeps an explicit
+  `rank_by`, so the new `de_*` default (`significance`) does not apply.
+- Significance ranking inside `de_*` metrics now keeps exact ties as dense ranks instead of
+  breaking them by gene index, and DE-set metrics whose universe is all positive return `NaN`
+  with `single_ground_truth_class`.
+
+Canary on Beauty (essential fold 0, linear baseline): of the 102 families shared with the
+previous universe, 100 gave bitwise-identical scores and identical defined/undefined decisions
+over 27,642 rows. The two significance-ranked DE AUROC families (`atlas-536de444734a`,
+`atlas-e446cff6c7e8`) differed by at most 1.2 × 10⁻⁶ because of the tie-preserving ranks.
+
+The universe was re-derived from Atlas `0b0fca9` at the same time
+(`docs/ranking-sensitivity-atlas-scope-change.md`), and every protocol of every bundle was
+rescored into one new results root. The protocol-behavior production-v2 generation moved to the
+same revision.

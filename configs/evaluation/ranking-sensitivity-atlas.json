@@ -197,7 +197,12 @@
         "execution_host": "beauty"
       }
     ],
-    "cellflow_runs_root": "pending: development-pool CellFlow runs (train plus validation)",
+    "cellflow_runs_root": {
+      "path": "runs-cellflow-development-pool",
+      "fit_on": "train plus validation perturbations (development_pool = train-plus-validation)",
+      "training_commit": "5085b33",
+      "replaces": "runs/replogle-weissman-2022-k562-essential/cellflow (train perturbations only), scored separately for comparison"
+    },
     "note": "One fresh scoring pass at the pinned scPertEval revision; no scores are reused from earlier universes.",
     "bundle_match": "one completion record per model/fold/seed, bound to its prediction checksum"
   },
