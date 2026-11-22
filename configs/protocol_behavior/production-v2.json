@@ -128,6 +128,6 @@
   "derived_from": "protocol-behavior-production-v1",
   "benchmark_alignment": "current-k562-essential-design",
   "metric_review_status": "approved-frozen-design",
-  "scperteval_revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
+  "scperteval_revision": "774e6001b09f889905c353a8fd4022a36482eb80",
   "high_memory_cpu_drf_stage": "drf.cpu.essential-k562"
 }

@@ -2,7 +2,7 @@
 
 This directory is the maintained successor to the frozen original-paper analysis
 in `analyses/scperteval-paper-v1/`. It is deliberately a separate UV project and
-pins scPertEval commit `58ccc91095ccb30bbe8f4470dff8b398d2eb4525`. The workflow
+pins scPertEval commit `774e6001b09f889905c353a8fd4022a36482eb80`. The workflow
 uses current concrete `Protocol` objects, current feature spaces, pure DE metrics,
 and the current `prepare()` / `calibrate()` / `de()` interfaces.
 

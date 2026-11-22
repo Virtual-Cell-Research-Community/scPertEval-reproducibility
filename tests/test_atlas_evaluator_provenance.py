@@ -22,13 +22,13 @@ def _write(path: Path, content: str) -> Path:
 
 def test_frozen_engine_revision_matches_the_installed_direct_dependency():
     root = Path(__file__).parents[1]
-    expected = "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+    expected = "774e6001b09f889905c353a8fd4022a36482eb80"
     assert expected_scperteval_revision(root) == expected
     assert assert_scperteval_revision(root) == expected
 
 
 def test_old_completion_records_are_stale_after_evaluator_migration(tmp_path: Path):
-    revision = "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+    revision = "774e6001b09f889905c353a8fd4022a36482eb80"
     _write(
         tmp_path / "configs/evaluation/ranking-sensitivity-atlas.json",
         json.dumps({"evaluation_engine": {"revision": revision}}),

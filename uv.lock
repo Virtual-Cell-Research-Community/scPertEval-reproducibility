@@ -1556,8 +1556,8 @@ wheels = [
 
 [[package]]
 name = "scperteval"
-version = "0.2.1.dev6+g58ccc9109"
-source = { git = "https://github.com/Virtual-Cell-Research-Community/scPertEval.git?rev=58ccc91095ccb30bbe8f4470dff8b398d2eb4525#58ccc91095ccb30bbe8f4470dff8b398d2eb4525" }
+version = "0.2.1.dev9+g774e6001b"
+source = { git = "https://github.com/Virtual-Cell-Research-Community/scPertEval.git?rev=774e6001b09f889905c353a8fd4022a36482eb80#774e6001b09f889905c353a8fd4022a36482eb80" }
 dependencies = [
     { name = "anndata" },
     { name = "h5py" },
@@ -1615,7 +1615,7 @@ requires-dist = [
     { name = "requests", specifier = ">=2.32" },
     { name = "scanpy", specifier = ">=1.10,<1.13" },
     { name = "scipy", specifier = ">=1.12" },
-    { name = "scperteval", extras = ["sinkhorn"], git = "https://github.com/Virtual-Cell-Research-Community/scPertEval.git?rev=58ccc91095ccb30bbe8f4470dff8b398d2eb4525" },
+    { name = "scperteval", extras = ["sinkhorn"], git = "https://github.com/Virtual-Cell-Research-Community/scPertEval.git?rev=774e6001b09f889905c353a8fd4022a36482eb80" },
 ]
 
 [package.metadata.requires-dev]

@@ -67,7 +67,7 @@ def test_current_manifest_replaces_gwps_with_k562_essential():
     manifest = load_manifest(Path("configs/protocol_behavior/production-v2.json"))
 
     assert manifest["status"] == "ready-scperteval-main-staging"
-    assert manifest["scperteval_revision"] == "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+    assert manifest["scperteval_revision"] == "774e6001b09f889905c353a8fd4022a36482eb80"
     assert default_results(manifest) == Path("results/protocol_behavior/production-v2-scperteval-main-staging")
     assert manifest["datasets"][0]["id"] == "essential-k562"
     assert manifest["high_memory_cpu_drf_stage"] == "drf.cpu.essential-k562"
@@ -274,7 +274,7 @@ def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
             {
                 "schema_version": 1,
                 "id": "tiny",
-                "scperteval_revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
+                "scperteval_revision": "774e6001b09f889905c353a8fd4022a36482eb80",
                 "seed": 42,
                 "minimum_cells": 5,
                 "reference_subsample": 20,
@@ -326,7 +326,7 @@ def test_tiny_production_workflow_renders_and_validates(tmp_path, monkeypatch):
     assert stage_status(manifest_path, output)["counts"] == {"complete": 8, "failed": 0, "pending": 0}
     assert all(not Path(artifact["path"]).is_absolute() for artifact in completion_payload["artifacts"])
     first_record = json.loads((output / "stages" / first_stage.id / "stage.json").read_text())
-    assert first_record["inputs"]["scperteval_revision"] == "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+    assert first_record["inputs"]["scperteval_revision"] == "774e6001b09f889905c353a8fd4022a36482eb80"
     assert all(not Path(name).is_absolute() for name in first_record["artifact_sha256"])
     source = pd.read_csv(output / "figures" / "deg_jaccard_with_counts.csv")
     assert set(source["record_type"]) == {"jaccard", "set_size", "spearman"}

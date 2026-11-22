@@ -4,7 +4,7 @@
   "status": "frozen-with-post-hoc-scope-extension",
   "evaluation_engine": {
     "package": "scperteval",
-    "revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+    "revision": "774e6001b09f889905c353a8fd4022a36482eb80"
   },
   "protocol_universe": {
     "eligibility_config": "configs/evaluation/atlas-protocol-eligibility.json",
