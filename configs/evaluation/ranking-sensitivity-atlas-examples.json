@@ -12,12 +12,13 @@
       "rationale": "Genetic context-transfer example contrasting control-centered effects with uncentered expression."
     },
     {
-      "comparison_id": "chemical_context_transfer|atlas-727bef1a4b26|atlas-cd1d5e56afac",
-      "rationale": "Chemical context-transfer example contrasting pseudobulk Pearson with population MMD in the frozen PCA-50 space."
+      "comparison_id": "chemical_context_transfer|atlas-5891c67acb2a|atlas-727bef1a4b26",
+      "rationale": "Chemical context-transfer example contrasting pseudobulk Pearson with population MMD on all genes."
     },
     {
       "comparison_id": "chemical_context_transfer|aggregation|atlas-9d5a81b78415",
       "rationale": "Chemical context-transfer example contrasting mean and median perturbation aggregation."
     }
-  ]
+  ],
+  "revision_note": "2026-11-22: the PCA-50 MMD family of the earlier chemical example left the universe derived from Atlas 0b0fca9; it was replaced by the same Pearson-versus-population-MMD contrast on all genes."
 }
