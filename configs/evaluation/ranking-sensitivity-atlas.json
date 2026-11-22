@@ -1,16 +1,16 @@
 {
   "schema_version": 1,
-  "id": "ranking-sensitivity-atlas-v2",
-  "status": "post-hoc-scope-extension-of-v1",
+  "id": "ranking-sensitivity-atlas",
+  "status": "frozen-with-post-hoc-scope-extension",
   "evaluation_engine": {
     "package": "scperteval",
     "revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
   },
   "protocol_universe": {
-    "eligibility_config": "configs/evaluation/atlas-protocol-eligibility-v2.json",
-    "eligible_families": "configs/evaluation/atlas-protocol-eligibility-v2.csv",
+    "eligibility_config": "configs/evaluation/atlas-protocol-eligibility.json",
+    "eligible_families": "configs/evaluation/atlas-protocol-eligibility.csv",
     "eligible_families_sha256": "020a70e56365ac22dd93f3cd52aa9c7650fef8e5e86d0f98289173ee96d7b92f",
-    "task_manifest": "configs/evaluation/atlas-task-protocol-manifest-v2.csv",
+    "task_manifest": "configs/evaluation/atlas-task-protocol-manifest.csv",
     "task_manifest_sha256": "88b1e1bedb93103d1197da14bd8b6aed536acfd6a625c7a7262d12c3392d6564",
     "n_families": 111,
     "vote_weighting": "equal",
@@ -60,7 +60,7 @@
     "same_evaluation_units_for_both_protocols": true,
     "candidate_minimum_common_fraction": 0.75,
     "candidate_is_frozen": true,
-    "freeze_after": "The 75% rule was frozen on 2026-11-21 for v1, before model ranks were inspected. v2 applies the same unchanged rule; the truth-only coverage of the 10 added protocols was computed after v1 ranks were inspected.",
+    "freeze_after": "The 75% rule was frozen on 2026-11-21, before model ranks were inspected, and is unchanged. The truth-only coverage of the 10 retrieval-rank families was computed after model ranks over the prespecified universe had been inspected.",
     "allowed_undefined_reasons": [
       "constant_truth",
       "no_ground_truth_positives",
@@ -156,37 +156,43 @@
     "selection_disclosed_in_legend": true,
     "complete_candidate_table_exported": true
   },
-  "supersedes": {
-    "id": "ranking-sensitivity-atlas-v1",
-    "decided_on": "2026-11-22",
-    "post_hoc": true,
-    "change": "Adds the 10 recurring identity-matching (retrieval-rank) protocol families excluded from v1; effect-size and pooled-response cross-perturbation families stay excluded.",
-    "disclosure": "The scope change was decided after v1 model ranks had been inspected. v2 is the primary analysis; v1 is retained unchanged and reported as a supplementary analysis.",
-    "unchanged": [
-      "evaluation_engine",
-      "tasks",
-      "ground_truth_coverage.candidate_minimum_common_fraction",
-      "undefined_scores",
-      "pairwise_protocol_comparison",
-      "aggregation",
-      "headline_outputs",
-      "robustness"
-    ],
-    "documentation": "docs/ranking-sensitivity-atlas-v2-scope-change.md"
+  "history": {
+    "scope_extension": {
+      "decided_on": "2026-11-22",
+      "post_hoc": true,
+      "change": "Added the 10 recurring identity-matching (retrieval-rank) protocol families to the prespecified 101-family universe; effect-size and pooled-response cross-perturbation families stay excluded.",
+      "disclosure": "The scope extension was decided after model ranks over the prespecified universe had been inspected and must be disclosed in the Methods.",
+      "prespecified_universe_commit": "aadbe9479076c9303301f721994e83448e09a948",
+      "prespecified_n_families": 101,
+      "unchanged": [
+        "evaluation_engine",
+        "tasks",
+        "ground_truth_coverage.candidate_minimum_common_fraction",
+        "undefined_scores",
+        "pairwise_protocol_comparison",
+        "aggregation",
+        "headline_outputs",
+        "robustness"
+      ],
+      "documentation": "docs/ranking-sensitivity-atlas-scope-change.md"
+    }
   },
   "scoring": {
-    "reuse": {
-      "protocols": "the 101 v1 families",
-      "source": "results/ranking-sensitivity-atlas-v1/details",
-      "unchanged": true
-    },
-    "added": {
-      "protocols": "the 10 v2 retrieval families absent from v1",
-      "destination": "results/ranking-sensitivity-atlas-v2/details",
-      "execution_host": "beauty",
-      "evaluator": "analyses/ranking_sensitivity/retrieval.py via atlas_runtime.py"
-    },
-    "bundle_match": "v1 and v2 completion records of one model/fold/seed must bind the same prediction checksum"
+    "details_roots": [
+      {
+        "path": "results/ranking-sensitivity-atlas-v1/details",
+        "protocols": "the 101 prespecified families",
+        "repository_commit": "aadbe9479076c9303301f721994e83448e09a948"
+      },
+      {
+        "path": "results/ranking-sensitivity-atlas-v2/details",
+        "protocols": "the 10 retrieval-rank families",
+        "repository_commit": "caee425",
+        "execution_host": "beauty"
+      }
+    ],
+    "note": "The SDS directory names are historical; the analysis merges both roots into one 111-protocol table.",
+    "bundle_match": "both roots' completion records of one model/fold/seed must bind the same prediction checksum"
   },
   "factor_sensitivity": {
     "cross_perturbation": "direct comparison versus retrieval rank with the same distance (squared error, MAE or cosine) and otherwise identical representation, space, centering, feature panel, target policy and weighting; predicted-query and observed-query retrieval are distinct levels",

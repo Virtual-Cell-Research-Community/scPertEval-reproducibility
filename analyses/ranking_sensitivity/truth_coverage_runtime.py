@@ -13,14 +13,10 @@ from scperteval.types import Protocol
 
 from workflows.predictions import expected_test_conditions
 
-from .atlas_runtime import build_protocols, eligibility_path, target_key_for_task
+from .atlas_runtime import build_protocols, target_key_for_task
 from .engine import assert_scperteval_revision
 
-TASK_MANIFESTS = {
-    "v1": Path("configs/evaluation/atlas-task-protocol-manifest-v1.csv"),
-    "v2": Path("configs/evaluation/atlas-task-protocol-manifest-v2.csv"),
-}
-DEFAULT_TASK_MANIFEST = TASK_MANIFESTS["v1"]
+DEFAULT_TASK_MANIFEST = Path("configs/evaluation/atlas-task-protocol-manifest.csv")
 
 REASON_MAP = {
     "metric_undefined": "constant_truth",
@@ -81,23 +77,10 @@ def applicable_protocol_ids(task: str, path: Path = DEFAULT_TASK_MANIFEST) -> se
     return selected
 
 
-def task_protocols(task: str, version: str = "v1", added_since: str | None = None) -> list[Protocol]:
-    """Resolve the frozen protocols of one task and eligibility version.
-
-    ``added_since`` keeps only protocols absent from that earlier version's task manifest, so an
-    extended universe can be scored incrementally while earlier scores are reused unchanged.
-    """
-    if version not in TASK_MANIFESTS:
-        raise ValueError(f"unknown eligibility version {version!r}; expected {sorted(TASK_MANIFESTS)}")
-    applicable = applicable_protocol_ids(task, TASK_MANIFESTS[version])
-    if added_since is not None:
-        if added_since not in TASK_MANIFESTS or added_since == version:
-            raise ValueError(f"invalid baseline eligibility version {added_since!r}")
-        baseline = set(pd.read_csv(TASK_MANIFESTS[added_since]).query("task == @task")["protocol_id"].astype(str))
-        applicable -= baseline
-        if not applicable:
-            raise ValueError(f"{version} adds no protocols to {added_since} for {task!r}")
-    protocols = [protocol for protocol in build_protocols(eligibility_path(version)) if protocol.name in applicable]
+def task_protocols(task: str) -> list[Protocol]:
+    """Resolve the frozen protocols applicable to one task."""
+    applicable = applicable_protocol_ids(task)
+    protocols = [protocol for protocol in build_protocols() if protocol.name in applicable]
     if {protocol.name for protocol in protocols} != applicable:
         raise ValueError("not every applicable protocol has a concrete runtime implementation")
     return protocols
@@ -111,11 +94,9 @@ def evaluate_fold(
     expected_units: list[str],
     minimum_cells: int = 50,
     workers: int = 0,
-    version: str = "v1",
-    added_since: str | None = None,
 ) -> pd.DataFrame:
     """Return the coverage-audit availability schema for one fold."""
-    protocols = task_protocols(task, version, added_since)
+    protocols = task_protocols(task)
     prepared = spe.prepare(
         truth,
         protocols,
@@ -156,12 +137,6 @@ def main() -> None:
     parser.add_argument("--fold-label", help="coverage-config label (default: fold argument)")
     parser.add_argument("--minimum-cells", type=int, default=50)
     parser.add_argument("--workers", type=int, default=0)
-    parser.add_argument("--eligibility-version", choices=sorted(TASK_MANIFESTS), default="v1")
-    parser.add_argument(
-        "--added-since",
-        choices=sorted(TASK_MANIFESTS),
-        help="audit only protocols absent from this earlier eligibility version",
-    )
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     assert_scperteval_revision(Path.cwd())
@@ -175,8 +150,6 @@ def main() -> None:
         expected_units=expected,
         minimum_cells=args.minimum_cells,
         workers=args.workers,
-        version=args.eligibility_version,
-        added_since=args.added_since,
     )
     args.out.parent.mkdir(parents=True, exist_ok=True)
     result.to_csv(args.out, index=False)

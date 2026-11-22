@@ -137,5 +137,5 @@ def test_workflow_numbers_reject_a_scope_audit_smaller_than_the_ranked_universe(
 
     census, ranking, scope = _source_data(tmp_path)
     pd.DataFrame({"scope_decision": ["included"] * 9}).to_csv(scope, index=False)
-    with pytest.raises(ValueError, match="--scope-audit"):
+    with pytest.raises(ValueError, match="different universes"):
         workflow_numbers(census, ranking, scope)

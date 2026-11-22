@@ -309,8 +309,10 @@ one vote, reporting aggregation is separated from atomic protocol identity, and
 the approved scope excludes retrieval, cross-perturbation metrics, new
 population-distance implementations, curated composite panels, and
 effect-weighted perturbation aggregation. Limma-dependent evaluation is
-postponed. The resulting primary universe contains 101 families, normalized by
-task in `configs/evaluation/atlas-task-protocol-manifest-v1.csv`.
+postponed. The resulting prespecified universe contained 101 families. After model ranks over it
+had been inspected, the ten recurring retrieval-rank families were added post hoc
+(`docs/ranking-sensitivity-atlas-scope-change.md`); the analysed universe contains 111 families,
+normalized by task in `configs/evaluation/atlas-task-protocol-manifest.csv`.
 
 Metrics remain separate; no cross-metric composite or global leaderboard is
 constructed. Tasks also remain separate. The global analysis is reference-free:
@@ -342,10 +344,10 @@ protocols and every model use that identical set. A model-specific failure may
 not shrink the set for its competitors. The audit records the total, individual
 defined counts, common count, common fraction, and structured undefined reasons.
 The headline threshold is frozen at 75% common coverage in every fold. The
-ground-truth-only v1 audit was completed before inspecting model ranks and is
-recorded in `docs/ground-truth-coverage-audit-v1.md`. Every essential and
-genetic pair passes, including the four explicit target-policy protocols, and
-97.9% of chemical pairs pass. The only excluded chemical protocol is
+ground-truth-only audit of the prespecified universe was completed before inspecting model ranks;
+it and the later audit of the retrieval families are recorded in
+`docs/ground-truth-coverage-audit.md`. Every essential and genetic pair passes, including the
+explicit target-policy protocols, and 98.1% of chemical pairs pass. The only excluded chemical protocol is
 uncentered Pearson on the top-50 significance-ranked DEGs, whose weakest fold
 contains 21/33 defined conditions. Winner-share summaries include only
 protocols passing this frozen rule and display their coverage.

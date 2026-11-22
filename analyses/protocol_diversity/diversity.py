@@ -35,7 +35,7 @@ ATLAS_FILES = (
     "data/manifest.json",
     "public/data/datasets.json",
 )
-ELIGIBILITY_CONFIG = Path(__file__).resolve().parents[2] / "configs/evaluation/atlas-protocol-eligibility-v1.json"
+ELIGIBILITY_CONFIG = Path(__file__).resolve().parents[2] / "configs/evaluation/atlas-protocol-eligibility.json"
 
 
 def pinned_atlas_revision(config: Path = ELIGIBILITY_CONFIG) -> str:

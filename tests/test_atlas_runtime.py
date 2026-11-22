@@ -15,9 +15,9 @@ from analyses.ranking_sensitivity.atlas_runtime import (
 def test_every_eligible_family_resolves_to_one_concrete_protocol():
     families = load_eligible_families()
     protocols = build_protocols()
-    assert len(protocols) == 101
+    assert len(protocols) == 111
     assert [protocol.name for protocol in protocols] == families["family_id"].tolist()
-    assert len({protocol.name for protocol in protocols}) == 101
+    assert len({protocol.name for protocol in protocols}) == 111
     assert all(not protocol.parameterised for protocol in protocols)
 
 
@@ -34,7 +34,9 @@ def test_resolved_protocol_representations_match_the_frozen_manifest():
 def test_target_policy_is_part_of_the_executable_panel():
     families = load_eligible_families().set_index("family_id")
     protocols = {protocol.name: protocol for protocol in build_protocols()}
-    target_rows = families[families["target_operation"] != "no_target_operation"]
+    # Retrieval families resolve target policies on the shared gene axis (tests/test_retrieval.py).
+    direct = families[families["cross_perturbation_group"] == ""]
+    target_rows = direct[direct["target_operation"] != "no_target_operation"]
     assert len(target_rows) == 4
     for family_id, row in target_rows.iterrows():
         protocol = protocols[family_id]

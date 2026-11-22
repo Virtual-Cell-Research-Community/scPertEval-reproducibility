@@ -12,7 +12,7 @@ from analyses.ranking_sensitivity.atlas_protocol_audit import (
     task_protocol_records,
 )
 
-CONFIG = json.loads(Path("configs/evaluation/atlas-protocol-eligibility-v1.json").read_text())
+CONFIG = json.loads(Path("configs/evaluation/atlas-protocol-eligibility.json").read_text())
 
 
 def row(**overrides: str) -> dict[str, str]:
@@ -62,9 +62,9 @@ def test_metric_equivalence_collapses_mse_and_rmse_family_labels() -> None:
     assert canonical_metric(row(wide_display_family="squared-error"), CONFIG) == "squared-error"
 
 
-def test_scope_excludes_cross_perturbation_and_accepts_existing_population_metric() -> None:
-    cross = group_families([row(cross_perturbation_group="identity_matching")], CONFIG)[0]
-    assert scope_decision(cross, CONFIG) == ("excluded", "pooled_or_cross_perturbation")
+def test_scope_excludes_unlisted_cross_perturbation_and_accepts_existing_population_metric() -> None:
+    cross = group_families([row(cross_perturbation_group="unknown_group")], CONFIG)[0]
+    assert scope_decision(cross, CONFIG) == ("excluded", "cross_perturbation_group_out_of_scope")
 
     population = group_families([row(population="SC", space="PCA", wide_display_family="mmd-rbf")], CONFIG)[0]
     assert scope_decision(population, CONFIG) == ("included", "")
@@ -135,10 +135,7 @@ def test_task_manifest_expands_applicability_without_duplicate_votes() -> None:
     assert {record["protocol_id"] for record in records} == {"family"}
 
 
-CONFIG_V2 = json.loads(Path("configs/evaluation/atlas-protocol-eligibility-v2.json").read_text())
-
-
-def test_v2_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_excluded() -> None:
+def test_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_excluded() -> None:
     retrieval = group_families(
         [
             row(
@@ -148,9 +145,9 @@ def test_v2_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_exc
                 reference_population="control",
             )
         ],
-        CONFIG_V2,
+        CONFIG,
     )[0]
-    assert scope_decision(retrieval, CONFIG_V2) == ("included", "")
+    assert scope_decision(retrieval, CONFIG) == ("included", "")
 
     union_panel = group_families(
         [
@@ -160,14 +157,14 @@ def test_v2_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_exc
                 wide_display_family="retrieval-rank-rmse",
             )
         ],
-        CONFIG_V2,
+        CONFIG,
     )[0]
-    assert scope_decision(union_panel, CONFIG_V2) == ("included", "")
+    assert scope_decision(union_panel, CONFIG) == ("included", "")
 
-    direct_other = group_families([row(feature_set="Other")], CONFIG_V2)[0]
-    assert scope_decision(direct_other, CONFIG_V2) == ("excluded", "feature_set_out_of_scope")
+    direct_other = group_families([row(feature_set="Other")], CONFIG)[0]
+    assert scope_decision(direct_other, CONFIG) == ("excluded", "feature_set_out_of_scope")
 
-    effect = group_families([row(cross_perturbation_group="effect_size")], CONFIG_V2)[0]
-    assert scope_decision(effect, CONFIG_V2) == ("excluded", "cross_perturbation_effect_size_out_of_scope")
-    pooled = group_families([row(cross_perturbation_group="pooled_response", population="DE")], CONFIG_V2)[0]
-    assert scope_decision(pooled, CONFIG_V2) == ("excluded", "pooled_response_out_of_scope")
+    effect = group_families([row(cross_perturbation_group="effect_size")], CONFIG)[0]
+    assert scope_decision(effect, CONFIG) == ("excluded", "cross_perturbation_effect_size_out_of_scope")
+    pooled = group_families([row(cross_perturbation_group="pooled_response", population="DE")], CONFIG)[0]
+    assert scope_decision(pooled, CONFIG) == ("excluded", "pooled_response_out_of_scope")

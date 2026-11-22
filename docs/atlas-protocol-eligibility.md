@@ -1,4 +1,4 @@
-# Atlas protocol eligibility audit v2
+# Atlas protocol eligibility audit
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
 commit `0be116b2a871132c2b3f0c9e896e2fb544a41fe5` and `data/protocols.csv` SHA-256 `cbd088852e213efc92c6af3c633a46fb0eef31efd14667b3d200da6e039f2280`.
@@ -48,7 +48,7 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 
 ## Cross-perturbation scope
 
-Adds the recurring identity-matching (retrieval-rank) cross-perturbation families; keeps effect-size and pooled-response cross-perturbation families excluded with distinct reasons. Decided after v1 model ranks had been inspected; v1 remains frozen and is reported as a supplementary analysis.
+Admitted the recurring identity-matching (retrieval-rank) cross-perturbation families; effect-size and pooled-response cross-perturbation families stay excluded with distinct reasons. Decided after model ranks over the prespecified 101-family universe had been inspected. That prespecified universe is frozen in commit `aadbe94`.
 
 Included cross-perturbation groups: `identity_matching`. Additional feature sets admitted only for
 these groups: `identity_matching`: `Other`. Other recurring cross-perturbation groups remain excluded with
@@ -59,7 +59,7 @@ a group-specific reason:
 
 ## DE caller audit
 
-The DE caller does not define atomic-family eligibility in this version. Existing scPertEval callers remain the
+The DE caller does not define atomic-family eligibility. Existing scPertEval callers remain the
 canonical implementations unless the literature audit below reveals a missing, sufficiently common
 pipeline worth discussing before implementation.
 
@@ -78,7 +78,7 @@ Explicit target operations apply only to genetic tasks and require an unambiguou
 
 ## Files
 
-- `atlas-protocol-eligibility-v2.csv`: included families only.
-- `atlas-task-protocol-manifest-v2.csv`: one row per applicable task and included family.
-- `atlas-protocol-scope-audit-v2.csv`: every literature-eligible family and its inclusion/exclusion reason.
-- `atlas-de-method-audit-v2.csv`: DE caller usage and current scPertEval support.
+- `atlas-protocol-eligibility.csv`: included families only.
+- `atlas-task-protocol-manifest.csv`: one row per applicable task and included family.
+- `atlas-protocol-scope-audit.csv`: every literature-eligible family and its inclusion/exclusion reason.
+- `atlas-de-method-audit.csv`: DE caller usage and current scPertEval support.

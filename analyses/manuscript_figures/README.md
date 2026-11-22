@@ -11,7 +11,7 @@ rankings.
 
 | Panel | Content | Source data |
 |---|---|---|
-| a | Workflow: literature corpus → taxonomy annotation → census, and → scPertEval implementation → ranking sensitivity | `corpus-summary.csv`, `task-summary.csv`, `winner-shares.csv`, `configs/evaluation/atlas-protocol-scope-audit-v2.csv` (`--scope-audit` selects v1) |
+| a | Workflow: literature corpus → taxonomy annotation → census, and → scPertEval implementation → ranking sensitivity | `corpus-summary.csv`, `task-summary.csv`, `winner-shares.csv`, `configs/evaluation/atlas-protocol-scope-audit.csv` |
 | b | Paper pairs sharing ≥ 1 protocol as evaluation choices are added (top to bottom) | `consensus-decay.csv` |
 | c | Paper pairs agreeing on each evaluation choice alone (same rows as b) | `single-choice-agreement.csv` |
 | d | Protocol pairs selecting different winning models, per benchmark task | `task-protocol-disagreement.csv` |
@@ -22,14 +22,10 @@ from the repository root:
 
 ```bash
 uv run python -m analyses.manuscript_figures.evaluation_practice \
-  --ranking /path/to/figures/ranking-sensitivity-atlas-v2/source-data
+  --ranking /path/to/figures/ranking-sensitivity-atlas/source-data
 ```
 
-v2 (111 protocols, including retrieval ranks) is the primary ranking analysis. For the v1
-supplement pass `--ranking …/ranking-sensitivity-atlas-v1/source-data --scope-audit
-configs/evaluation/atlas-protocol-scope-audit-v1.csv`; a mismatched pair is rejected.
-
-Writes `figures/evaluation-practice-v1/evaluation-practice-{light,dark}.{png,pdf,svg}`
+Writes `figures/evaluation-practice/evaluation-practice-{light,dark}.{png,pdf,svg}`
 and `figure-manifest.json` (the workflow numbers and SHA-256 of every input).
 The light PDF is the manuscript asset.
 

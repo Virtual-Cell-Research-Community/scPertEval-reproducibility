@@ -1,21 +1,57 @@
-# Ground-truth protocol coverage audit v1
+# Ground-truth protocol coverage audit
+
+The coverage audit spans all 111 protocol families. It consists of the prespecified audit of the
+101 original families (completed 2026-11-21, before model ranks were inspected) and the
+truth-self-evaluation of the ten retrieval-rank families added post hoc on 2026-11-22
+(`docs/ranking-sensitivity-atlas-scope-change.md`). The frozen 75% rule was not changed.
+Machine-readable provenance, checksums and summary values are in
+`configs/evaluation/atlas-ground-truth-coverage-audit.json`; the combined result bundle is at:
+
+```text
+/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v2
+```
+
+## Current audit (111 families)
+
+The combined availability table has 373,488 protocol/evaluation-unit rows (the 340,075 rows of the
+prespecified audit unchanged, plus 33,413 retrieval rows). 369,883 rows are defined and 3,605 are
+undefined: 1,740 unmeasured target genes, 678 constant truth vectors, 587 empty truth-derived
+feature sets, 543 cases with no ground-truth positives, and 57 single-class truth sets. All 348
+undefined retrieval rows are unmeasured targets of the target-excluding MAE retrieval family.
+
+| Task | Applicable protocols | Protocol pairs | Pairs at frozen 75% | Fraction | Minimum | Median |
+|---|---:|---:|---:|---:|---:|---:|
+| Essential perturbation generalization | 111 | 6,105 | 6,105 | 100.0% | 96.7% | 100.0% |
+| Genetic context transfer | 111 | 6,105 | 6,105 | 100.0% | 77.5% | 98.1% |
+| Chemical context transfer | 104 | 5,356 | 5,253 | 98.1% | 63.6% | 100.0% |
+
+Minimum and median are taken over each pair's worst fold. The 103 failing chemical pairs are
+exactly the comparisons involving the same weakest chemical protocol as before. The
+target-excluding MAE retrieval family covers 393/480 genetic targets (81.9%) in every fold, the same
+limit as the other target-policy protocols, and passes the rule.
+
+## Prespecified audit (101 families)
+
+The audit below is reproduced as recorded before the retrieval families were added. It was run
+at scPertEval commit `3950557`. The current table uses the same 340,075 rows re-evaluated at
+scPertEval `58ccc91` (`docs/scperteval-main-ranking-migration.md`). That re-evaluation has 3,257
+undefined rows rather than the 3,428 listed below, and its pair counts are unchanged.
 
 The ground-truth-only audit completed on 2026-11-21 before model ranks were
 inspected. It truth-self-evaluated every task-applicable protocol built from the
 101 frozen Atlas semantic families using scPertEval commit `3950557`. The 75%
 coverage decision was frozen in reproducibility repository commit `b6d6170`.
 
-The authoritative 72 MB result bundle is retained at:
+Its authoritative 72 MB result bundle is retained at:
 
 ```text
 /home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v1
 ```
 
-Its machine-readable provenance, file checksums, and exact summary values are
-recorded in
-`configs/evaluation/atlas-ground-truth-coverage-audit-v1.json`.
+Its checksums are recorded in the history of
+`configs/evaluation/atlas-ground-truth-coverage-audit.json` (commit `aadbe94`).
 
-## Completeness
+### Completeness
 
 The audit contains 340,075 protocol/evaluation-unit rows across all 12 folds:
 
@@ -30,7 +66,7 @@ structured reason: 1,392 unmeasured target genes, 1,005 empty truth-derived
 feature sets, 678 constant truth vectors, 334 cases with no ground-truth
 positives, and 19 single-class truth sets.
 
-## Matched protocol-pair coverage
+### Matched protocol-pair coverage
 
 The table reports each pair's worst fold, because the proposed rule requires
 the threshold in every fold.
@@ -62,7 +98,7 @@ excluded from headline winner shares and pairwise analyses, while its results
 and structured missingness remain in the source tables. The threshold was
 selected from ground-truth coverage before model ranks were inspected.
 
-## Runtime corrections discovered by the audit
+### Runtime corrections discovered by the audit
 
 Two issues were found and fixed before the final tables were produced:
 

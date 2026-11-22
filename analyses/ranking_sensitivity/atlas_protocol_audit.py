@@ -24,14 +24,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-CONFIG_PATH = Path("configs/evaluation/atlas-protocol-eligibility-v1.json")
-V1_OUTPUTS = {
-    "eligible_families": "atlas-protocol-eligibility-v1.csv",
-    "task_manifest": "atlas-task-protocol-manifest-v1.csv",
-    "scope_audit": "atlas-protocol-scope-audit-v1.csv",
-    "de_method_audit": "atlas-de-method-audit-v1.csv",
-    "summary": "docs/atlas-protocol-eligibility-v1.md",
-}
+CONFIG_PATH = Path("configs/evaluation/atlas-protocol-eligibility.json")
 
 
 @dataclass(frozen=True)
@@ -120,13 +113,10 @@ def scope_decision(family: Family, config: Mapping[str, Any]) -> tuple[str, str]
 
     group = identity["cross_perturbation_group"]
     allowed_feature_sets = list(scope["allowed_feature_sets"])
-    if "cross_perturbation_groups" in scope:
-        groups = scope["cross_perturbation_groups"]
-        if group and group not in groups["included"]:
-            return "excluded", groups["excluded"].get(group, groups["unlisted_reason"])
-        allowed_feature_sets += groups.get("additional_feature_sets", {}).get(group, [])
-    elif scope["require_empty_cross_perturbation_group"] and group:
-        return "excluded", "pooled_or_cross_perturbation"
+    groups = scope["cross_perturbation_groups"]
+    if group and group not in groups["included"]:
+        return "excluded", groups["excluded"].get(group, groups["unlisted_reason"])
+    allowed_feature_sets += groups.get("additional_feature_sets", {}).get(group, [])
     if identity["feature_set"] not in allowed_feature_sets:
         return "excluded", "feature_set_out_of_scope"
     if identity["centering"] not in scope["allowed_centering"]:
@@ -364,24 +354,25 @@ def write_summary(
         str(record["exclusion_reason"]) for record in all_records if record["scope_decision"] == "excluded"
     )
 
-    outputs = config.get("outputs", V1_OUTPUTS)
-    version = str(config["id"]).rsplit("-", 1)[-1]
-    cross_perturbation = ""
-    groups = config["scope"].get("cross_perturbation_groups")
-    if groups:
-        included_groups = ", ".join(f"`{group}`" for group in groups["included"])
-        excluded_groups = "\n".join(f"- `{group}` → `{reason}`" for group, reason in sorted(groups["excluded"].items()))
-        extra_sets = "; ".join(
-            f"`{group}`: {', '.join(f'`{value}`' for value in values)}"
-            for group, values in sorted(groups.get("additional_feature_sets", {}).items())
-        )
-        supersedes = config.get("supersedes", {})
-        cross_perturbation = f"""
+    outputs = config["outputs"]
+    groups = config["scope"]["cross_perturbation_groups"]
+    included_groups = ", ".join(f"`{group}`" for group in groups["included"])
+    excluded_groups = "\n".join(f"- `{group}` → `{reason}`" for group, reason in sorted(groups["excluded"].items()))
+    extra_sets = "; ".join(
+        f"`{group}`: {', '.join(f'`{value}`' for value in values)}"
+        for group, values in sorted(groups.get("additional_feature_sets", {}).items())
+    )
+    extension = config.get("history", {}).get("scope_extension", {})
+    extension_note = (
+        f"{extension['change']} {extension['post_hoc_note']} That prespecified universe is frozen in "
+        f"commit `{extension['prespecified_universe_commit'][:7]}`.\n\n"
+        if extension
+        else ""
+    )
+    cross_perturbation = f"""
 ## Cross-perturbation scope
 
-{supersedes.get("change", "")} {supersedes.get("post_hoc_note", "")}
-
-Included cross-perturbation groups: {included_groups}. Additional feature sets admitted only for
+{extension_note}Included cross-perturbation groups: {included_groups}. Additional feature sets admitted only for
 these groups: {extra_sets or "none"}. Other recurring cross-perturbation groups remain excluded with
 a group-specific reason:
 
@@ -400,7 +391,7 @@ a group-specific reason:
                 f"scPertEval `{record['scperteval_support']}`"
             )
 
-    text = f"""# Atlas protocol eligibility audit {version}
+    text = f"""# Atlas protocol eligibility audit
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
 commit `{config["atlas"]["revision"]}` and `data/protocols.csv` SHA-256 `{source_sha256}`.
@@ -434,7 +425,7 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 {cross_perturbation}
 ## DE caller audit
 
-The DE caller does not define atomic-family eligibility in this version. Existing scPertEval callers remain the
+The DE caller does not define atomic-family eligibility. Existing scPertEval callers remain the
 canonical implementations unless the literature audit below reveals a missing, sufficiently common
 pipeline worth discussing before implementation.
 
@@ -464,7 +455,7 @@ def build_audit(
     summary_path: Path | None = None,
 ) -> dict[str, int]:
     config = load_config(config_path)
-    outputs = config.get("outputs", V1_OUTPUTS)
+    outputs = config["outputs"]
     summary_path = summary_path or Path(outputs["summary"])
     rows, source_sha256 = read_atlas_csv(
         atlas_repo,

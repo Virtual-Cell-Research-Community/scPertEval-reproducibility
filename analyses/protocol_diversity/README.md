@@ -13,7 +13,7 @@ uv run python -m analyses.protocol_diversity.figure \
 ```
 
 The Atlas is read with `git show` at the revision pinned in
-`configs/evaluation/atlas-protocol-eligibility-v1.json`, the same revision the
+`configs/evaluation/atlas-protocol-eligibility.json`, the same revision the
 ranking-sensitivity analysis uses. `--revision <rev>` overrides it, and
 `--revision working-tree` reads uncommitted files (not for publication).
 

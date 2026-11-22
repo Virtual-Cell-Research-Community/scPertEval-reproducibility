@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "id": "atlas-protocol-eligibility-v2",
+  "id": "atlas-protocol-eligibility",
   "atlas": {
     "revision": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
     "source_path": "data/protocols.csv",
@@ -240,18 +240,21 @@
     ],
     "target_mapping_requirement": "unambiguous_measured_gene"
   },
-  "supersedes": {
-    "id": "atlas-protocol-eligibility-v1",
-    "change": "Adds the recurring identity-matching (retrieval-rank) cross-perturbation families; keeps effect-size and pooled-response cross-perturbation families excluded with distinct reasons.",
-    "decided_on": "2026-11-22",
-    "post_hoc": true,
-    "post_hoc_note": "Decided after v1 model ranks had been inspected; v1 remains frozen and is reported as a supplementary analysis."
+  "history": {
+    "scope_extension": {
+      "decided_on": "2026-11-22",
+      "post_hoc": true,
+      "change": "Admitted the recurring identity-matching (retrieval-rank) cross-perturbation families; effect-size and pooled-response cross-perturbation families stay excluded with distinct reasons.",
+      "post_hoc_note": "Decided after model ranks over the prespecified 101-family universe had been inspected.",
+      "prespecified_universe_commit": "aadbe9479076c9303301f721994e83448e09a948",
+      "prespecified_n_families": 101
+    }
   },
   "outputs": {
-    "eligible_families": "atlas-protocol-eligibility-v2.csv",
-    "task_manifest": "atlas-task-protocol-manifest-v2.csv",
-    "scope_audit": "atlas-protocol-scope-audit-v2.csv",
-    "de_method_audit": "atlas-de-method-audit-v2.csv",
-    "summary": "docs/atlas-protocol-eligibility-v2.md"
+    "eligible_families": "atlas-protocol-eligibility.csv",
+    "task_manifest": "atlas-task-protocol-manifest.csv",
+    "scope_audit": "atlas-protocol-scope-audit.csv",
+    "de_method_audit": "atlas-de-method-audit.csv",
+    "summary": "docs/atlas-protocol-eligibility.md"
   }
 }

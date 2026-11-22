@@ -31,11 +31,11 @@ def test_evaluate_fold_emits_ground_truth_only_availability(monkeypatch):
     ]
     monkeypatch.setattr(
         "analyses.ranking_sensitivity.truth_coverage_runtime.applicable_protocol_ids",
-        lambda task, path: {protocol.name for protocol in protocols},
+        lambda task, path=None: {protocol.name for protocol in protocols},
     )
     monkeypatch.setattr(
         "analyses.ranking_sensitivity.truth_coverage_runtime.build_protocols",
-        lambda path: protocols,
+        lambda path=None: protocols,
     )
     result = evaluate_fold(
         dataset_adata,
@@ -59,16 +59,15 @@ def test_evaluate_fold_emits_ground_truth_only_availability(monkeypatch):
     assert not np.isnan(result["self_score"]).any()
 
 
-def test_incremental_v2_selection_contains_only_the_added_retrieval_protocols():
+def test_task_protocols_follow_the_task_manifest():
     from analyses.ranking_sensitivity.truth_coverage_runtime import task_protocols
 
     counts = {
-        "essential_perturbation_generalization": 10,
-        "genetic_context_transfer": 10,
-        "chemical_context_transfer": 7,
+        "essential_perturbation_generalization": (111, 10),
+        "genetic_context_transfer": (111, 10),
+        "chemical_context_transfer": (104, 7),
     }
-    for task, expected in counts.items():
-        added = task_protocols(task, "v2", added_since="v1")
-        assert len(added) == expected
-        assert {protocol.group for protocol in added} == {"atlas-retrieval"}
-    assert len(task_protocols("chemical_context_transfer", "v2")) == 104
+    for task, (total, retrieval) in counts.items():
+        protocols = task_protocols(task)
+        assert len(protocols) == total
+        assert sum(protocol.group == "atlas-retrieval" for protocol in protocols) == retrieval

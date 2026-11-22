@@ -18,7 +18,6 @@ from analyses.ranking_sensitivity.atlas_runtime import (
     RETRIEVAL_HVG_K,
     RETRIEVAL_UNION_DEGS,
     build_protocols,
-    eligibility_path,
     load_eligible_families,
 )
 from analyses.ranking_sensitivity.cross_perturbation import (
@@ -144,34 +143,23 @@ def test_cross_perturbation_decomposition_pairs_retrieval_with_the_same_direct_d
     assert decompose("retrieval-rank-cosine").distance == "cosine"
 
 
-def test_v2_universe_adds_exactly_the_ten_dataset_wide_retrieval_protocols():
-    v1 = {protocol.name: protocol for protocol in build_protocols(eligibility_path("v1"))}
-    v2 = {protocol.name: protocol for protocol in build_protocols(eligibility_path("v2"))}
-    assert len(v2) == 111
-    assert set(v1) <= set(v2)
-    added = {name: protocol for name, protocol in v2.items() if name not in v1}
-    assert len(added) == 10
-    assert all(protocol.scope == "dataset" and protocol.better == "lower" for protocol in added.values())
+def test_universe_contains_exactly_ten_dataset_wide_retrieval_protocols():
+    protocols = {protocol.name: protocol for protocol in build_protocols()}
+    assert len(protocols) == 111
+    retrieval = {name: protocol for name, protocol in protocols.items() if protocol.group == "atlas-retrieval"}
+    assert len(retrieval) == 10
+    assert all(protocol.scope == "dataset" and protocol.better == "lower" for protocol in retrieval.values())
     # Stacking every perturbation into one matrix requires one shared gene axis.
-    assert all(not protocol.space.per_pert for protocol in added.values())
-    families = load_eligible_families(eligibility_path("v2")).set_index("family_id")
-    assert set(families.loc[list(added), "cross_perturbation_group"]) == {"identity_matching"}
-    exclusion = [name for name, p in added.items() if p.metric.keywords["exclude_query_target"]]
+    assert all(not protocol.space.per_pert for protocol in retrieval.values())
+    families = load_eligible_families().set_index("family_id")
+    assert set(families.loc[list(retrieval), "cross_perturbation_group"]) == {"identity_matching"}
+    assert set(families.drop(index=list(retrieval))["cross_perturbation_group"]) == {""}
+    exclusion = [name for name, p in retrieval.items() if p.metric.keywords["exclude_query_target"]]
     assert exclusion == ["atlas-e1e926ba033b"]
-    for name, protocol in v1.items():
-        assert _structure(v2[name]) == _structure(protocol)
 
 
-def _structure(protocol: Protocol) -> tuple:
-    """Protocol identity with partial metrics compared by function and bound parameters."""
-    metric = protocol.metric
-    if isinstance(metric, partial):
-        metric = (metric.func, metric.args, tuple(sorted(metric.keywords.items())))
-    return (*(value for key, value in protocol.__dict__.items() if key != "metric"), metric)
-
-
-def test_union_panel_parameters_match_the_frozen_v2_config():
-    config = json.loads(Path("configs/evaluation/atlas-protocol-eligibility-v2.json").read_text())
+def test_union_panel_parameters_match_the_frozen_config():
+    config = json.loads(Path("configs/evaluation/atlas-protocol-eligibility.json").read_text())
     panel = config["canonical_parameters"]["retrieval"]["union_panel"]
     assert RETRIEVAL_HVG_K == panel["hvg_k"]
     assert RETRIEVAL_UNION_DEGS.top_k == panel["per_unit_deg_top_k"]
@@ -209,8 +197,8 @@ def _synthetic_fold(seed: int = 5) -> tuple[ad.AnnData, ad.AnnData]:
 
 def test_end_to_end_mse_protocol_equals_scperteval_transpose_rank():
     truth, prediction = _synthetic_fold()
-    v2 = {protocol.name: protocol for protocol in build_protocols(eligibility_path("v2"))}
-    ours = v2["atlas-fbb25436e8b0"]  # transposed MSE, control-centred, all genes
+    protocols = {protocol.name: protocol for protocol in build_protocols()}
+    ours = protocols["atlas-fbb25436e8b0"]  # transposed MSE, control-centred, all genes
     reference = Protocol(
         "reference-transpose-rank",
         partial(metrics.rank_retrieval, transpose=True),
@@ -229,8 +217,7 @@ def test_end_to_end_mse_protocol_equals_scperteval_transpose_rank():
 
 def test_end_to_end_truth_self_retrieval_is_perfect_and_target_policies_resolve():
     truth, _ = _synthetic_fold()
-    v2 = build_protocols(eligibility_path("v2"))
-    added = [p for p in v2 if p.group == "atlas-retrieval"]
+    added = [p for p in build_protocols() if p.group == "atlas-retrieval"]
     prepared = spe.prepare(truth, added, min_cells=10, seed=42, workers=1, name="synthetic")
     availability = spe.truth_availability(prepared, added)
     assert len(availability) == len(added) * 5

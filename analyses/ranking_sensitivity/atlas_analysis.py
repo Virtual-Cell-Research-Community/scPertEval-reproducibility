@@ -865,19 +865,19 @@ def main() -> int:
     parser.add_argument(
         "--families",
         type=Path,
-        default=Path("configs/evaluation/atlas-protocol-eligibility-v1.csv"),
+        default=Path("configs/evaluation/atlas-protocol-eligibility.csv"),
     )
     parser.add_argument(
         "--task-manifest",
         type=Path,
-        default=Path("configs/evaluation/atlas-task-protocol-manifest-v1.csv"),
+        default=Path("configs/evaluation/atlas-task-protocol-manifest.csv"),
     )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--coverage-threshold", type=float, default=0.75)
     parser.add_argument(
         "--examples",
         type=Path,
-        default=Path("configs/evaluation/ranking-sensitivity-atlas-examples-v1.json"),
+        default=Path("configs/evaluation/ranking-sensitivity-atlas-examples.json"),
     )
     args = parser.parse_args()
     analyse(

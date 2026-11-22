@@ -26,14 +26,21 @@ python -m analyses.ranking_sensitivity.atlas_protocol_audit \
 ```
 
 The generator reads the exact Atlas revision pinned in
-`configs/evaluation/atlas-protocol-eligibility-v1.json` with `git show`, so a
+`configs/evaluation/atlas-protocol-eligibility.json` with `git show`, so a
 newer Atlas working tree cannot silently change the audit. It writes the
 included universe, the complete scope audit, the separate DE-caller audit, and
 the human-readable summary. Reporting aggregation and DE caller are deliberately
 not part of atomic-family identity.
 
+The universe has 111 families (111, 111 and 104 per task). It includes ten
+retrieval-rank families (Atlas `cross_perturbation_group == identity_matching`),
+which were added post hoc to the prespecified 101 families; see
+`docs/ranking-sensitivity-atlas-scope-change.md` for the disclosure.
+Retrieval ranks are dataset-scope (the candidate set is every evaluation unit of
+the fold) and are implemented in `retrieval.py`.
+
 The current analysis policy is
-`configs/evaluation/ranking-sensitivity-atlas-v1.json`. Before any model ranks
+`configs/evaluation/ranking-sensitivity-atlas.json`. Before any model ranks
 are inspected, produce a complete ground-truth availability table with columns
 `task`, `fold`, `protocol_id`, `evaluation_unit`, `ground_truth_defined`, and
 `undefined_reason`. Each fold is truth-self-evaluated through the exact concrete
@@ -64,9 +71,9 @@ The command rejects model or score columns. It reports protocol coverage and
 the matched common set for every unordered protocol pair. The headline rule is
 frozen at 75% shared coverage in every fold, selected from the ground-truth-only
 audit before model ranks were inspected.
-The completed v1 audit and its checksummed SDS result bundle are summarized in
-`docs/ground-truth-coverage-audit-v1.md` and
-`configs/evaluation/atlas-ground-truth-coverage-audit-v1.json`.
+The completed audit and its checksummed SDS result bundle are summarized in
+`docs/ground-truth-coverage-audit.md` and
+`configs/evaluation/atlas-ground-truth-coverage-audit.json`.
 
 ## Retained-prediction scoring
 
@@ -79,7 +86,7 @@ python scripts/evaluate_atlas_production_benchmark.py \
   --project-root /path/to/scPertEval-reproducibility \
   --model-data-root /fast/local/cache/models/data \
   --runs-root /shared/sds/scPertEval-reproducibility/runs \
-  --results-root /path/to/results/ranking-sensitivity-atlas-v1 \
+  --results-root /path/to/results/ranking-sensitivity-atlas \
   --track chemical-context \
   --fold holdout-a549 \
   --workers 16
@@ -103,10 +110,18 @@ the reference-free headline summaries:
 ```bash
 python -m analyses.ranking_sensitivity.atlas_analysis \
   --details-root results/ranking-sensitivity-atlas-v1/details \
-  --availability results/ground-truth-coverage-v1/availability.csv \
-  --pair-coverage results/ground-truth-coverage-v1/pairwise-coverage-summary.csv \
-  --output results/ranking-sensitivity-atlas-v1/analysis-v1
+  --details-root results/ranking-sensitivity-atlas-v2/details \
+  --availability results/ground-truth-coverage-v2/availability.csv \
+  --pair-coverage results/ground-truth-coverage-v2/pairwise-coverage-summary.csv \
+  --output results/ranking-sensitivity-atlas-v2/analysis-v2
 ```
+
+The SDS directory names are historical. The 101 prespecified protocols were
+scored into `ranking-sensitivity-atlas-v1/details` and the ten retrieval
+protocols into `ranking-sensitivity-atlas-v2/details`; `--details-root` is
+repeatable and merges disjoint protocol sets only when every bundle binds the
+same prediction checksum. A fresh run of the scorer writes all 111 protocols
+into one root.
 
 The analysis keeps the three tasks separate. Winner shares use the standard
 mean reduction, equal protocol votes, and fractional credit for ties. Every
@@ -114,7 +129,8 @@ unordered protocol pair is compared on the ground-truth-defined evaluation-unit
 intersection within each fold and must meet the frozen 75% minimum-fold
 coverage rule. Factor sensitivity separates evaluation family (profile,
 population, or DE), score function within a fixed family and space, and
-expression space. An evaluation-family transition may necessarily change to a
+expression space. Cross-perturbation evaluation compares direct comparison with
+retrieval under the same distance and every other choice fixed. An evaluation-family transition may necessarily change to a
 compatible score function; all other factors are strict one-factor contrasts.
 Mean-versus-median aggregation is evaluated separately. The main figure shows
 only task-level factor estimates supported by at least 10 matched contrasts;
@@ -124,8 +140,8 @@ Render all global and selected bump figures in both light and dark mode:
 
 ```bash
 python -m analyses.ranking_sensitivity.atlas_figures \
-  --source-data results/ranking-sensitivity-atlas-v1/analysis-v1/source-data \
-  --output results/ranking-sensitivity-atlas-v1/analysis-v1/figures
+  --source-data results/ranking-sensitivity-atlas-v2/analysis-v2/source-data \
+  --output results/ranking-sensitivity-atlas-v2/analysis-v2/figures
 ```
 
 The rendering layer uses Plotnine and fixes the global figure at a 7.2-inch
@@ -139,7 +155,7 @@ Every figure reads an exported CSV in `source-data/`. The compressed
 `canonical-scores.csv.gz` preserves the complete validated long-form analysis
 input without duplicating it across figure-specific tables.
 The four post-hoc illustrative examples are frozen with explicit rationales in
-`configs/evaluation/ranking-sensitivity-atlas-examples-v1.json`; the complete
+`configs/evaluation/ranking-sensitivity-atlas-examples.json`; the complete
 ranked candidate table remains available as `bump-plot-candidates.csv`.
 
 # Ranking-sensitivity figures
@@ -160,46 +176,3 @@ python -m analyses.ranking_sensitivity.figure \
 The main figure combines cluster-bootstrap reversal intervals with examples
 selected by the rule frozen in `configs/evaluation/ranking-sensitivity-v1.json`.
 The supplement contains every task and evaluation-choice slope plot.
-
-## v2: retrieval-rank extension (primary)
-
-v2 adds the ten recurring retrieval-rank families to the 101 v1 families (111 in total; 104 for
-the chemical task). The change is post hoc and is documented in
-`docs/ranking-sensitivity-atlas-v2-scope-change.md`; v1 stays frozen and is reported in the
-supplement. Regenerate the universe from the same Atlas revision:
-
-```bash
-python -m analyses.ranking_sensitivity.atlas_protocol_audit \
-  --atlas-repo /path/to/PerturbationEvaluationAtlas \
-  --config configs/evaluation/atlas-protocol-eligibility-v2.json
-```
-
-Only the added protocols are evaluated; v1 scores are reused. Pass the same flags to the
-truth-coverage runtime (`--eligibility-version v2 --added-since v1`) and the production scorer,
-which writes schema-3 completion records into a separate result tree. Run the scorer on Beauty only:
-
-```bash
-python scripts/evaluate_atlas_production_benchmark.py \
-  --project-root . --model-data-root /path/to/models/data --runs-root /path/to/runs \
-  --results-root /path/to/results/ranking-sensitivity-atlas-v2 \
-  --track chemical-context --eligibility-version v2 --added-since v1 --workers 16
-```
-
-Append the new availability rows to the v1 table, summarize them with
-`--config configs/evaluation/ranking-sensitivity-atlas-v2.json`, then analyse both detail roots
-together:
-
-```bash
-python -m analyses.ranking_sensitivity.atlas_analysis \
-  --details-root results/ranking-sensitivity-atlas-v1/details \
-  --details-root results/ranking-sensitivity-atlas-v2/details \
-  --availability results/ground-truth-coverage-v2/availability.csv \
-  --pair-coverage results/ground-truth-coverage-v2/pairwise-coverage-summary.csv \
-  --families configs/evaluation/atlas-protocol-eligibility-v2.csv \
-  --task-manifest configs/evaluation/atlas-task-protocol-manifest-v2.csv \
-  --output results/ranking-sensitivity-atlas-v2/analysis-v2
-```
-
-Retrieval ranks are dataset-scope (the candidate set is every evaluation unit of the fold) and are
-implemented in `retrieval.py`. Factor sensitivity adds a cross-perturbation factor: direct
-comparison versus retrieval with the same distance and every other choice fixed.

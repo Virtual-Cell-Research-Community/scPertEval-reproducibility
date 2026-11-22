@@ -13,7 +13,7 @@ source data; nothing is recomputed here.
 From the repository root:
 
     uv run python -m analyses.manuscript_figures.evaluation_practice \\
-      --ranking /path/to/figures/ranking-sensitivity-atlas-v2/source-data
+      --ranking /path/to/figures/ranking-sensitivity-atlas/source-data
 """
 
 from __future__ import annotations
@@ -62,14 +62,10 @@ from analyses.protocol_diversity.figure import axis_panel, decay_panel
 from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, RANKING_FACTORS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCOPE_AUDITS = {
-    version: REPO_ROOT / f"configs/evaluation/atlas-protocol-scope-audit-{version}.csv" for version in ("v1", "v2")
-}
-SCOPE_AUDIT = SCOPE_AUDITS["v2"]
-"""Default protocol scope: v2 is the primary ranking-sensitivity analysis; pass v1 for the supplement."""
+SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit.csv"
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
-DEFAULT_OUTPUT = Path("figures/evaluation-practice-v1")
+DEFAULT_OUTPUT = Path("figures/evaluation-practice")
 FIGURE_HEIGHT_IN = 6.3
 SEQUENTIAL = ("#F2F0F7", "#54278F")
 """Single-hue sequential ramp (purple) for winner-change rates; distinct from every task hue."""
@@ -91,7 +87,7 @@ def workflow_numbers(census: Path, ranking: Path, scope_audit: Path = SCOPE_AUDI
     if int(per_task["protocols"].max()) > implemented:
         raise ValueError(
             f"ranking source data rank up to {int(per_task['protocols'].max())} protocols per task but the scope "
-            f"audit {scope_audit.name} implements only {implemented}; pass the matching --scope-audit"
+            f"audit {scope_audit.name} implements only {implemented}; the inputs come from different universes"
         )
     return {
         "works": int(corpus["works"]),
@@ -366,14 +362,8 @@ def main() -> int:
     parser.add_argument("--census", type=Path, default=Path("figures/protocol-diversity-v1/source-data"))
     parser.add_argument("--ranking", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
-    parser.add_argument(
-        "--scope-audit",
-        type=Path,
-        default=SCOPE_AUDIT,
-        help="Atlas scope audit matching the ranking source data (default: v2, the primary analysis)",
-    )
     args = parser.parse_args()
-    render(args.census, args.ranking, args.output, args.scope_audit)
+    render(args.census, args.ranking, args.output)
     return 0
 
 

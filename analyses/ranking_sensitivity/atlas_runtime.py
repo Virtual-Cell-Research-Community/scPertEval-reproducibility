@@ -14,15 +14,12 @@ from scperteval.types import Protocol
 from .cross_perturbation import decompose
 from .retrieval import PerUnitDEGUnion, retrieval_rank
 
-ELIGIBILITY_VERSIONS = {
-    "v1": (Path("configs/evaluation/atlas-protocol-eligibility-v1.csv"), 101),
-    "v2": (Path("configs/evaluation/atlas-protocol-eligibility-v2.csv"), 111),
-}
-"""Frozen executable family tables and their expected family counts."""
-DEFAULT_ELIGIBILITY = ELIGIBILITY_VERSIONS["v1"][0]
+DEFAULT_ELIGIBILITY = Path("configs/evaluation/atlas-protocol-eligibility.csv")
+N_ELIGIBLE_FAMILIES = 111
+"""Expected size of the frozen executable family table."""
 RETRIEVAL_HVG_K = 4000
 RETRIEVAL_UNION_DEGS = PerUnitDEGUnion(padj=0.05, top_k=25, rank_by="absolute_effect", reference="control")
-"""PerturBench-style union panel (``feature_set == "Other"``); mirrors the v2 eligibility config."""
+"""PerturBench-style union panel (``feature_set == "Other"``); mirrors the eligibility config."""
 
 PROFILE_METRICS = {
     "MAE": metrics.mae,
@@ -61,20 +58,10 @@ DE_METRICS = {
 }
 
 
-def eligibility_path(version: str) -> Path:
-    """Return the frozen family table of one eligibility version."""
-    try:
-        return ELIGIBILITY_VERSIONS[version][0]
-    except KeyError as error:
-        raise ValueError(f"unknown eligibility version {version!r}; expected {sorted(ELIGIBILITY_VERSIONS)}") from error
-
-
 def load_eligible_families(path: Path = DEFAULT_ELIGIBILITY) -> pd.DataFrame:
     """Load and minimally validate the frozen executable family table."""
     frame = pd.read_csv(path, keep_default_na=False)
-    expected = {Path(item).name: count for item, count in ELIGIBILITY_VERSIONS.values()}.get(Path(path).name)
-    if expected is None:
-        raise ValueError(f"{path} is not a registered eligibility table")
+    expected = N_ELIGIBLE_FAMILIES
     if len(frame) != expected or frame["family_id"].nunique() != expected:
         raise ValueError(f"expected {expected} unique eligible Atlas families, found {len(frame)} rows")
     if set(frame["scope_decision"]) != {"included"}:

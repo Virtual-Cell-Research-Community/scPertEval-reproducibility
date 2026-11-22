@@ -6,7 +6,7 @@ import importlib.metadata
 import json
 from pathlib import Path
 
-DEFAULT_RANKING_CONFIG = Path("configs/evaluation/ranking-sensitivity-atlas-v1.json")
+DEFAULT_RANKING_CONFIG = Path("configs/evaluation/ranking-sensitivity-atlas.json")
 
 
 def expected_scperteval_revision(

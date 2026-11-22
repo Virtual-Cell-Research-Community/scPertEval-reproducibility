@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-DEFAULT_CONFIG = Path("configs/evaluation/ranking-sensitivity-atlas-v1.json")
+DEFAULT_CONFIG = Path("configs/evaluation/ranking-sensitivity-atlas.json")
 REQUIRED_COLUMNS = {
     "task",
     "fold",
