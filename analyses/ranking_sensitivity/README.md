@@ -128,6 +128,13 @@ python -m analyses.ranking_sensitivity.atlas_figures \
   --output results/ranking-sensitivity-atlas-v1/analysis-v1/figures
 ```
 
+The rendering layer uses Plotnine and fixes the global figure at a 7.2-inch
+manuscript width. The light PDF is the publication asset; the dark variant is
+intended for presentations. Panel tags are rendered in the figure, whereas
+descriptive panel titles and all methodological detail belong in the caption.
+The plotting code performs display-only transformations and never recomputes
+scores, ranks, winners or protocol eligibility.
+
 Every figure reads an exported CSV in `source-data/`. The compressed
 `canonical-scores.csv.gz` preserves the complete validated long-form analysis
 input without duplicating it across figure-specific tables.
