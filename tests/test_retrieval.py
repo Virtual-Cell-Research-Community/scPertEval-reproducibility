@@ -128,6 +128,38 @@ def test_query_target_exclusion_drops_only_the_query_target_and_keeps_unmeasured
     np.testing.assert_allclose(_values(outcomes)[defined], expected[defined], atol=1e-12)
 
 
+@pytest.mark.parametrize("transpose", [False, True])
+def test_query_target_exclusion_on_a_panel_maps_targets_and_ignores_targets_off_the_panel(transpose):
+    rng = np.random.default_rng(5)
+    names = ["g0", "g1", "g2", "g3", "g4", "g5"]
+    panel = np.array([1, 2, 4, 5])  # g0 and g3 are measured but outside the panel
+    perturbations = ["g0", "g2", "missing", "g5", "g1"]
+    G = list(rng.normal(size=(5, panel.size)))
+    P = list(np.vstack(G) + rng.normal(scale=0.7, size=(5, panel.size)))
+    positions = {name: index for index, name in enumerate(names)}
+    ctx = SimpleNamespace(
+        perturbations=perturbations,
+        ds=SimpleNamespace(
+            var_names=names,
+            target_gene_indices=lambda pert: np.array([positions[pert]] if pert in positions else [], dtype=int),
+        ),
+    )
+    gene_space = SimpleNamespace(per_pert=False, select=lambda ctx, pert: panel)
+    on_panel = {int(gene): index for index, gene in enumerate(panel)}
+    excluded = [
+        np.array([on_panel[positions[p]]] if p in positions and positions[p] in on_panel else [], dtype=int)
+        for p in perturbations
+    ]
+    outcomes = retrieval_rank(
+        G, P, ctx, distance="cosine", transpose=transpose, exclude_query_target=True, gene_space=gene_space
+    )
+    expected = _brute_force(G, P, "cosine", transpose=transpose, excluded=excluded)
+    assert outcomes[0].undefined_reason is None  # measured target off the panel: nothing to remove
+    assert outcomes[2].undefined_reason == "target_gene_not_measured"
+    defined = [index for index in range(5) if index != 2]
+    np.testing.assert_allclose(_values(outcomes)[defined], expected[defined], atol=1e-12)
+
+
 def test_cross_perturbation_decomposition_pairs_retrieval_with_the_same_direct_distance():
     assert decompose("pearson").strategy == DIRECT
     mse = decompose("transposed-retrieval-rank-MSE")
@@ -143,19 +175,26 @@ def test_cross_perturbation_decomposition_pairs_retrieval_with_the_same_direct_d
     assert decompose("retrieval-rank-cosine").distance == "cosine"
 
 
-def test_universe_contains_exactly_ten_dataset_wide_retrieval_protocols():
+def test_universe_contains_exactly_thirteen_dataset_wide_retrieval_protocols():
     protocols = {protocol.name: protocol for protocol in build_protocols()}
-    assert len(protocols) == 111
+    assert len(protocols) == 115
     retrieval = {name: protocol for name, protocol in protocols.items() if protocol.group == "atlas-retrieval"}
-    assert len(retrieval) == 10
+    assert len(retrieval) == 13
     assert all(protocol.scope == "dataset" and protocol.better == "lower" for protocol in retrieval.values())
     # Stacking every perturbation into one matrix requires one shared gene axis.
     assert all(not protocol.space.per_pert for protocol in retrieval.values())
     families = load_eligible_families().set_index("family_id")
     assert set(families.loc[list(retrieval), "cross_perturbation_group"]) == {"identity_matching"}
     assert set(families.drop(index=list(retrieval))["cross_perturbation_group"]) == {""}
-    exclusion = [name for name, p in retrieval.items() if p.metric.keywords["exclude_query_target"]]
-    assert exclusion == ["atlas-e1e926ba033b"]
+    exclusion = sorted(name for name, p in retrieval.items() if p.metric.keywords["exclude_query_target"])
+    assert exclusion == ["atlas-2715e9a4439c", "atlas-b94b1c70ad98", "atlas-d81fdc541750", "atlas-e1e926ba033b"]
+    # Panel exclusion maps the query target onto the panel; the full-axis family keeps the original path.
+    for name in exclusion:
+        keywords = retrieval[name].metric.keywords
+        if families.loc[name, "feature_set"] == "All":
+            assert "gene_space" not in keywords
+        else:
+            assert keywords["gene_space"].cache_key == retrieval[name].space.cache_key
 
 
 def test_union_panel_parameters_match_the_frozen_config():

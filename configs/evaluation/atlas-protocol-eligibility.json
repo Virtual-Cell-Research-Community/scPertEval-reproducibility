@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "atlas-protocol-eligibility",
   "atlas": {
-    "revision": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
+    "revision": "0b0fca9dc997fd531c686fedeb95aa66c68c4d24",
     "source_path": "data/protocols.csv",
     "minimum_independent_works": 2,
     "required_columns": [
@@ -144,6 +144,7 @@
         ],
         "metrics": [
           "average-precision",
+          "auprc",
           "deg-identification-auprc",
           "auroc",
           "topk-overlap",
@@ -157,6 +158,7 @@
           "spearman",
           "balanced-accuracy",
           "class-precision",
+          "deg-set-precision",
           "class-recall",
           "class-f1",
           "deg-set-intersection",

@@ -15,7 +15,7 @@ from .cross_perturbation import decompose
 from .retrieval import PerUnitDEGUnion, retrieval_rank
 
 DEFAULT_ELIGIBILITY = Path("configs/evaluation/atlas-protocol-eligibility.csv")
-N_ELIGIBLE_FAMILIES = 111
+N_ELIGIBLE_FAMILIES = 115
 """Expected size of the frozen executable family table."""
 RETRIEVAL_HVG_K = 4000
 RETRIEVAL_UNION_DEGS = PerUnitDEGUnion(padj=0.05, top_k=25, rank_by="absolute_effect", reference="control")
@@ -37,6 +37,15 @@ POPULATION_METRICS = {
     "mmd-rbf": metrics.unbiased_mmd_median,
     "sinkhorn-divergence": metrics.sinkhorn_w2,
 }
+# Atlas DEG ranking basis -> scPertEval ``rank_by``. An unspecified ("") or unknown ("other") basis
+# takes the canonical ranking (``canonical_parameters.deg_rank_by`` in the eligibility config).
+DEG_RANK_BY = {
+    "significance": "significance",
+    "effect": "absolute_effect",
+    "": "absolute_effect",
+    "other": "absolute_effect",
+}
+
 TARGET_POLICIES = {
     "no_target_operation",
     "force_include_target",
@@ -44,10 +53,12 @@ TARGET_POLICIES = {
 }
 
 DE_METRICS = {
+    "auprc": metrics.de_auprc,
     "average-precision": metrics.de_auprc,
     "auroc": metrics.de_auroc,
     "class-precision": metrics.de_precision,
     "deg-identification-auprc": metrics.de_auprc,
+    "deg-set-precision": metrics.de_precision,
     "deg-set-intersection": metrics.de_recall,
     "direction-concordance": metrics.de_direction_concordance,
     "f1": metrics.de_f1,
@@ -91,7 +102,7 @@ def gene_space(row: pd.Series) -> SubsetSpace:
     if feature_set not in {"all", "deg", "hvg", "heg"}:
         raise ValueError(f"{row['family_id']}: unsupported feature set {row['feature_set']!r}")
     rank = str(row["feature_ranking_basis"])
-    rank_by = {"significance": "significance", "effect": "absolute_effect", "": "absolute_effect"}[rank]
+    rank_by = DEG_RANK_BY[rank]
     top_k = _canonical_k(row)
     if feature_set == "all":
         base = spaces.full()
@@ -125,7 +136,7 @@ def _de_metric(row: pd.Series):
     family = str(row["metric_family"])
     top_k = _canonical_k(row)
     rank = str(row["feature_ranking_basis"])
-    rank_by = {"significance": "significance", "effect": "absolute_effect", "": "absolute_effect"}[rank]
+    rank_by = DEG_RANK_BY[rank]
     if family in {"set-overlap-at-n", "topk-overlap"}:
         return partial(metrics.de_overlap, k=top_k or 50, rank_by=rank_by)
     metric = DE_METRICS.get(family)
@@ -172,8 +183,6 @@ def retrieval_space(row: pd.Series) -> tuple[SubsetSpace, bool]:
     if operation == "force_include_target":
         return base | spaces.perturbed_genes(), False
     if operation == "exclude_own_target":
-        if feature_set != "all":
-            raise ValueError(f"{family_id}: own-target exclusion is implemented on the full gene axis only")
         return base, True
     raise ValueError(f"{family_id}: unsupported target operation {operation!r}")
 
@@ -181,6 +190,10 @@ def retrieval_space(row: pd.Series) -> tuple[SubsetSpace, bool]:
 def _retrieval_protocol(row: pd.Series) -> Protocol:
     spec = decompose(str(row["metric_family"]))
     space, exclude_query_target = retrieval_space(row)
+    options: dict[str, object] = {}
+    if exclude_query_target and str(row["feature_set"]).lower() != "all":
+        # The metric must map each query's target from the full gene axis onto the panel.
+        options["gene_space"] = space
     return Protocol(
         str(row["family_id"]),
         partial(
@@ -188,6 +201,7 @@ def _retrieval_protocol(row: pd.Series) -> Protocol:
             distance=spec.distance,
             transpose=spec.transpose,
             exclude_query_target=exclude_query_target,
+            **options,
         ),
         representation="centroid",
         scope="dataset",

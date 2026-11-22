@@ -2,7 +2,7 @@
 
 scPertEval's :func:`~scperteval.protocols.metrics.rank_retrieval` orders candidates by squared
 Euclidean distance only. The Atlas retrieval families additionally use L1 (MAE) and cosine
-distances, and one family removes the query perturbation's own target gene before computing
+distances, and some families remove the query perturbation's own target gene before computing
 distances. :func:`retrieval_rank` reproduces ``rank_retrieval`` exactly — distance-matrix
 orientation, tie-breaking noise, normalization — and only generalizes the distance and the
 query-specific gene mask, so the scPertEval pin does not change.
@@ -83,6 +83,7 @@ def retrieval_rank(
     distance: str = "squared_euclidean",
     transpose: bool = False,
     exclude_query_target: bool = False,
+    gene_space: SubsetSpace | None = None,
 ) -> list[MetricOutcome]:
     """Cross-perturbation retrieval rank with a configurable distance; lower is better.
 
@@ -95,6 +96,8 @@ def retrieval_rank(
     ``exclude_query_target`` removes the query perturbation's own target gene(s) from every distance
     that query computes (the Virtual Cell Challenge PDS convention). A query whose target is not
     measured is undefined (``target_gene_not_measured``) but remains a candidate for other queries.
+    Centroids lie on the full gene axis unless ``gene_space`` names the dataset-wide panel they were
+    sliced to; a measured target outside that panel has nothing to remove, so its query stays defined.
     With cosine distance, an observed profile with zero norm is undefined (``constant_truth``).
     """
     G = np.vstack(gt).astype(np.float64, copy=False)
@@ -110,14 +113,24 @@ def retrieval_rank(
         perturbations = list(ctx.perturbations)
         if len(perturbations) != n:
             raise ValueError("query-target exclusion needs one centroid per prepared perturbation")
-        if G.shape[1] != len(ctx.ds.var_names):
-            raise ValueError("query-target exclusion requires centroids on the full gene axis")
+        n_full = len(ctx.ds.var_names)
+        if gene_space is None:
+            panel = np.arange(n_full)
+        else:
+            if gene_space.per_pert:
+                raise ValueError("query-target exclusion needs a dataset-wide gene panel")
+            panel = np.arange(n_full)[gene_space.select(ctx, None)]
+        if G.shape[1] != panel.size:
+            raise ValueError(f"centroids have {G.shape[1]} genes but the declared gene panel has {panel.size}")
+        position = np.full(n_full, -1, dtype=int)
+        position[panel] = np.arange(panel.size)
         excluded = []
         for index, perturbation in enumerate(perturbations):
             genes = np.asarray(ctx.ds.target_gene_indices(perturbation), dtype=int)
             if genes.size == 0:
                 undefined[index] = "target_gene_not_measured"
-            excluded.append(genes)
+            on_panel = position[genes]
+            excluded.append(on_panel[on_panel >= 0])
         D = _query_masked_distances(P, G, excluded, distance, transpose=transpose)
     else:
         D = pairwise_distances(P, G, distance)

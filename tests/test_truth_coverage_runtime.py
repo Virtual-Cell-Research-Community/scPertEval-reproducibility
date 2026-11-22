@@ -63,8 +63,8 @@ def test_task_protocols_follow_the_task_manifest():
     from analyses.ranking_sensitivity.truth_coverage_runtime import task_protocols
 
     counts = {
-        "essential_perturbation_generalization": (111, 10),
-        "genetic_context_transfer": (111, 10),
+        "essential_perturbation_generalization": (115, 13),
+        "genetic_context_transfer": (115, 13),
         "chemical_context_transfer": (104, 7),
     }
     for task, (total, retrieval) in counts.items():
