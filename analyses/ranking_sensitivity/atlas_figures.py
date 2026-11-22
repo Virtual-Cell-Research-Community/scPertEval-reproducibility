@@ -17,8 +17,6 @@ from plotnine import (
     aes,
     coord_flip,
     element_blank,
-    element_line,
-    element_rect,
     element_text,
     geom_col,
     geom_point,
@@ -41,39 +39,20 @@ from plotnine import (
     scale_y_continuous,
     scale_y_discrete,
     theme,
-    theme_minimal,
 )
 
-TASK_ORDER = [
-    "essential_perturbation_generalization",
-    "genetic_context_transfer",
-    "chemical_context_transfer",
-]
-TASK_LABELS = {
-    "essential_perturbation_generalization": "Perturbation\ngeneralization",
-    "genetic_context_transfer": "Genetic context\ntransfer",
-    "chemical_context_transfer": "Chemical context\ntransfer",
-}
+from analyses.figure_style import BENCHMARK_TASK_COLORS, DARK, LIGHT, TEXT_WIDTH_IN, paper_theme
+from analyses.vocabulary import BENCHMARK_TASKS, RANKING_FACTORS, axis_label
+
+TASK_ORDER = list(BENCHMARK_TASKS)
+TASK_LABELS = {task: "\n".join(label.rsplit(" ", 1)) for task, label in BENCHMARK_TASKS.items()}
 SHORT_TASK_LABELS = {
     "essential_perturbation_generalization": "Perturbation",
     "genetic_context_transfer": "Genetic",
     "chemical_context_transfer": "Chemical",
 }
-TASK_COLORS = {
-    "essential_perturbation_generalization": "#4EA8DE",
-    "genetic_context_transfer": "#E69F00",
-    "chemical_context_transfer": "#00B894",
-}
-FACTOR_LABELS = {
-    "evaluation_family": "Evaluation family",
-    "score_function": "Score function",
-    "expression_space": "Expression space",
-    "feature_panel": "Gene selection",
-    "centering": "Centering and reference",
-    "target_policy": "Target-gene policy",
-    "weighting": "Gene weighting",
-    "aggregation": "Perturbation aggregation",
-}
+TASK_COLORS = BENCHMARK_TASK_COLORS
+FACTOR_LABELS = {factor: axis_label(factor) for factor in RANKING_FACTORS}
 MIN_FACTOR_CONTRASTS = 10
 BASELINES = {"no-change", "fold-mean", "linear"}
 MODEL_LABELS = {
@@ -129,18 +108,6 @@ LEVEL_LABELS = {
     "DEG/significance · k=50": "Top-50 DE genes",
     "HVG · k=2000": "2,000 HVGs",
 }
-LIGHT = {
-    "background": "#FFFFFF",
-    "foreground": "#171717",
-    "grid": "#D7DBE0",
-    "muted": "#68707D",
-}
-DARK = {
-    "background": "#0E1117",
-    "foreground": "#F3F4F6",
-    "grid": "#343A46",
-    "muted": "#AAB1BC",
-}
 HEATMAP_COLORS = ["#10002B", "#3C096C", "#9D4EDD", "#FF6D5A", "#FFF3B0"]
 
 
@@ -165,26 +132,8 @@ def _colors(dark: bool) -> dict[str, str]:
     return DARK if dark else LIGHT
 
 
-def _plot_theme(dark: bool, *, base_size: float = 8) -> Any:
-    colors = _colors(dark)
-    return theme_minimal(base_family="DejaVu Sans", base_size=base_size) + theme(
-        text=element_text(color=colors["foreground"]),
-        axis_text=element_text(color=colors["foreground"], size=base_size - 0.5),
-        axis_title=element_text(color=colors["foreground"], size=base_size),
-        axis_ticks=element_blank(),
-        panel_grid_major=element_line(color=colors["grid"], size=0.35),
-        panel_grid_minor=element_blank(),
-        panel_background=element_rect(fill=colors["background"], color=colors["background"]),
-        plot_background=element_rect(fill=colors["background"], color=colors["background"]),
-        plot_tag=element_text(size=10, weight="bold", color=colors["foreground"]),
-        plot_tag_location="panel",
-        plot_tag_position=(0.01, 0.99),
-        legend_background=element_rect(fill=colors["background"], color=colors["background"]),
-        legend_key=element_rect(fill=colors["background"], color=colors["background"]),
-        legend_text=element_text(color=colors["foreground"], size=6.5),
-        legend_title=element_text(color=colors["foreground"], size=7),
-        svg_usefonts=True,
-    )
+def _plot_theme(dark: bool, *, base_size: float = 7) -> Any:
+    return paper_theme(dark, base_size=base_size)
 
 
 def _task_frame(frame: pd.DataFrame) -> pd.DataFrame:
@@ -198,7 +147,9 @@ def _disagreement_plot(summary: pd.DataFrame, *, dark: bool, tag: str | None = N
     rows = _task_frame(summary.set_index("task").reindex(TASK_ORDER).reset_index())
     rows["task_label"] = pd.Categorical(rows["task_label"], [TASK_LABELS[task] for task in TASK_ORDER[::-1]])
     rows["annotation"] = rows.apply(
-        lambda row: f"{row.winner_disagreement_rate:.1%}\n{int(row.n_winner_disagreements):,}/{int(row.n_protocol_pairs):,}",
+        lambda row: (
+            f"{row.winner_disagreement_rate:.1%}\n{int(row.n_winner_disagreements):,}/{int(row.n_protocol_pairs):,}"
+        ),
         axis=1,
     )
     maximum = float(rows["winner_disagreement_rate"].max())
@@ -288,9 +239,11 @@ def _factor_data(factors: pd.DataFrame) -> pd.DataFrame:
         rows["task_label"], [SHORT_TASK_LABELS[task] for task in TASK_ORDER], ordered=True
     )
     rows["annotation"] = rows.apply(
-        lambda row: ""
-        if pd.isna(row.winner_change_rate)
-        else f"{row.winner_change_rate:.1%}\n{int(row.n_winner_changes)}/{int(row.n_matched_contrasts)}",
+        lambda row: (
+            ""
+            if pd.isna(row.winner_change_rate)
+            else f"{row.winner_change_rate:.1%}\n{int(row.n_winner_changes)}/{int(row.n_matched_contrasts)}"
+        ),
         axis=1,
     )
     return rows
@@ -351,7 +304,9 @@ def _contrast_data(contrasts: pd.DataFrame) -> pd.DataFrame:
         lambda row: f"{row.winner_change_rate:.0%}  ({int(row.n_winner_changes)}/{int(row.n_backgrounds)})",
         axis=1,
     )
-    rows["annotation_x"] = rows["winner_change_rate"].map(lambda value: value - 0.025 if value > 0.65 else value + 0.025)
+    rows["annotation_x"] = rows["winner_change_rate"].map(
+        lambda value: value - 0.025 if value > 0.65 else value + 0.025
+    )
     rows["annotation_ha"] = rows["winner_change_rate"].map(lambda value: "right" if value > 0.65 else "left")
     return rows
 
@@ -398,7 +353,7 @@ def global_plot(source: Path, *, dark: bool) -> Any:
     contrasts = _read(source, "concrete-factor-contrasts.csv")
     top = _disagreement_plot(disagreement, dark=dark, tag="a") | _winner_share_plot(shares, dark=dark, tag="b")
     bottom = _factor_plot(factors, dark=dark, tag="c") | _contrast_plot(contrasts, dark=dark, tag="d")
-    return (top / bottom) + theme(figure_size=(7.2, 8.8), dpi=300)
+    return (top / bottom) + theme(figure_size=(TEXT_WIDTH_IN, 8.0), dpi=300)
 
 
 def _spread_labels(values: list[float], *, minimum: float, maximum: float, gap: float = 0.48) -> list[float]:
@@ -491,11 +446,11 @@ def bump_plot(source: Path, *, dark: bool) -> Any:
     if not plots:
         raise ValueError("bump-plot source contains no selected examples")
     if len(plots) == 1:
-        return plots[0] + theme(figure_size=(7.2, 3.6), dpi=300)
+        return plots[0] + theme(figure_size=(TEXT_WIDTH_IN, 3.3), dpi=300)
     if len(plots) == 2:
-        return (plots[0] | plots[1]) + theme(figure_size=(7.2, 3.6), dpi=300)
+        return (plots[0] | plots[1]) + theme(figure_size=(TEXT_WIDTH_IN, 3.3), dpi=300)
     composition = (plots[0] | plots[1]) / (plots[2] | plots[3])
-    return composition + theme(figure_size=(7.2, 7.0), dpi=300)
+    return composition + theme(figure_size=(TEXT_WIDTH_IN, 6.4), dpi=300)
 
 
 def _save(plot: Any, output: Path, stem: str, mode: str) -> None:
