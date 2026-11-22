@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "id": "ranking-sensitivity-atlas",
-  "status": "frozen-with-post-hoc-scope-extension",
+  "status": "frozen-with-post-hoc-scope-extension-and-atlas-update",
   "evaluation_engine": {
     "package": "scperteval",
     "revision": "774e6001b09f889905c353a8fd4022a36482eb80"
@@ -9,15 +9,15 @@
   "protocol_universe": {
     "eligibility_config": "configs/evaluation/atlas-protocol-eligibility.json",
     "eligible_families": "configs/evaluation/atlas-protocol-eligibility.csv",
-    "eligible_families_sha256": "020a70e56365ac22dd93f3cd52aa9c7650fef8e5e86d0f98289173ee96d7b92f",
+    "eligible_families_sha256": "fdf58408fbffd182cea8e11583ce6337324eb2a39bc3a2f03df3dfbe89cccd97",
     "task_manifest": "configs/evaluation/atlas-task-protocol-manifest.csv",
-    "task_manifest_sha256": "88b1e1bedb93103d1197da14bd8b6aed536acfd6a625c7a7262d12c3392d6564",
-    "n_families": 111,
+    "task_manifest_sha256": "79c0779957cb1a65a08571f53c005eccbaab62da9236d2f1da637fc16f522056",
+    "n_families": 115,
     "vote_weighting": "equal",
     "literature_frequency_used_only_for_eligibility": true,
     "n_protocols_by_task": {
-      "essential_perturbation_generalization": 111,
-      "genetic_context_transfer": 111,
+      "essential_perturbation_generalization": 115,
+      "genetic_context_transfer": 115,
       "chemical_context_transfer": 104
     }
   },
@@ -60,7 +60,7 @@
     "same_evaluation_units_for_both_protocols": true,
     "candidate_minimum_common_fraction": 0.75,
     "candidate_is_frozen": true,
-    "freeze_after": "The 75% rule was frozen on 2026-11-21, before model ranks were inspected, and is unchanged. The truth-only coverage of the 10 retrieval-rank families was computed after model ranks over the prespecified universe had been inspected.",
+    "freeze_after": "The 75% rule was frozen on 2026-11-21, before model ranks were inspected, and is unchanged. Truth-only coverage of the current universe (Atlas 0b0fca9, scPertEval 774e600) was recomputed after model ranks over earlier universes had been inspected.",
     "allowed_undefined_reasons": [
       "constant_truth",
       "no_ground_truth_positives",
@@ -175,24 +175,31 @@
         "robustness"
       ],
       "documentation": "docs/ranking-sensitivity-atlas-scope-change.md"
+    },
+    "atlas_update": {
+      "decided_on": "2026-11-22",
+      "post_hoc": true,
+      "change": "Re-derived the protocol universe from Atlas 0b0fca9 (previously 0be116b) and moved scoring to scPertEval 774e600 (previously 58ccc91); every protocol of every bundle was rescored.",
+      "previous_universe": {
+        "atlas_revision": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
+        "n_families": 111,
+        "repository_commit": "33a48f3"
+      },
+      "rules_unchanged": "eligibility rules, scope rules and every analysis rule; only Atlas curation and metric labels changed, plus two label aliases (auprc, deg-set-precision), the canonical ranking for an unknown DEG ranking basis, and own-target exclusion on HVG retrieval panels",
+      "documentation": "docs/ranking-sensitivity-atlas-scope-change.md"
     }
   },
   "scoring": {
     "details_roots": [
       {
-        "path": "results/ranking-sensitivity-atlas-v1/details",
-        "protocols": "the 101 prespecified families",
-        "repository_commit": "aadbe9479076c9303301f721994e83448e09a948"
-      },
-      {
-        "path": "results/ranking-sensitivity-atlas-v2/details",
-        "protocols": "the 10 retrieval-rank families",
-        "repository_commit": "caee425",
+        "path": "results/ranking-sensitivity-atlas-0b0fca9-scperteval-774e600/details",
+        "protocols": "all 115 families",
         "execution_host": "beauty"
       }
     ],
-    "note": "The SDS directory names are historical; the analysis merges both roots into one 111-protocol table.",
-    "bundle_match": "both roots' completion records of one model/fold/seed must bind the same prediction checksum"
+    "cellflow_runs_root": "pending: development-pool CellFlow runs (train plus validation)",
+    "note": "One fresh scoring pass at the pinned scPertEval revision; no scores are reused from earlier universes.",
+    "bundle_match": "one completion record per model/fold/seed, bound to its prediction checksum"
   },
   "factor_sensitivity": {
     "cross_perturbation": "direct comparison versus retrieval rank with the same distance (squared error, MAE or cosine) and otherwise identical representation, space, centering, feature panel, target policy and weighting; predicted-query and observed-query retrieval are distinct levels",
