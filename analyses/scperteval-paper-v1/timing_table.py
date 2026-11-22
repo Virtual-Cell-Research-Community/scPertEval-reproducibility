@@ -6,6 +6,7 @@ dataset plus a per-row Total and a per-dataset TOTAL row.
 
     python timing_table.py
 """
+
 from __future__ import annotations
 
 import glob
@@ -47,13 +48,15 @@ def collect() -> dict:
 
 def render(tim: dict, path: Path) -> None:
     headers = DESC + [lbl for _, lbl in DATASETS] + ["TOTAL (s)"]
-    cells, cell_vals = [], []   # cell_vals: numeric seconds parallel to cells (NaN where "-")
+    cells, cell_vals = [], []  # cell_vals: numeric seconds parallel to cells (NaN where "-")
     for proto, *desc in ROWS:
         secs = [tim.get(ds, {}).get(proto, float("nan")) for ds, _ in DATASETS]
         tot = np.nansum(secs) if np.any(np.isfinite(secs)) else float("nan")
-        cells.append(list(desc)
-                     + ["-" if not np.isfinite(s) else f"{s:.1f}" for s in secs]
-                     + ["-" if not np.isfinite(tot) else f"{tot:.1f}"])
+        cells.append(
+            list(desc)
+            + ["-" if not np.isfinite(s) else f"{s:.1f}" for s in secs]
+            + ["-" if not np.isfinite(tot) else f"{tot:.1f}"]
+        )
         cell_vals.append([float("nan")] * len(DESC) + list(secs) + [tot])
     # per-dataset TOTAL row
     totals = ["TOTAL (s)"] + [""] * (len(DESC) - 1)
@@ -71,7 +74,7 @@ def render(tim: dict, path: Path) -> None:
     cell_vals = np.array(cell_vals, dtype=float)
 
     ncol, nrow = len(headers), len(cells)
-    d0, d1 = len(DESC), len(DESC) + len(DATASETS)   # per-dataset cols [d0, d1)
+    d0, d1 = len(DESC), len(DESC) + len(DATASETS)  # per-dataset cols [d0, d1)
     total_col = ncol - 1
 
     # two separate grayscale (log) scales: per-cell times, and the much-larger TOTAL margins
@@ -81,10 +84,10 @@ def render(tim: dict, path: Path) -> None:
         return LogNorm(vmin=v.min(), vmax=v.max())
 
     cell_mask = np.zeros_like(cell_vals, dtype=bool)
-    cell_mask[: nrow - 1, d0:d1] = True             # metric rows × dataset cols
+    cell_mask[: nrow - 1, d0:d1] = True  # metric rows × dataset cols
     total_mask = np.zeros_like(cell_vals, dtype=bool)
-    total_mask[:, total_col] = True                 # right TOTAL column
-    total_mask[nrow - 1, d0:total_col + 1] = True    # bottom TOTAL row
+    total_mask[:, total_col] = True  # right TOTAL column
+    total_mask[nrow - 1, d0 : total_col + 1] = True  # bottom TOTAL row
     cell_norm, total_norm = _lognorm(cell_mask), _lognorm(total_mask)
     cmap = plt.cm.Greys
 
@@ -93,7 +96,7 @@ def render(tim: dict, path: Path) -> None:
     tbl = ax.table(cellText=cells, colLabels=headers, cellLoc="center", loc="center")
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(8)
-    tbl.scale(1, 2.0)   # tall rows for the two-line headers and Negative Control cells
+    tbl.scale(1, 2.0)  # tall rows for the two-line headers and Negative Control cells
     # Fit descriptor columns to text; give the numeric columns (datasets + Total) one uniform width.
     tbl.auto_set_column_width(list(range(ncol)))
     fig.canvas.draw()
@@ -103,7 +106,7 @@ def render(tim: dict, path: Path) -> None:
     for j in range(len(DESC), ncol):
         for i in range(nrow + 1):
             celld[(i, j)].set_width(num_w)
-    for j in range(ncol):                            # bold gray header row
+    for j in range(ncol):  # bold gray header row
         c = tbl[0, j]
         c.set_text_props(weight="bold")
         c.set_facecolor("#e8e8e8")
@@ -129,19 +132,27 @@ def render(tim: dict, path: Path) -> None:
         shade(r + 1, total_col, cell_vals[r, total_col], total_norm, bold=True)
     for j in range(d0, total_col + 1):
         shade(nrow, j, cell_vals[nrow - 1, j], total_norm, bold=True)
-    for j in range(d0):                              # bottom TOTAL row descriptor cells
+    for j in range(d0):  # bottom TOTAL row descriptor cells
         c = tbl[nrow, j]
         c.set_text_props(weight="bold")
         c.set_facecolor("#f3f3f3")
 
-    fig.canvas.draw()   # title placed just above the table's actual top (the table overflows the axes)
+    fig.canvas.draw()  # title placed just above the table's actual top (the table overflows the axes)
     bb = tbl.get_window_extent(fig.canvas.get_renderer()).transformed(fig.transFigure.inverted())
-    fig.text((bb.x0 + bb.x1) / 2, bb.y1 + 0.012, "Computation Time (Seconds)",
-             ha="center", va="bottom", fontsize=15, fontweight="bold")
+    fig.text(
+        (bb.x0 + bb.x1) / 2,
+        bb.y1 + 0.012,
+        "Computation Time (Seconds)",
+        ha="center",
+        va="bottom",
+        fontsize=15,
+        fontweight="bold",
+    )
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     pd.DataFrame(cells, columns=[h.replace("\n", " ") for h in headers]).to_csv(
-        str(path).replace(".png", ".csv"), index=False)
+        str(path).replace(".png", ".csv"), index=False
+    )
 
 
 def main() -> None:

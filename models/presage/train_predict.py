@@ -192,7 +192,10 @@ def main() -> None:
     )
     parser.add_argument("--fold", type=int, default=0, help="which fold_<i>_presage.json to train/predict on")
     parser.add_argument(
-        "--epochs", type=int, default=1000, help="training.max_epochs (default: 1000, full-scale; early stopping usually ends training well before this)"
+        "--epochs",
+        type=int,
+        default=1000,
+        help="training.max_epochs (default: 1000, full-scale; early stopping usually ends training well before this)",
     )
     parser.add_argument(
         "--batch-size",
@@ -225,7 +228,9 @@ def main() -> None:
     out_path = run.prediction_path
 
     if not (CACHE_DIR / "cache" / "pathway_embeddings").exists():
-        raise FileNotFoundError(f"{CACHE_DIR} has no gene-embedding cache — run `pixi run -e presage fetch-cache` first")
+        raise FileNotFoundError(
+            f"{CACHE_DIR} has no gene-embedding cache — run `pixi run -e presage fetch-cache` first"
+        )
 
     # presage.py/train.py hardcode a few CWD-relative paths of their own (the Node2Vec
     # embeddings it computes from *our* training data cache to "./cache/pathway_embeddings/",

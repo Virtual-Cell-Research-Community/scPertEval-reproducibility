@@ -211,8 +211,7 @@ def main() -> None:
     )
     metrics_path = handle.directory / "checkpoints" / "training-history.json"
     metrics_path.write_text(
-        json.dumps({key: list(map(float, values)) for key, values in trainer.logs.items()}, indent=2)
-        + "\n"
+        json.dumps({key: list(map(float, values)) for key, values in trainer.logs.items()}, indent=2) + "\n"
     )
 
     torch.manual_seed(args.seed)

@@ -361,9 +361,7 @@ def write_summary(
     populations = Counter(str(record["population"]) for record in eligible_records)
     target_operations = Counter(str(record["target_operation"]) for record in eligible_records)
     excluded = Counter(
-        str(record["exclusion_reason"])
-        for record in all_records
-        if record["scope_decision"] == "excluded"
+        str(record["exclusion_reason"]) for record in all_records if record["scope_decision"] == "excluded"
     )
 
     outputs = config.get("outputs", V1_OUTPUTS)
@@ -372,9 +370,7 @@ def write_summary(
     groups = config["scope"].get("cross_perturbation_groups")
     if groups:
         included_groups = ", ".join(f"`{group}`" for group in groups["included"])
-        excluded_groups = "\n".join(
-            f"- `{group}` → `{reason}`" for group, reason in sorted(groups["excluded"].items())
-        )
+        excluded_groups = "\n".join(f"- `{group}` → `{reason}`" for group, reason in sorted(groups["excluded"].items()))
         extra_sets = "; ".join(
             f"`{group}`: {', '.join(f'`{value}`' for value in values)}"
             for group, values in sorted(groups.get("additional_feature_sets", {}).items())
@@ -407,10 +403,10 @@ a group-specific reason:
     text = f"""# Atlas protocol eligibility audit {version}
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
-commit `{config['atlas']['revision']}` and `data/protocols.csv` SHA-256 `{source_sha256}`.
+commit `{config["atlas"]["revision"]}` and `data/protocols.csv` SHA-256 `{source_sha256}`.
 
 Eligibility means that an operationally distinct family occurs in at least
-{config['atlas']['minimum_independent_works']} independent works. Reporting aggregation and DE caller are
+{config["atlas"]["minimum_independent_works"]} independent works. Reporting aggregation and DE caller are
 audited separately from atomic protocol identity. `ordinary`, `unspecified`, and `not_applicable`
 target policies all execute as `no_target_operation`; their raw Atlas values remain in the CSV.
 
@@ -481,10 +477,7 @@ def build_audit(
     families = [family for family in group_families(rows, config) if len(family.work_ids) >= threshold]
     all_records = [family_record(family, config) for family in families]
     eligible_records = [record for record in all_records if record["scope_decision"] == "included"]
-    included_family_ids = {
-        str(record["family_id"])
-        for record in eligible_records
-    }
+    included_family_ids = {str(record["family_id"]) for record in eligible_records}
     in_scope_protocol_ids = {
         protocol_id
         for family in families

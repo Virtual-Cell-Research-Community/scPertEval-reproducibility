@@ -45,13 +45,7 @@ def run_directory(
     seed: int,
 ) -> Path:
     """Return the one canonical directory for a model × fold × seed run."""
-    return (
-        root
-        / _safe_component(experiment)
-        / _safe_component(model)
-        / _safe_component(fold)
-        / f"seed-{int(seed)}"
-    )
+    return root / _safe_component(experiment) / _safe_component(model) / _safe_component(fold) / f"seed-{int(seed)}"
 
 
 def repository_revision(cwd: Path | None = None) -> str:
@@ -148,10 +142,7 @@ def begin_run(
         "repository_revision": repository_revision(repo_root),
         "command": reproducible_command(command),
         "configuration": configuration,
-        "inputs": {
-            name: {"path": str(path), "sha256": file_checksum(path)}
-            for name, path in sorted(inputs.items())
-        },
+        "inputs": {name: {"path": str(path), "sha256": file_checksum(path)} for name, path in sorted(inputs.items())},
     }
     content = _json_bytes(resolved)
     resolved_sha256 = _sha256_bytes(content)

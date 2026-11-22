@@ -177,9 +177,7 @@ def fast_create_dataset_file(self):
         if pert_category != "ctrl":
             pert_idx = self.get_pert_idx(pert_category, adata_)
             pert_de_category = adata_.obs["condition_name"][0]
-            de_idx = np.where(
-                adata_.var_names.isin(np.array(de_genes[pert_de_category][:num_de_genes]))
-            )[0]
+            de_idx = np.where(adata_.var_names.isin(np.array(de_genes[pert_de_category][:num_de_genes])))[0]
             ctrl_idx = np.random.randint(0, n_ctrl, size=n)
             x_dense = ctrl_dense[ctrl_idx]
             y_dense = target_dense

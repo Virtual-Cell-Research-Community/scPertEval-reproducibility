@@ -97,19 +97,12 @@ def build_prediction_adata(
     rows = []
     names = []
     for condition in sorted(predictions):
-        expected_size = (
-            population_sizes[condition]
-            if population_sizes is not None
-            else population_size
-        )
+        expected_size = population_sizes[condition] if population_sizes is not None else population_size
         if expected_size is None:
             raise ValueError("population_sizes are required for match-observed predictions")
         matrix = np.asarray(predictions[condition])[:expected_size]
         if matrix.shape != (expected_size, len(var)):
-            raise ValueError(
-                f"condition {condition!r} has shape {matrix.shape}; "
-                f"expected {(expected_size, len(var))}"
-            )
+            raise ValueError(f"condition {condition!r} has shape {matrix.shape}; expected {(expected_size, len(var))}")
         if not np.isfinite(matrix).all() or np.any(matrix < 0):
             raise ValueError("scDisInFact predictions must be finite and non-negative")
         if np.any(matrix.sum(axis=1) <= 0):

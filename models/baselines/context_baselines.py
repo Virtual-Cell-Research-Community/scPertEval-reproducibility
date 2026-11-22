@@ -94,8 +94,8 @@ def predict_context_baselines(
     linear_ridge: float = 1.0,
 ) -> dict[str, ad.AnnData]:
     """Predict held-out profiles or populations without using held-out treated cells."""
-    fold_spec = split["folds"][fold] if isinstance(fold, int) else next(
-        item for item in split["folds"] if item["id"] == fold
+    fold_spec = (
+        split["folds"][fold] if isinstance(fold, int) else next(item for item in split["folds"] if item["id"] == fold)
     )
     test_context = str(fold_spec["test_context"])
     train_contexts = list(map(str, fold_spec["train_contexts"]))
@@ -223,8 +223,8 @@ def main() -> int:
 
     split = json.loads(args.split.read_text())
     fold: int | str = int(args.fold) if args.fold.isdigit() else args.fold
-    fold_spec = split["folds"][fold] if isinstance(fold, int) else next(
-        item for item in split["folds"] if item["id"] == fold
+    fold_spec = (
+        split["folds"][fold] if isinstance(fold, int) else next(item for item in split["folds"] if item["id"] == fold)
     )
     fold_id = str(fold_spec.get("id", fold))
     data_manifest = args.data_manifest or args.data.with_suffix(".manifest.json")

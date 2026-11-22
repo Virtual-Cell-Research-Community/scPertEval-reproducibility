@@ -87,9 +87,7 @@ def kfold_gene_splits(genes: list[str], n_folds: int = N_FOLDS, seed: int = SEED
         remainder = np.delete(shuffled, test_idx)
         n_val = round(len(remainder) * VAL_FRAC_OF_REMAINDER)
         val, train = remainder[:n_val], remainder[n_val:]
-        folds.append(
-            {"train": sorted(train.tolist()), "val": sorted(val.tolist()), "test": sorted(test.tolist())}
-        )
+        folds.append({"train": sorted(train.tolist()), "val": sorted(val.tolist()), "test": sorted(test.tolist())})
     return folds
 
 
@@ -180,7 +178,9 @@ def build_split_manifest(
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("raw_path", help="path to a prepared raw.h5ad (models/data/<dataset>/raw.h5ad)")
-    parser.add_argument("--n-folds", type=int, default=N_FOLDS, help=f"number of CV folds (default: {N_FOLDS}, Miller's own value)")
+    parser.add_argument(
+        "--n-folds", type=int, default=N_FOLDS, help=f"number of CV folds (default: {N_FOLDS}, Miller's own value)"
+    )
     parser.add_argument("--seed", type=int, default=SEED, help=f"random seed (default: {SEED})")
     parser.add_argument("--dataset-id", help="canonical dataset id (default: parent directory name)")
     parser.add_argument("--split-id", help="split id (default: <dataset-id>-unseen-perturbation-<n>-fold)")
@@ -231,7 +231,9 @@ def main() -> None:
         tabicl_split = to_tabicl_custom_split(fold)
         (fold_dir / f"fold_{i}_tabicl.json").write_text(json.dumps(tabicl_split, indent=2) + "\n")
 
-        print(f"  fold {i}: train={len(split_dict['train'])} val={len(split_dict['val'])} test={len(split_dict['test'])}")
+        print(
+            f"  fold {i}: train={len(split_dict['train'])} val={len(split_dict['val'])} test={len(split_dict['test'])}"
+        )
 
 
 if __name__ == "__main__":

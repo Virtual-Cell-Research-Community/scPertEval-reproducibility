@@ -219,14 +219,7 @@ def discover_jobs(
                             prediction_manifest=prediction_manifest,
                             profile_prediction=profile_prediction,
                             profile_prediction_manifest=profile_prediction_manifest,
-                            output=(
-                                results_root
-                                / "details"
-                                / track_id
-                                / model
-                                / fold_id
-                                / f"seed-{seed}.csv"
-                            ),
+                            output=(results_root / "details" / track_id / model / fold_id / f"seed-{seed}.csv"),
                         )
                     )
     return jobs
@@ -272,9 +265,7 @@ def aggregate(
     reuse_detail_scores: bool,
 ) -> None:
     missing = [
-        job.output
-        for job in jobs
-        if not (job.output.is_file() if reuse_detail_scores else _output_is_current(job))
+        job.output for job in jobs if not (job.output.is_file() if reuse_detail_scores else _output_is_current(job))
     ]
     if missing:
         raise RuntimeError(f"cannot aggregate with {len(missing)} missing or stale detail outputs")
@@ -356,7 +347,9 @@ def main() -> int:
                 job = futures[future]
                 path, rows, skipped = future.result()
                 state = "skipped" if skipped else "completed"
-                print(f"{state} {job.track}/{job.model}/{job.fold_id}/seed-{job.seed}: {rows} rows -> {path}", flush=True)
+                print(
+                    f"{state} {job.track}/{job.model}/{job.fold_id}/seed-{job.seed}: {rows} rows -> {path}", flush=True
+                )
 
     if args.aggregate or args.aggregate_only:
         aggregate(

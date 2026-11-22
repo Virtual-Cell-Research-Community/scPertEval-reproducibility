@@ -71,9 +71,7 @@ def test_current_protocol_data_config_uses_the_essential_screen():
 
     steps = build_steps(config)
     essential = next(
-        step
-        for step in steps
-        if step.id == "replogle-weissman-2022-k562-essential" and step.kind == "view"
+        step for step in steps if step.id == "replogle-weissman-2022-k562-essential" and step.kind == "view"
     )
 
     assert len(config["canonical_datasets"]) == 5

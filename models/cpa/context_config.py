@@ -43,9 +43,7 @@ def assign_cpa_splits(
     assignments = np.full(data.n_obs, "train", dtype=object)
     assignments[(contexts == test_context) & ~controls] = "test"
     assignments[
-        contexts.isin(train_contexts)
-        & labels.isin(set(map(str, split["validation_conditions"])))
-        & ~controls
+        contexts.isin(train_contexts) & labels.isin(set(map(str, split["validation_conditions"]))) & ~controls
     ] = "valid"
 
     result = data.copy()
@@ -106,8 +104,6 @@ def build_counterfactual_queries(
         query.obs["cpa_dose"] = 1.0
         query.obs["cpa_split"] = "test"
         query.obs["perturbation"] = f"{test_context}::{condition}"
-        query.obs_names = pd.Index(
-            [f"{test_context}::{condition}::prediction-{index}" for index in range(size)]
-        )
+        query.obs_names = pd.Index([f"{test_context}::{condition}::prediction-{index}" for index in range(size)])
         queries.append(query)
     return ad.concat(queries, join="inner", merge="same", index_unique=None)

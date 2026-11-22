@@ -10,15 +10,11 @@ from workflows.population_lift import lift_prediction_population
 
 
 @pytest.mark.parametrize("manifest_key", ["artifact", "output"])
-def test_truth_identity_accepts_both_prepared_data_manifest_schemas(
-    tmp_path, manifest_key: str
-) -> None:
+def test_truth_identity_accepts_both_prepared_data_manifest_schemas(tmp_path, manifest_key: str) -> None:
     truth = tmp_path / "raw.h5ad"
     truth.write_bytes(b"truth")
     checksum = "a" * 64
-    truth.with_suffix(".manifest.json").write_text(
-        f'{{"{manifest_key}": {{"sha256": "{checksum}"}}}}\n'
-    )
+    truth.with_suffix(".manifest.json").write_text(f'{{"{manifest_key}": {{"sha256": "{checksum}"}}}}\n')
 
     assert _truth_identity(truth) == f"sha256:{checksum}"
 

@@ -51,10 +51,7 @@ def prediction_only_evaluation(
     required = ("compute_or_load_presage_degs", "_build_presage_evaluator")
     missing = [name for name in required if not hasattr(upstream_module, name)]
     if missing:
-        raise RuntimeError(
-            "Pinned TabICLv2 implementation no longer exposes the expected "
-            f"evaluation hooks: {missing}"
-        )
+        raise RuntimeError(f"Pinned TabICLv2 implementation no longer exposes the expected evaluation hooks: {missing}")
 
     original_degs = upstream_module.compute_or_load_presage_degs
     original_evaluator = upstream_module._build_presage_evaluator

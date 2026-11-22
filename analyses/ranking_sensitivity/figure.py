@@ -188,8 +188,17 @@ def _slope_plot(ax: plt.Axes, rows: pd.DataFrame, comparison: pd.Series, panel: 
             zorder=2 if row.model in highlighted else 1,
         )
         if row.model in highlighted or row.model in BASELINES:
-            ax.text(-0.03, row.reference_rank, f"{row.model}  {row.reference_rank:g}", ha="right", va="center", fontsize=6.8)
-            ax.text(1.03, row.alternative_rank, f"{row.alternative_rank:g}  {row.model}", ha="left", va="center", fontsize=6.8)
+            ax.text(
+                -0.03, row.reference_rank, f"{row.model}  {row.reference_rank:g}", ha="right", va="center", fontsize=6.8
+            )
+            ax.text(
+                1.03,
+                row.alternative_rank,
+                f"{row.alternative_rank:g}  {row.model}",
+                ha="left",
+                va="center",
+                fontsize=6.8,
+            )
     ax.scatter(
         np.zeros(len(rows)),
         rows["reference_rank"],
@@ -230,8 +239,7 @@ def _selected_examples(
             raise ValueError(f"expected exactly one selected profile scenario for {dataset}")
         examples.append(selected.iloc[0])
     chemical_population = showcase[
-        (showcase["dataset"] == "srivatsan-trapnell-2020-sciplex3")
-        & (showcase["stratum"] == "population")
+        (showcase["dataset"] == "srivatsan-trapnell-2020-sciplex3") & (showcase["stratum"] == "population")
     ]
     if len(chemical_population) != 1:
         raise ValueError("expected exactly one selected chemical population scenario")
@@ -251,8 +259,7 @@ def main_figure(results: Path, output: Path) -> None:
     _summary_dots(figure.add_subplot(grid[0, :]), comparisons, bootstrap)
     for index, (comparison, panel) in enumerate(zip(examples, ["b", "c", "d", "e"], strict=True)):
         rows = rank_changes[
-            (rank_changes["dataset"] == comparison["dataset"])
-            & (rank_changes["scenario"] == comparison["scenario"])
+            (rank_changes["dataset"] == comparison["dataset"]) & (rank_changes["scenario"] == comparison["scenario"])
         ]
         _slope_plot(figure.add_subplot(grid[1 + index // 2, index % 2]), rows, comparison, panel)
     output.mkdir(parents=True, exist_ok=True)
@@ -305,8 +312,7 @@ def all_slopes(results: Path, output: Path) -> None:
     with PdfPages(output / "ranking-sensitivity-all-slopes.pdf") as pdf:
         for comparison in comparisons.itertuples(index=False):
             rows = rank_changes[
-                (rank_changes["dataset"] == comparison.dataset)
-                & (rank_changes["scenario"] == comparison.scenario)
+                (rank_changes["dataset"] == comparison.dataset) & (rank_changes["scenario"] == comparison.scenario)
             ]
             figure, ax = plt.subplots(figsize=(5.2, 4.2), constrained_layout=True)
             _slope_plot(ax, rows, pd.Series(comparison._asdict()), "")

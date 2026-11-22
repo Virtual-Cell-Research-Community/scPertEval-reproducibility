@@ -172,9 +172,7 @@ def test_genepert_adapter_uses_normalized_embeddings_and_development_means() -> 
 def test_esm2_generator_reproduces_longest_canonical_sequence_and_atomic_cache(tmp_path: Path) -> None:
     canonical = tmp_path / "canonical.tsv"
     canonical.write_text(
-        "ENSG1\tENST1\tEnsembl Canonical\n"
-        "ENSG2\tENST2\tEnsembl Canonical\n"
-        "ENSG3\tENST3\tnot canonical\n"
+        "ENSG1\tENST1\tEnsembl Canonical\nENSG2\tENST2\tEnsembl Canonical\nENSG3\tENST3\tnot canonical\n"
     )
     peptides = tmp_path / "peptides.fa"
     peptides.write_text(
@@ -377,9 +375,7 @@ def test_cell_cycle_reference_is_pinned() -> None:
 
 
 def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None:
-    genetic = json.loads(
-        (ROOT / "configs" / "experiments" / "replogle-nadig-four-context-50-cell.json").read_text()
-    )
+    genetic = json.loads((ROOT / "configs" / "experiments" / "replogle-nadig-four-context-50-cell.json").read_text())
     assert genetic["n_perturbations"] == len(genetic["perturbations"]) == 480
     assert genetic["perturbations"] == sorted(set(genetic["perturbations"]))
     assert genetic["n_test_populations"] == len(genetic["contexts"]) * genetic["n_perturbations"]
@@ -394,9 +390,7 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
     assert set(genetic["validation_conditions"]) <= set(genetic["perturbations"])
     assert all(len(expected_test_conditions(genetic, fold["id"], "population")) == 480 for fold in genetic["folds"])
 
-    chemical = json.loads(
-        (ROOT / "configs" / "experiments" / "sciplex3-nine-drug-context-transfer.json").read_text()
-    )
+    chemical = json.loads((ROOT / "configs" / "experiments" / "sciplex3-nine-drug-context-transfer.json").read_text())
     assert chemical["n_drugs"] == len(chemical["drugs"]) == 9
     assert chemical["n_point_conditions"] == len(chemical["drugs"]) * len(chemical["doses"]) == 36
     assert chemical["n_population_conditions"] == 33
@@ -419,10 +413,7 @@ def test_context_transfer_cohorts_are_frozen_and_internally_consistent() -> None
 def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     experiment = json.loads(
         (
-            ROOT
-            / "configs"
-            / "experiments"
-            / "replogle-weissman-2022-k562-gwps-perturbation-generalization.json"
+            ROOT / "configs" / "experiments" / "replogle-weissman-2022-k562-gwps-perturbation-generalization.json"
         ).read_text()
     )
     assert experiment["role"] == "retired-exploratory"
@@ -440,18 +431,14 @@ def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     assert experiment["perturbations"] == sorted(set(experiment["perturbations"]))
     assert experiment["eligibility"]["n_targets_shared"] == 6935
     assert experiment["development_pool_policy"]["test_targets_never_available_to_models"]
-    assert experiment["development_pool_policy"][
-        "fixed_budget_and_training_free_methods_may_use_train_plus_validation"
-    ]
+    assert experiment["development_pool_policy"]["fixed_budget_and_training_free_methods_may_use_train_plus_validation"]
     assert experiment["model_development_usage"]["tabicl"] == {
         "in_context_examples": "train-plus-validation",
         "selection": "none-equal-modality-fusion",
         "early_stopping": False,
         "gradient_training": False,
     }
-    assert experiment["model_development_usage"]["gears"]["selection"] == (
-        "best-validation-checkpoint"
-    )
+    assert experiment["model_development_usage"]["gears"]["selection"] == ("best-validation-checkpoint")
 
     folds = kfold_gene_splits(
         experiment["perturbations"],
@@ -460,15 +447,9 @@ def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     )
     payload = json.dumps(folds, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == experiment["split"]["folds_sha256"]
-    assert [len(fold["train"]) for fold in folds] == experiment["split"][
-        "training_targets_per_fold"
-    ]
-    assert [len(fold["val"]) for fold in folds] == experiment["split"][
-        "validation_targets_per_fold"
-    ]
-    assert [len(fold["test"]) for fold in folds] == experiment["split"][
-        "test_targets_per_fold"
-    ]
+    assert [len(fold["train"]) for fold in folds] == experiment["split"]["training_targets_per_fold"]
+    assert [len(fold["val"]) for fold in folds] == experiment["split"]["validation_targets_per_fold"]
+    assert [len(fold["test"]) for fold in folds] == experiment["split"]["test_targets_per_fold"]
 
     tabicl = to_tabicl_custom_split(folds[0])
     assert tabicl["val"] == []
@@ -477,12 +458,7 @@ def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
     assert set(tabicl["train"]).isdisjoint(tabicl["test"])
 
     validation = json.loads(
-        (
-            ROOT
-            / "configs"
-            / "experiments"
-            / "replogle-weissman-2022-k562-gwps-metadata-validation.json"
-        ).read_text()
+        (ROOT / "configs" / "experiments" / "replogle-weissman-2022-k562-gwps-metadata-validation.json").read_text()
     )
     assert validation["input_sha256"] == experiment["canonical_input"]["sha256"]
     assert validation["shape"] == [
@@ -490,22 +466,17 @@ def test_gwps_retired_experiment_is_frozen_and_reconstructable() -> None:
         experiment["canonical_input"]["n_vars"],
     ]
     assert validation["n_frozen_targets"] == experiment["n_perturbations"]
-    assert validation["n_targets_at_minimum"] == experiment["eligibility"][
-        "n_targets_at_least_50_cells"
-    ]
-    assert validation["n_measured_targets_at_minimum"] == experiment["eligibility"][
-        "n_targets_measured_at_least_50_cells"
-    ]
+    assert validation["n_targets_at_minimum"] == experiment["eligibility"]["n_targets_at_least_50_cells"]
+    assert (
+        validation["n_measured_targets_at_minimum"] == experiment["eligibility"]["n_targets_measured_at_least_50_cells"]
+    )
     assert validation["status"] == "valid"
 
 
 def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     experiment = json.loads(
         (
-            ROOT
-            / "configs"
-            / "experiments"
-            / "replogle-weissman-2022-k562-essential-perturbation-generalization.json"
+            ROOT / "configs" / "experiments" / "replogle-weissman-2022-k562-essential-perturbation-generalization.json"
         ).read_text()
     )
     assert experiment["role"] == "primary"
@@ -549,9 +520,7 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     folds = kfold_gene_splits(experiment["perturbations"], n_folds=5, seed=42)
     payload = json.dumps(folds, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(payload).hexdigest() == experiment["split"]["folds_sha256"]
-    assert [len(fold["test"]) for fold in folds] == experiment["split"][
-        "test_targets_per_fold"
-    ]
+    assert [len(fold["test"]) for fold in folds] == experiment["split"]["test_targets_per_fold"]
 
     audit_path = ROOT / experiment["coverage_audit"]["path"]
     audit = json.loads(audit_path.read_text())
@@ -567,9 +536,7 @@ def test_essential_primary_experiment_freezes_expanded_panel_cohort() -> None:
     assert file_checksum(validation_path) == experiment["metadata_validation"]["sha256"]
     assert validation["input_sha256"] == experiment["canonical_input"]["sha256"]
     assert validation["n_frozen_targets"] == experiment["n_perturbations"]
-    assert validation["n_frozen_targeted_cells"] == experiment["eligibility"][
-        "final_targeted_cells"
-    ]
+    assert validation["n_frozen_targeted_cells"] == experiment["eligibility"]["final_targeted_cells"]
     assert validation["all_frozen_targets_measured"]
     assert validation["status"] == "valid"
 
@@ -605,9 +572,7 @@ def test_feature_coverage_audit_intersects_every_required_reference(tmp_path: Pa
     pd.DataFrame({"0": ["A", "B", "C"]}).to_csv(txpert_path)
     esm2_canonical_path = tmp_path / "canonical.tsv"
     esm2_canonical_path.write_text(
-        "ENSGA\tENSTA\tEnsembl Canonical\n"
-        "ENSGB\tENSTB\tEnsembl Canonical\n"
-        "ENSGC\tENSTC\tEnsembl Canonical\n"
+        "ENSGA\tENSTA\tEnsembl Canonical\nENSGB\tENSTB\tEnsembl Canonical\nENSGC\tENSTC\tEnsembl Canonical\n"
     )
     esm2_fasta_path = tmp_path / "proteins.fa"
     esm2_fasta_path.write_text(
@@ -696,7 +661,9 @@ def test_sclambda_scalability_helpers_match_conditionwise_embedding_and_means() 
     np.testing.assert_allclose(by_condition["ctrl"], embeddings["ctrl"])
     np.testing.assert_allclose(by_condition["G1+ctrl"], embeddings["G1"])
     np.testing.assert_allclose(by_condition["G2+ctrl"], embeddings["G2"])
-    np.testing.assert_allclose(table[inverse], np.vstack([embeddings["ctrl"], embeddings["G1"], embeddings["G2"], embeddings["G1"]]))
+    np.testing.assert_allclose(
+        table[inverse], np.vstack([embeddings["ctrl"], embeddings["G1"], embeddings["G2"], embeddings["G1"]])
+    )
 
     expression = sp.csr_matrix(
         np.array(
@@ -725,12 +692,8 @@ def test_tabicl_initializes_with_frozen_validation_before_using_merged_pool(
 ) -> None:
     validation_split = tmp_path / "fold_presage.json"
     model_split = tmp_path / "fold_tabicl.json"
-    validation_split.write_text(
-        json.dumps({"train": ["G1", "control"], "val": ["G2"], "test": ["G3"]})
-    )
-    model_split.write_text(
-        json.dumps({"train": ["G1", "G2", "control"], "val": [], "test": ["G3"]})
-    )
+    validation_split.write_text(json.dumps({"train": ["G1", "control"], "val": ["G2"], "test": ["G3"]}))
+    model_split.write_text(json.dumps({"train": ["G1", "G2", "control"], "val": [], "test": ["G3"]}))
 
     class FakeDataModule:
         split_json_path = ""
@@ -1581,10 +1544,42 @@ def test_one_factor_rank_comparisons_and_paired_bootstrap_report_reversals() -> 
 def test_ranking_uses_average_ties_and_keeps_missing_scores_missing() -> None:
     summary = pd.DataFrame(
         [
-            {"model": "a", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 1.0},
-            {"model": "b", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 1.0},
-            {"model": "c", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": 0.0},
-            {"model": "missing", "dataset": "d", "split": "s", "variant": "v", "aggregation": "mean", "better": "higher", "score": np.nan},
+            {
+                "model": "a",
+                "dataset": "d",
+                "split": "s",
+                "variant": "v",
+                "aggregation": "mean",
+                "better": "higher",
+                "score": 1.0,
+            },
+            {
+                "model": "b",
+                "dataset": "d",
+                "split": "s",
+                "variant": "v",
+                "aggregation": "mean",
+                "better": "higher",
+                "score": 1.0,
+            },
+            {
+                "model": "c",
+                "dataset": "d",
+                "split": "s",
+                "variant": "v",
+                "aggregation": "mean",
+                "better": "higher",
+                "score": 0.0,
+            },
+            {
+                "model": "missing",
+                "dataset": "d",
+                "split": "s",
+                "variant": "v",
+                "aggregation": "mean",
+                "better": "higher",
+                "score": np.nan,
+            },
         ]
     )
     ranked = rank_models(summary).set_index("model")
@@ -1678,7 +1673,9 @@ def test_context_bootstrap_samples_perturbation_identities_and_retains_contexts(
                             "better": "higher",
                             "perturbation": f"{context}::{perturbation}",
                             "held_out_context": context,
-                            "score": float(model_index + context_index + perturbation_index + (variant == "alternative")),
+                            "score": float(
+                                model_index + context_index + perturbation_index + (variant == "alternative")
+                            ),
                             "effect_strength": 1.0,
                         }
                     )
@@ -1696,11 +1693,46 @@ def test_context_bootstrap_samples_perturbation_identities_and_retains_contexts(
 def test_showcase_selection_prefers_largest_winner_change_and_population_reversal() -> None:
     comparisons = pd.DataFrame(
         [
-            {"dataset": "d", "split": "s", "scenario": "large-no-change", "stratum": "profile", "winner_changed": False, "pairwise_reversal_fraction": 0.9},
-            {"dataset": "d", "split": "s", "scenario": "small-change", "stratum": "profile", "winner_changed": True, "pairwise_reversal_fraction": 0.2},
-            {"dataset": "d", "split": "s", "scenario": "large-change", "stratum": "profile", "winner_changed": True, "pairwise_reversal_fraction": 0.4},
-            {"dataset": "d", "split": "s", "scenario": "population-small", "stratum": "population", "winner_changed": False, "pairwise_reversal_fraction": 0.1},
-            {"dataset": "d", "split": "s", "scenario": "population-large", "stratum": "population", "winner_changed": True, "pairwise_reversal_fraction": 0.5},
+            {
+                "dataset": "d",
+                "split": "s",
+                "scenario": "large-no-change",
+                "stratum": "profile",
+                "winner_changed": False,
+                "pairwise_reversal_fraction": 0.9,
+            },
+            {
+                "dataset": "d",
+                "split": "s",
+                "scenario": "small-change",
+                "stratum": "profile",
+                "winner_changed": True,
+                "pairwise_reversal_fraction": 0.2,
+            },
+            {
+                "dataset": "d",
+                "split": "s",
+                "scenario": "large-change",
+                "stratum": "profile",
+                "winner_changed": True,
+                "pairwise_reversal_fraction": 0.4,
+            },
+            {
+                "dataset": "d",
+                "split": "s",
+                "scenario": "population-small",
+                "stratum": "population",
+                "winner_changed": False,
+                "pairwise_reversal_fraction": 0.1,
+            },
+            {
+                "dataset": "d",
+                "split": "s",
+                "scenario": "population-large",
+                "stratum": "population",
+                "winner_changed": True,
+                "pairwise_reversal_fraction": 0.5,
+            },
         ]
     )
     selected = select_showcase_scenarios(comparisons)
@@ -2380,9 +2412,7 @@ def test_scdisinfact_context_helpers_keep_native_counts_and_package_predictions(
 
     training = select_scdisinfact_training_data(data, split, 0)
     assert training.shape == (16, 3)
-    assert set(training.obs.loc[training.obs["context"] == "context-b", "model_perturbation"]) == {
-        "control"
-    }
+    assert set(training.obs.loc[training.obs["context"] == "context-b", "model_perturbation"]) == {"control"}
     controls = select_scdisinfact_controls(data, split, 0, population_size=3, seed=7)
     assert controls.shape == (3, 3)
     assert set(controls.obs["model_perturbation"]) == {"control"}
@@ -2453,9 +2483,7 @@ def test_trvae_context_helpers_build_one_joint_leak_free_fold() -> None:
 
     training = select_trvae_training_data(data, split, 0)
     assert training.shape == (16, 3)
-    assert set(training.obs.loc[training.obs["context"] == "context-b", "model_perturbation"]) == {
-        "control"
-    }
+    assert set(training.obs.loc[training.obs["context"] == "context-b", "model_perturbation"]) == {"control"}
     controls = select_trvae_controls(data, split, 0, population_size=3, seed=7)
     assert controls.shape == (3, 3)
 

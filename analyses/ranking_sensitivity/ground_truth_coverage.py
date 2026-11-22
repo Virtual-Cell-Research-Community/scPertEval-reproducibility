@@ -48,11 +48,7 @@ def _as_bool(series: pd.Series) -> pd.Series:
 
 
 def expected_fold_sizes(config: dict[str, Any]) -> dict[tuple[str, str], int]:
-    return {
-        (str(task["id"]), str(fold)): int(size)
-        for task in config["tasks"]
-        for fold, size in task["folds"].items()
-    }
+    return {(str(task["id"]), str(fold)): int(size) for task in config["tasks"] for fold, size in task["folds"].items()}
 
 
 def validate_availability(
@@ -67,9 +63,7 @@ def validate_availability(
         raise ValueError(f"availability table is missing columns: {', '.join(missing)}")
     forbidden = sorted(FORBIDDEN_COLUMNS & set(frame.columns))
     if forbidden:
-        raise ValueError(
-            "ground-truth coverage input must not contain model outputs: " + ", ".join(forbidden)
-        )
+        raise ValueError("ground-truth coverage input must not contain model outputs: " + ", ".join(forbidden))
 
     result = frame.copy()
     for column in ["task", "fold", "protocol_id", "evaluation_unit"]:
@@ -96,8 +90,7 @@ def validate_availability(
 
     for (task, fold), group in result.groupby(["task", "fold"], sort=False):
         universes = {
-            protocol: frozenset(rows["evaluation_unit"])
-            for protocol, rows in group.groupby("protocol_id", sort=False)
+            protocol: frozenset(rows["evaluation_unit"]) for protocol, rows in group.groupby("protocol_id", sort=False)
         }
         if len(set(universes.values())) != 1:
             sizes = ", ".join(f"{protocol}={len(units)}" for protocol, units in sorted(universes.items()))
@@ -115,9 +108,7 @@ def validate_availability(
         for (task, fold), group in result.groupby(["task", "fold"], sort=False):
             observed = int(group["evaluation_unit"].nunique())
             if observed != expected[(task, fold)]:
-                raise ValueError(
-                    f"{task}/{fold} has {observed} evaluation units, expected {expected[(task, fold)]}"
-                )
+                raise ValueError(f"{task}/{fold} has {observed} evaluation units, expected {expected[(task, fold)]}")
             if expected_protocols is not None:
                 observed_protocols = set(group["protocol_id"])
                 declared_protocols = expected_protocols.get(task, set())
@@ -133,10 +124,7 @@ def validate_availability(
 
 def _reason_counts(group: pd.DataFrame) -> str:
     counts = (
-        group.loc[~group["ground_truth_defined"], "undefined_reason"]
-        .value_counts(sort=False)
-        .sort_index()
-        .to_dict()
+        group.loc[~group["ground_truth_defined"], "undefined_reason"].value_counts(sort=False).sort_index().to_dict()
     )
     return json.dumps({str(key): int(value) for key, value in counts.items()}, sort_keys=True)
 
@@ -145,9 +133,7 @@ def protocol_coverage(frame: pd.DataFrame) -> pd.DataFrame:
     """Return ground-truth availability for every task/fold/protocol."""
 
     rows = []
-    for (task, fold, protocol), group in frame.groupby(
-        ["task", "fold", "protocol_id"], sort=True
-    ):
+    for (task, fold, protocol), group in frame.groupby(["task", "fold", "protocol_id"], sort=True):
         n_total = len(group)
         n_defined = int(group["ground_truth_defined"].sum())
         rows.append(
@@ -202,9 +188,7 @@ def summarize_protocol_pairs(fold_coverage: pd.DataFrame, candidate_threshold: f
     """Aggregate pair coverage across folds without hiding a weak held-out context."""
 
     rows = []
-    for (task, protocol_a, protocol_b), group in fold_coverage.groupby(
-        ["task", "protocol_a", "protocol_b"], sort=True
-    ):
+    for (task, protocol_a, protocol_b), group in fold_coverage.groupby(["task", "protocol_a", "protocol_b"], sort=True):
         n_total = int(group["n_total"].sum())
         n_common = int(group["n_common"].sum())
         minimum = float(group["common_fraction"].min())
@@ -271,9 +255,7 @@ def _resolve_repo_path(config_path: Path, declared_path: str) -> Path:
     return repository_root / path
 
 
-def load_task_protocol_manifest(
-    config: dict[str, Any], config_path: Path
-) -> tuple[pd.DataFrame, dict[str, set[str]]]:
+def load_task_protocol_manifest(config: dict[str, Any], config_path: Path) -> tuple[pd.DataFrame, dict[str, set[str]]]:
     """Load and checksum the frozen task-specific protocol declaration."""
 
     declaration = config["protocol_universe"]
@@ -292,8 +274,7 @@ def load_task_protocol_manifest(
     if manifest.duplicated(["task", "protocol_id"]).any():
         raise ValueError("task protocol manifest contains duplicate task/protocol rows")
     expected = {
-        str(task): set(group["protocol_id"].astype(str))
-        for task, group in manifest.groupby("task", sort=False)
+        str(task): set(group["protocol_id"].astype(str)) for task, group in manifest.groupby("task", sort=False)
     }
     return manifest, expected
 

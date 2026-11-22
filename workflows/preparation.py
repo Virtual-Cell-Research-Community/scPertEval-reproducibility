@@ -89,9 +89,7 @@ def prepare_scperturb(
 ) -> AnnData:
     """Apply the shared CRISPRi QC workflow while preserving raw counts in X."""
     adata = harmonize_scperturb(read_h5ad(source_path), merge_disambiguated=merge_disambiguated)
-    adata.obs["control_class"] = pd.Categorical(
-        np.where(adata.obs["is_control"], "non-targeting", "targeted")
-    )
+    adata.obs["control_class"] = pd.Categorical(np.where(adata.obs["is_control"], "non-targeting", "targeted"))
 
     adata.obs["total_counts"] = np.asarray(adata.X.sum(axis=1)).ravel()
     adata.obs["total_counts_log10"] = np.log10(adata.obs["total_counts"])
@@ -280,7 +278,9 @@ def prepare_sciplex(source_dir: Path, *, expected_compounds: int = 188) -> AnnDa
         obs[column] = result.obs[column].to_numpy()
     for column in chemistry:
         obs[column] = chemistry[column].to_numpy()
-    categorical = [column for column in obs if column not in {"is_control", "dose", "time", "total_counts", "molecular_weight"}]
+    categorical = [
+        column for column in obs if column not in {"is_control", "dose", "time", "total_counts", "molecular_weight"}
+    ]
     for column in categorical:
         obs[column] = obs[column].astype("category")
     result.obs = obs

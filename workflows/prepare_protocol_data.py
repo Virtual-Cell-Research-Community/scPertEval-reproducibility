@@ -112,10 +112,7 @@ def _perturbation_command(
     expected_output = repository_root / "models" / "data" / str(view["id"]) / "raw.h5ad"
     declared_output = (repository_root / view["output"]).resolve()
     if expected_output.resolve() != declared_output:
-        raise ValueError(
-            "perturbation builder output must be models/data/<view id>/raw.h5ad: "
-            f"{view['output']}"
-        )
+        raise ValueError(f"perturbation builder output must be models/data/<view id>/raw.h5ad: {view['output']}")
     command = [
         sys.executable,
         "-m",
@@ -247,9 +244,7 @@ def _record_is_valid(path: Path, config_path: Path, steps: list[PreparationStep]
         for output in step.outputs:
             key = (
                 step.id,
-                str(output.relative_to(REPOSITORY_ROOT))
-                if output.is_relative_to(REPOSITORY_ROOT)
-                else str(output),
+                str(output.relative_to(REPOSITORY_ROOT)) if output.is_relative_to(REPOSITORY_ROOT) else str(output),
             )
             if not output.is_file() or recorded.get(key) != file_checksum(output):
                 return False
@@ -277,10 +272,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.plan:
         print(json.dumps({"id": config["id"], "steps": [step.__dict__ for step in steps]}, indent=2, default=str))
         return 0
-    record_path = (
-        args.record
-        or REPOSITORY_ROOT / "models" / "data" / f"{config['id']}.manifest.json"
-    ).resolve()
+    record_path = (args.record or REPOSITORY_ROOT / "models" / "data" / f"{config['id']}.manifest.json").resolve()
     valid = _record_is_valid(record_path, config_path, steps)
     if args.validate_only:
         if not valid:

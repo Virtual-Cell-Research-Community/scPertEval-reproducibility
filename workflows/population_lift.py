@@ -52,11 +52,15 @@ def _sample_indices(
                 )
                 selected.extend(map(int, chosen))
             return np.asarray(selected, dtype=np.int64)
-    return _rng(seed, condition).choice(
-        control_indices,
-        size=len(treated_indices),
-        replace=len(control_indices) < len(treated_indices),
-    ).astype(np.int64)
+    return (
+        _rng(seed, condition)
+        .choice(
+            control_indices,
+            size=len(treated_indices),
+            replace=len(control_indices) < len(treated_indices),
+        )
+        .astype(np.int64)
+    )
 
 
 def _nonnegative_with_target_mean(values: np.ndarray, target: np.ndarray) -> np.ndarray:

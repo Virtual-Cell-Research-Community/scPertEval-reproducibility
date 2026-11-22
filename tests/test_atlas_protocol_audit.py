@@ -66,9 +66,7 @@ def test_scope_excludes_cross_perturbation_and_accepts_existing_population_metri
     cross = group_families([row(cross_perturbation_group="identity_matching")], CONFIG)[0]
     assert scope_decision(cross, CONFIG) == ("excluded", "pooled_or_cross_perturbation")
 
-    population = group_families(
-        [row(population="SC", space="PCA", wide_display_family="mmd-rbf")], CONFIG
-    )[0]
+    population = group_families([row(population="SC", space="PCA", wide_display_family="mmd-rbf")], CONFIG)[0]
     assert scope_decision(population, CONFIG) == ("included", "")
 
 
@@ -155,7 +153,13 @@ def test_v2_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_exc
     assert scope_decision(retrieval, CONFIG_V2) == ("included", "")
 
     union_panel = group_families(
-        [row(cross_perturbation_group="identity_matching", feature_set="Other", wide_display_family="retrieval-rank-rmse")],
+        [
+            row(
+                cross_perturbation_group="identity_matching",
+                feature_set="Other",
+                wide_display_family="retrieval-rank-rmse",
+            )
+        ],
         CONFIG_V2,
     )[0]
     assert scope_decision(union_panel, CONFIG_V2) == ("included", "")

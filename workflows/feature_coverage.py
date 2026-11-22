@@ -75,9 +75,7 @@ def _miller_esm2_keys(canonical_path: Path, peptide_fasta_path: Path) -> set[str
         names=["gene_id", "transcript_id", "status"],
         compression="infer",
     )
-    transcripts = set(
-        canonical.loc[canonical["status"] == "Ensembl Canonical", "transcript_id"].astype(str)
-    )
+    transcripts = set(canonical.loc[canonical["status"] == "Ensembl Canonical", "transcript_id"].astype(str))
 
     # Miller sorts canonical sequences by descending length, then drops duplicate gene
     # symbols while keeping the first row. Reproduce that exactly: a gene is eligible only
@@ -98,12 +96,7 @@ def _miller_esm2_keys(canonical_path: Path, peptide_fasta_path: Path) -> set[str
         for line in handle:
             if line.startswith(">"):
                 retain_record()
-                fields = {
-                    key: value
-                    for item in line[1:].split()
-                    if ":" in item
-                    for key, value in [item.split(":", 1)]
-                }
+                fields = {key: value for item in line[1:].split() if ":" in item for key, value in [item.split(":", 1)]}
                 transcript = fields.get("transcript")
                 gene_symbol = fields.get("gene_symbol")
                 sequence_length = 0
@@ -111,9 +104,7 @@ def _miller_esm2_keys(canonical_path: Path, peptide_fasta_path: Path) -> set[str
                 sequence_length += len(line.strip())
     retain_record()
     return {
-        gene
-        for gene, sequence_length in maximum_length_by_gene.items()
-        if sequence_length <= ESM2_MAX_PROTEIN_RESIDUES
+        gene for gene, sequence_length in maximum_length_by_gene.items() if sequence_length <= ESM2_MAX_PROTEIN_RESIDUES
     }
 
 
@@ -169,9 +160,7 @@ def audit_feature_coverage(
             "measured_targets_at_minimum": len(measured),
             "preliminary_gears_genept_common": len(preliminary),
             "esm2_supported_in_preliminary": len(preliminary & support["miller_esm2"]),
-            "txpert_public_supported_in_preliminary": len(
-                preliminary & support["txpert_public"]
-            ),
+            "txpert_public_supported_in_preliminary": len(preliminary & support["txpert_public"]),
             "final_common_targets": len(final),
             "final_targeted_cells": int(final_counts.sum()),
             "control_cells": n_control_cells,
@@ -181,8 +170,7 @@ def audit_feature_coverage(
         },
         "retention_fraction_of_preliminary": len(final) / len(preliminary),
         "support_keysets": {
-            name: {"n_keys": len(keys), "sha256": _keyset_sha256(keys)}
-            for name, keys in support.items()
+            name: {"n_keys": len(keys), "sha256": _keyset_sha256(keys)} for name, keys in support.items()
         },
         "missing_from_esm2": sorted(preliminary - support["miller_esm2"]),
         "missing_from_txpert_public": sorted(preliminary - support["txpert_public"]),
@@ -214,9 +202,7 @@ def main() -> None:
     )
     observed = report["counts"]["preliminary_gears_genept_common"]
     if observed != args.expected_preliminary:
-        raise ValueError(
-            f"preliminary cohort changed: observed={observed}, expected={args.expected_preliminary}"
-        )
+        raise ValueError(f"preliminary cohort changed: observed={observed}, expected={args.expected_preliminary}")
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(report, indent=2) + "\n")
     print(json.dumps({**report["counts"], "retention": report["retention_fraction_of_preliminary"]}, indent=2))

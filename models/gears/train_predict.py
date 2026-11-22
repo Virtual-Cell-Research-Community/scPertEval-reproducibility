@@ -177,10 +177,7 @@ def main() -> None:
     # adapter may silently drop after training.
     ungraphed = [g for g in single_gene_perts if g not in model.pert_list]
     if ungraphed:
-        raise ValueError(
-            f"frozen common cohort contains {len(ungraphed)} targets outside GEARS' graph: "
-            f"{ungraphed}"
-        )
+        raise ValueError(f"frozen common cohort contains {len(ungraphed)} targets outside GEARS' graph: {ungraphed}")
     pred_lists = [[g] for g in single_gene_perts]
     preds = model.predict(pred_lists)
 

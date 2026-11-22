@@ -217,9 +217,7 @@ def canonical_annotations(
     if control_value is None:
         unique = set(controls.unique().tolist())
         if not unique <= {True, False}:
-            raise ValueError(
-                f"obs[{control_key!r}] is not boolean; provide --control-value explicitly"
-            )
+            raise ValueError(f"obs[{control_key!r}] is not boolean; provide --control-value explicitly")
         control_mask = controls.astype(bool).to_numpy()
     else:
         control_mask = (controls.astype(str) == str(control_value)).to_numpy()
@@ -278,11 +276,7 @@ def validate_frozen_experiment_metadata(
     counts = pd.Series(labels[~control_mask]).value_counts()
     missing = sorted(frozen_set - set(counts.index))
     minimum = int(experiment["minimum_treated_cells_per_perturbation"])
-    below = {
-        label: int(counts[label])
-        for label in frozen
-        if label in counts and counts[label] < minimum
-    }
+    below = {label: int(counts[label]) for label in frozen if label in counts and counts[label] < minimum}
     unmeasured = sorted(frozen_set - set(map(str, adata.var_names)))
     if missing or below or unmeasured:
         raise ValueError(
@@ -301,9 +295,7 @@ def validate_frozen_experiment_metadata(
         )
     n_targets_at_minimum = int((counts >= minimum).sum())
     measured_genes = set(map(str, adata.var_names))
-    n_measured_targets_at_minimum = int(
-        sum(label in measured_genes for label in counts[counts >= minimum].index)
-    )
+    n_measured_targets_at_minimum = int(sum(label in measured_genes for label in counts[counts >= minimum].index))
     declared_counts = {
         "n_targets_total": int(counts.size),
         "n_targets_at_least_50_cells": n_targets_at_minimum,
@@ -378,16 +370,10 @@ def prepare_frozen_experiment_raw(
         )
     expected_genes = int(experiment["gene_panel"]["n_genes"])
     if adata.n_vars != expected_genes:
-        raise ValueError(
-            f"materialized gene panel has {adata.n_vars} genes; expected {expected_genes}"
-        )
-    expected_cells = int(control_mask.sum()) + int(
-        pd.Series(perturbations[~control_mask]).isin(frozen).sum()
-    )
+        raise ValueError(f"materialized gene panel has {adata.n_vars} genes; expected {expected_genes}")
+    expected_cells = int(control_mask.sum()) + int(pd.Series(perturbations[~control_mask]).isin(frozen).sum())
     if len(cohort_indices) != expected_cells:
-        raise ValueError(
-            f"materialized cohort has {len(cohort_indices)} cells; expected {expected_cells}"
-        )
+        raise ValueError(f"materialized cohort has {len(cohort_indices)} cells; expected {expected_cells}")
 
     if smoke is not None:
         n_perts, cells_per_pert, control_cells, seed = smoke
@@ -536,9 +522,7 @@ def apply_miller_fixes(
     return adata
 
 
-def smoke_subsample(
-    adata: ad.AnnData, n_perts: int, cells_per_pert: int, control_cells: int, seed: int
-) -> ad.AnnData:
+def smoke_subsample(adata: ad.AnnData, n_perts: int, cells_per_pert: int, control_cells: int, seed: int) -> ad.AnnData:
     """Further reduce an already Miller-fixed population to a tiny smoke-test scale — the same
     selection logic this script used to apply directly to the raw processed file, now layered
     on top of the shared Miller-consistent population instead."""
@@ -607,7 +591,9 @@ def finalize_model_annotations(adata: ad.AnnData, cell_type: str) -> ad.AnnData:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        "--source", default="replogle22k562", help="data/<source>_processed_complete.h5ad to prepare (default: replogle22k562)"
+        "--source",
+        default="replogle22k562",
+        help="data/<source>_processed_complete.h5ad to prepare (default: replogle22k562)",
     )
     parser.add_argument(
         "--input",
@@ -644,8 +630,12 @@ def main() -> None:
     parser.add_argument(
         "--smoke", action="store_true", help="additionally subsample to a tiny smoke-test scale (see --n-perts etc.)"
     )
-    parser.add_argument("--n-perts", type=int, default=12, help="[--smoke] number of perturbations to keep (default: 12)")
-    parser.add_argument("--cells-per-pert", type=int, default=100, help="[--smoke] per-perturbation cell cap (default: 100)")
+    parser.add_argument(
+        "--n-perts", type=int, default=12, help="[--smoke] number of perturbations to keep (default: 12)"
+    )
+    parser.add_argument(
+        "--cells-per-pert", type=int, default=100, help="[--smoke] per-perturbation cell cap (default: 100)"
+    )
     parser.add_argument("--control-cells", type=int, default=500, help="[--smoke] control cell cap (default: 500)")
     parser.add_argument("--cell-type", default="K562", help="cell_type label to assign (default: K562)")
     parser.add_argument(
@@ -702,9 +692,7 @@ def main() -> None:
                 perturbation_key=args.perturbation_key,
                 control_key=args.control_key,
                 control_value=args.control_value,
-                smoke=(args.n_perts, args.cells_per_pert, args.control_cells, args.seed)
-                if args.smoke
-                else None,
+                smoke=(args.n_perts, args.cells_per_pert, args.control_cells, args.seed) if args.smoke else None,
             )
         finally:
             source.file.close()
@@ -727,10 +715,7 @@ def main() -> None:
             seed=args.seed,
             compatible_models=set(args.compatible_models),
         )
-        print(
-            f"after Miller fixes: {adata.shape}, "
-            f"{adata.obs['perturbation'].nunique()} perturbations"
-        )
+        print(f"after Miller fixes: {adata.shape}, {adata.obs['perturbation'].nunique()} perturbations")
 
     if args.smoke and not (args.input is not None and experiment is not None):
         adata = smoke_subsample(adata, args.n_perts, args.cells_per_pert, args.control_cells, args.seed)

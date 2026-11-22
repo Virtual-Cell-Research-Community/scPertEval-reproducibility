@@ -429,9 +429,7 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
         if payload.get("manifest_sha256") != manifest_digest:
             errors.append(f"stage used a different manifest revision: {stage.id}")
         observed_revision = payload.get("scperteval_revision")
-        if observed_revision not in {None, expected_revision} or (
-            revision_required and observed_revision is None
-        ):
+        if observed_revision not in {None, expected_revision} or (revision_required and observed_revision is None):
             errors.append(f"stage used a different scPertEval revision: {stage.id}")
         checksums = payload.get("artifact_sha256", {})
         if not checksums:

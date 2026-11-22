@@ -12,6 +12,7 @@ the median DEG count table (bottom) are reused verbatim by importing from
 ``render()`` is parameterised by the t-test backend; ``deg_concordance_overestim_figure.py``
 reuses it against the ``t-test_overestim_var`` DE in ``gs://scperteval/de_outputs_overestim/``.
 """
+
 from __future__ import annotations
 
 import numpy as np
@@ -41,6 +42,7 @@ HIST_COLOR = "#4477aa"
 # Concordance-at-k (Squair AUCC), numpy + scipy only
 # --------------------------------------------------------------------------- #
 
+
 def _rank_order(neglog, stat):
     """Descending rank order: primary -log10 padj, tie-break |statistic|."""
     return np.lexsort((-np.abs(stat), -neglog))
@@ -66,8 +68,7 @@ def _pert_concordance(arrays):
     """Return (ks, conc) for one perturbation, or None if <4 valid genes."""
     tt_padj, mw_padj = arrays["ttest_padj"], arrays["mwu_padj"]
     tt_stat, mw_stat = arrays["ttest_stat"], arrays["mwu_stat"]
-    valid = (np.isfinite(tt_padj) & np.isfinite(mw_padj)
-             & np.isfinite(tt_stat) & np.isfinite(mw_stat))
+    valid = np.isfinite(tt_padj) & np.isfinite(mw_padj) & np.isfinite(tt_stat) & np.isfinite(mw_stat)
     n_genes = int(valid.sum())
     if n_genes < 4:
         return None
@@ -95,7 +96,7 @@ def compute_concordance(comp):
     Each per-pert curve is log-interpolated onto a shared grid = _k_grid(min over
     perts of their max k) before aggregation. AUCC per pert = mean(conc).
     """
-    per_pert = []          # (ks, conc)
+    per_pert = []  # (ks, conc)
     aucc_vals = []
     for pert in comp.perturbations:
         arrays = comp.read_perturbation(pert)
@@ -130,6 +131,7 @@ def compute_concordance(comp):
 # Top-row plotting (replaces _hist)
 # --------------------------------------------------------------------------- #
 
+
 def _concordance(ax, curve, dataset, show_y):
     grid = curve["grid"]
     ax.fill_between(grid, curve["p25"], curve["p75"], color=HIST_COLOR, alpha=0.25, linewidth=0)
@@ -142,13 +144,20 @@ def _concordance(ax, curve, dataset, show_y):
     if show_y:
         ax.set_ylabel("concordance@k", fontsize=10)
     ax.tick_params(labelsize=9)
-    ax.annotate(f"median AUCC = {curve['median_aucc']:.2f}", xy=(0.04, 0.06),
-                xycoords="axes fraction", fontsize=7.5, ha="left", va="bottom")
+    ax.annotate(
+        f"median AUCC = {curve['median_aucc']:.2f}",
+        xy=(0.04, 0.06),
+        xycoords="axes fraction",
+        fontsize=7.5,
+        ha="left",
+        va="bottom",
+    )
 
 
 # --------------------------------------------------------------------------- #
 # Figure (mirrors deg_jaccard_figure.plot_figure; only top row + top title differ)
 # --------------------------------------------------------------------------- #
+
 
 def plot_figure(results, curves, labels, out_path, suptitle=CONCORDANCE_SUPTITLE):
     """Three-band figure: concordance curves (top), 12x12 heatmaps (middle), set-size table (bottom)."""
@@ -165,12 +174,22 @@ def plot_figure(results, curves, labels, out_path, suptitle=CONCORDANCE_SUPTITLE
     col_w = 3.6
     fig_w = col_w * n
     left, right = 0.10, 0.90
-    heat_h = (right - left) * fig_w / n          # square heatmap content
+    heat_h = (right - left) * fig_w / n  # square heatmap content
     hist_h = 1.7
     fig_h = hist_h + heat_h + 9.5
     fig = plt.figure(figsize=(fig_w, fig_h))
-    gs = GridSpec(2, n, figure=fig, height_ratios=[hist_h, heat_h],
-                  left=left, right=right, top=0.92, bottom=0.50, hspace=0.95, wspace=0.30)
+    gs = GridSpec(
+        2,
+        n,
+        figure=fig,
+        height_ratios=[hist_h, heat_h],
+        left=left,
+        right=right,
+        top=0.92,
+        bottom=0.50,
+        hspace=0.95,
+        wspace=0.30,
+    )
 
     first_hist_ax = None
     for col, res in enumerate(results):
@@ -218,10 +237,8 @@ def plot_figure(results, curves, labels, out_path, suptitle=CONCORDANCE_SUPTITLE
     fig.text(xc, hist_row.y1 + 0.045, suptitle, va="bottom", **title_kw)
     fig.text(xc, heat_row.y1 + 0.022, "Mean Jaccard", va="bottom", **title_kw)
     fig.text(xc, heat_row.y1 + 0.010, "reference: all-perturbed 8192-cell pool", **sub_kw)
-    fig.text(xc, table_top + 0.022, "Median number of DEGs selected per criterion",
-             va="bottom", **title_kw)
-    fig.text(xc, table_top + 0.010,
-             "genes passing each threshold; rows match the heatmaps above", **sub_kw)
+    fig.text(xc, table_top + 0.022, "Median number of DEGs selected per criterion", va="bottom", **title_kw)
+    fig.text(xc, table_top + 0.010, "genes passing each threshold; rows match the heatmaps above", **sub_kw)
 
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -231,9 +248,16 @@ def plot_figure(results, curves, labels, out_path, suptitle=CONCORDANCE_SUPTITLE
 # main
 # --------------------------------------------------------------------------- #
 
-def render(ttest_key="t-test", de_prefix=GCS_DE_PREFIX, cache_dir=DE_CACHE,
-           local_dirs=None, ttest_label="t-test", suptitle=CONCORDANCE_SUPTITLE,
-           out_stem="deg_concordance") -> None:
+
+def render(
+    ttest_key="t-test",
+    de_prefix=GCS_DE_PREFIX,
+    cache_dir=DE_CACHE,
+    local_dirs=None,
+    ttest_label="t-test",
+    suptitle=CONCORDANCE_SUPTITLE,
+    out_stem="deg_concordance",
+) -> None:
     """Render the concordance composite for a chosen t-test backend.
 
     Defaults reproduce the standard (``t-test`` vs MWU) figure; the overestim variant
@@ -265,11 +289,14 @@ def render(ttest_key="t-test", de_prefix=GCS_DE_PREFIX, cache_dir=DE_CACHE,
         print("No datasets available; run `scperteval de` first.")
         return
     plot_figure(results, curves, labels, FIG_DIR / f"{out_stem}.png", suptitle=suptitle)
-    rows = [(c["dataset"], int(k), float(m), float(lo), float(hi))
-            for c in curves
-            for k, m, lo, hi in zip(c["grid"], c["median"], c["p25"], c["p75"])]
+    rows = [
+        (c["dataset"], int(k), float(m), float(lo), float(hi))
+        for c in curves
+        for k, m, lo, hi in zip(c["grid"], c["median"], c["p25"], c["p75"])
+    ]
     pd.DataFrame(rows, columns=["dataset", "k", "median_conc", "p25", "p75"]).to_csv(
-        FIG_DIR / f"{out_stem}.csv", index=False)
+        FIG_DIR / f"{out_stem}.csv", index=False
+    )
     print(f"wrote {out_stem}.{{png,csv}} ({len(results)} datasets)")
 
 

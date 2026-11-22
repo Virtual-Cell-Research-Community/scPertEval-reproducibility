@@ -142,9 +142,7 @@ def main() -> None:
     out_path = run.prediction_path
 
     if not (CHECKPOINT_DIR / "best_model.pt").exists():
-        raise FileNotFoundError(
-            f"{CHECKPOINT_DIR} has no checkpoint — run `pixi run -e scgpt fetch-checkpoint` first"
-        )
+        raise FileNotFoundError(f"{CHECKPOINT_DIR} has no checkpoint — run `pixi run -e scgpt fetch-checkpoint` first")
 
     pert_data = PertData(str(PERT_DATA_DIR))
     _patch.load_or_build_pert_data(pert_data, args.dataset, ad.read_h5ad(raw))
@@ -244,7 +242,9 @@ def main() -> None:
                     MVC=False,
                     ECS=False,
                 )
-                loss = criterion(output_dict["mlm_output"], target_values, torch.ones_like(input_values, dtype=torch.bool))
+                loss = criterion(
+                    output_dict["mlm_output"], target_values, torch.ones_like(input_values, dtype=torch.bool)
+                )
 
             model.zero_grad()
             scaler.scale(loss).backward()
@@ -340,9 +340,7 @@ def main() -> None:
                 loader = DataLoader(cell_graphs, batch_size=args.eval_batch_size, shuffle=False)
                 preds = []
                 for batch_data in loader:
-                    preds.append(
-                        model.pred_perturb(batch_data, include_zero_gene, gene_ids=gene_ids, amp=amp)
-                    )
+                    preds.append(model.pred_perturb(batch_data, include_zero_gene, gene_ids=gene_ids, amp=amp))
                 preds = torch.cat(preds, dim=0)
                 results["_".join(pert)] = np.mean(preds.detach().cpu().numpy(), axis=0)
         return results
@@ -353,9 +351,7 @@ def main() -> None:
     preds = predict([[g] for g in single_gene_perts])
 
     rows = [preds[gene] for gene in single_gene_perts]
-    pred_adata = ad.AnnData(
-        X=np.vstack(rows).astype(np.float32), obs={"perturbation": single_gene_perts}
-    )
+    pred_adata = ad.AnnData(X=np.vstack(rows).astype(np.float32), obs={"perturbation": single_gene_perts})
     pred_adata.var_names = pd.Index(np.asarray(pert_data.gene_names.values))
     out_path.parent.mkdir(parents=True, exist_ok=True)
     pred_adata.write_h5ad(out_path, compression="gzip")

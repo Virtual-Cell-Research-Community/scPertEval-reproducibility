@@ -36,6 +36,7 @@ close enough for a resource-report line, and it means this doesn't need any of
 the 6 model-specific pixi envs - plain torch (from the repo's own .venv) is
 enough, since a state_dict is just tensors, no custom classes to unpickle.
 """
+
 from pathlib import Path
 
 import torch

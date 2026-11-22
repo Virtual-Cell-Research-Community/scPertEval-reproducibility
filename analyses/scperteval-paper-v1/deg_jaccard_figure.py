@@ -16,6 +16,7 @@ them in ``de_cache/`` next to this script.
 ``deg_jaccard_overestim_figure.py`` reuses everything here against the
 ``t-test_overestim_var`` DE in ``gs://scperteval/de_outputs_overestim/``.
 """
+
 from __future__ import annotations
 
 import glob
@@ -44,8 +45,8 @@ DATASETS = ["wessels23", "replogle22k562", "nadig25hepg2", "arch1"]
 # Public-bucket DE loader (no gcloud / no auth)
 # --------------------------------------------------------------------------- #
 
-def _ensure_de(dataset: str, cache_dir: Path = DE_CACHE,
-               de_prefix: str = GCS_DE_PREFIX, local_dirs=None):
+
+def _ensure_de(dataset: str, cache_dir: Path = DE_CACHE, de_prefix: str = GCS_DE_PREFIX, local_dirs=None):
     """Return a local path to ``<dataset>*__de.h5``, downloading it if needed.
 
     If a matching file is already cached locally (in ``local_dirs``, default
@@ -98,6 +99,7 @@ def _ensure_de(dataset: str, cache_dir: Path = DE_CACHE,
         return None
     return dest
 
+
 # 12 DEG-calling criteria: t-test |t| / padj, then MWU |delta| / padj.
 TTEST_STAT_THR = [2.0, 4.0, 8.0]
 MWU_CLIFF_THR = [0.15, 0.33, 0.47]
@@ -109,6 +111,7 @@ SUPTITLE = "corr(-log10 p_adj t-test, -log10 p_adj MWU)"
 # --------------------------------------------------------------------------- #
 # Criteria
 # --------------------------------------------------------------------------- #
+
 
 def build_criteria(ttest_stat_thr, mwu_cliff_thr, padj_thr, ttest_label="t-test"):
     """Ordered (label, method, kind, threshold); method in {ttest,mwu}, kind in {stat,padj}.
@@ -145,6 +148,7 @@ def neg_log10_padj(padj):
 # Per-dataset accumulation: 12x12 mean Jaccard + per-pert Spearman + set sizes
 # --------------------------------------------------------------------------- #
 
+
 def _jaccard(mi, mj):
     union = int(np.count_nonzero(mi | mj))
     return int(np.count_nonzero(mi & mj)) / union if union else 0.0
@@ -178,8 +182,10 @@ def compute_dataset(comp, criteria):
             continue
         count += 1
         corr_rows.append((pert, _spearman_corr(arrays)))
-        masks = [_criterion_mask(c, arrays["ttest_stat"], arrays["ttest_padj"],
-                                 arrays["mwu_stat"], arrays["mwu_padj"]) for c in criteria]
+        masks = [
+            _criterion_mask(c, arrays["ttest_stat"], arrays["ttest_padj"], arrays["mwu_stat"], arrays["mwu_padj"])
+            for c in criteria
+        ]
         size_rows.append([int(np.count_nonzero(m)) for m in masks])
         for i in range(n):
             for j in range(i, n):
@@ -188,12 +194,14 @@ def compute_dataset(comp, criteria):
                 if j != i:
                     sum_jacc[j, i] += v
     mean_jacc = sum_jacc / max(count, 1)
-    median_sizes = (np.median(np.asarray(size_rows, dtype=np.float64), axis=0)
-                    if size_rows else np.full(n, np.nan))
+    median_sizes = np.median(np.asarray(size_rows, dtype=np.float64), axis=0) if size_rows else np.full(n, np.nan)
     return {
-        "dataset": comp.dataset_name, "reference": comp.reference,
-        "labels": [c[0] for c in criteria], "n_perturbations": count,
-        "mean_jaccard": mean_jacc, "median_sizes": median_sizes,
+        "dataset": comp.dataset_name,
+        "reference": comp.reference,
+        "labels": [c[0] for c in criteria],
+        "n_perturbations": count,
+        "mean_jaccard": mean_jacc,
+        "median_sizes": median_sizes,
         "corr_df": pd.DataFrame(corr_rows, columns=["perturbation", "spearman"]),
     }
 
@@ -201,6 +209,7 @@ def compute_dataset(comp, criteria):
 # --------------------------------------------------------------------------- #
 # Plotting
 # --------------------------------------------------------------------------- #
+
 
 def _hist(ax, corr_df, dataset, show_y):
     vals = corr_df["spearman"].to_numpy(dtype=np.float64)
@@ -231,11 +240,12 @@ def _count_table(ax, labels, datasets, size_matrix):
     ax.axis("off")
     # criterion label is a real first column; the whole block is sized to content and
     # centered in the (full-width) axes.
-    cell_text = [[lab] + ["-" if not np.isfinite(size_matrix[r, c]) else f"{round(size_matrix[r, c])}"
-                          for c in range(len(datasets))]
-                 for r, lab in enumerate(labels)]
-    table = ax.table(cellText=cell_text, colLabels=[""] + list(datasets),
-                     cellLoc="center", loc="upper center")
+    cell_text = [
+        [lab]
+        + ["-" if not np.isfinite(size_matrix[r, c]) else f"{round(size_matrix[r, c])}" for c in range(len(datasets))]
+        for r, lab in enumerate(labels)
+    ]
+    table = ax.table(cellText=cell_text, colLabels=[""] + list(datasets), cellLoc="center", loc="upper center")
     table.auto_set_font_size(False)
     table.set_fontsize(7)
     table.auto_set_column_width(list(range(len(datasets) + 1)))
@@ -267,14 +277,24 @@ def plot_figure(results, labels, out_path, suptitle=SUPTITLE):
     col_w = 3.6
     fig_w = col_w * n
     left, right = 0.10, 0.90
-    heat_h = (right - left) * fig_w / n          # square heatmap content
+    heat_h = (right - left) * fig_w / n  # square heatmap content
     hist_h = 1.7
     fig_h = hist_h + heat_h + 9.5
     fig = plt.figure(figsize=(fig_w, fig_h))
     # histograms + heatmaps share a 2-row grid in the upper portion; the table is placed
     # below by hand so the gap under the (tall) heatmap x-labels matches the hist->heat gap.
-    gs = GridSpec(2, n, figure=fig, height_ratios=[hist_h, heat_h],
-                  left=left, right=right, top=0.92, bottom=0.50, hspace=0.95, wspace=0.30)
+    gs = GridSpec(
+        2,
+        n,
+        figure=fig,
+        height_ratios=[hist_h, heat_h],
+        left=left,
+        right=right,
+        top=0.92,
+        bottom=0.50,
+        hspace=0.95,
+        wspace=0.30,
+    )
 
     first_hist_ax = None
     for col, res in enumerate(results):
@@ -298,10 +318,10 @@ def plot_figure(results, labels, out_path, suptitle=SUPTITLE):
     # even white gap between bands: measure each band's full bottom (incl. its x-labels), and
     # reserve a fixed block above each lower band for its section title.
     title_block = 0.05
-    hist_bottom = first_hist_ax.get_tightbbox(rend).transformed(inv).y0   # below the "spearman corr" label
-    label_bottom = last_heat_ax.get_tightbbox(rend).transformed(inv).y0   # below the vertical heatmap labels
-    gap = hist_bottom - (heat_row.y1 + title_block)                       # hist -> jaccard-title gap
-    table_top = label_bottom - gap - title_block                         # same gap above the table title
+    hist_bottom = first_hist_ax.get_tightbbox(rend).transformed(inv).y0  # below the "spearman corr" label
+    label_bottom = last_heat_ax.get_tightbbox(rend).transformed(inv).y0  # below the vertical heatmap labels
+    gap = hist_bottom - (heat_row.y1 + title_block)  # hist -> jaccard-title gap
+    table_top = label_bottom - gap - title_block  # same gap above the table title
 
     # count table: auto-sized, centered, with its top at table_top
     ax_table = fig.add_axes([0.0, 0.03, 1.0, table_top - 0.03])
@@ -324,13 +344,13 @@ def plot_figure(results, labels, out_path, suptitle=SUPTITLE):
     # title_block just above the plots, so the white gap above every title is equal.
     title_kw = {"ha": "center", "fontsize": 14, "fontweight": "bold"}
     sub_kw = {"ha": "center", "va": "top", "fontsize": 9}
-    fig.text(xc, hist_row.y1 + 0.045, suptitle, va="bottom", **title_kw)                  # histograms
-    fig.text(xc, heat_row.y1 + 0.022, "Mean Jaccard", va="bottom", **title_kw)           # heatmaps
+    fig.text(xc, hist_row.y1 + 0.045, suptitle, va="bottom", **title_kw)  # histograms
+    fig.text(xc, heat_row.y1 + 0.022, "Mean Jaccard", va="bottom", **title_kw)  # heatmaps
     fig.text(xc, heat_row.y1 + 0.010, "reference: all-perturbed 8192-cell pool", **sub_kw)
-    fig.text(xc, table_top + 0.022, "Median number of DEGs selected per criterion",
-             va="bottom", **title_kw)                                                    # count table
-    fig.text(xc, table_top + 0.010,
-             "genes passing each threshold; rows match the heatmaps above", **sub_kw)
+    fig.text(
+        xc, table_top + 0.022, "Median number of DEGs selected per criterion", va="bottom", **title_kw
+    )  # count table
+    fig.text(xc, table_top + 0.010, "genes passing each threshold; rows match the heatmaps above", **sub_kw)
 
     fig.savefig(out_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
@@ -339,6 +359,7 @@ def plot_figure(results, labels, out_path, suptitle=SUPTITLE):
 # --------------------------------------------------------------------------- #
 # scPertEval DE source + render/main
 # --------------------------------------------------------------------------- #
+
 
 class DESource:
     """Reads a ``scperteval de`` HDF5 file, yielding the {ttest,mwu}_{stat,padj} arrays per pert.
@@ -359,8 +380,7 @@ class DESource:
 
     def read_perturbation(self, pert):
         i = self._idx[pert]
-        return {"ttest_stat": self._ts[i], "ttest_padj": self._tp[i],
-                "mwu_stat": self._ms[i], "mwu_padj": self._mp[i]}
+        return {"ttest_stat": self._ts[i], "ttest_padj": self._tp[i], "mwu_stat": self._ms[i], "mwu_padj": self._mp[i]}
 
 
 def latest_de(ds: str):
@@ -370,9 +390,15 @@ def latest_de(ds: str):
     return cands[-1] if cands else None
 
 
-def render(ttest_key="t-test", de_prefix=GCS_DE_PREFIX, cache_dir=DE_CACHE,
-           local_dirs=None, ttest_label="t-test", suptitle=SUPTITLE,
-           out_stem="deg_jaccard_with_counts") -> None:
+def render(
+    ttest_key="t-test",
+    de_prefix=GCS_DE_PREFIX,
+    cache_dir=DE_CACHE,
+    local_dirs=None,
+    ttest_label="t-test",
+    suptitle=SUPTITLE,
+    out_stem="deg_jaccard_with_counts",
+) -> None:
     """Render the Jaccard composite for a chosen t-test backend.
 
     Defaults reproduce the standard (``t-test`` vs MWU) figure. The overestim variant
@@ -398,10 +424,14 @@ def render(ttest_key="t-test", de_prefix=GCS_DE_PREFIX, cache_dir=DE_CACHE,
         print("No datasets available; run `scperteval de` first.")
         return
     plot_figure(results, labels, FIG_DIR / f"{out_stem}.png", suptitle=suptitle)
-    rows = [(r["dataset"], lab, round(sz) if np.isfinite(sz) else "")
-            for r in results for lab, sz in zip(labels, r["median_sizes"])]
+    rows = [
+        (r["dataset"], lab, round(sz) if np.isfinite(sz) else "")
+        for r in results
+        for lab, sz in zip(labels, r["median_sizes"])
+    ]
     pd.DataFrame(rows, columns=["dataset", "criterion", "median_set_size"]).to_csv(
-        FIG_DIR / f"{out_stem}.csv", index=False)
+        FIG_DIR / f"{out_stem}.csv", index=False
+    )
     print(f"wrote {out_stem}.{{png,csv}} ({len(results)} datasets)")
 
 

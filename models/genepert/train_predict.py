@@ -37,11 +37,7 @@ from workflows.model_runs import add_point_run_arguments, begin_point_model_run
 
 DATA_DIR = HERE.parent / "data"
 GENEPT_PICKLE = (
-    HERE.parent
-    / "sclambda"
-    / "cache"
-    / "GenePT_emebdding_v2"
-    / "GenePT_gene_protein_embedding_model_3_text.pickle."
+    HERE.parent / "sclambda" / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
 )
 IMPLEMENTATION_REVISION = "zou-group/GenePert@31c0034211010696ba76dc62cb875af51bfe6f4a"
 DEFAULT_ALPHA = 10.0
@@ -149,9 +145,7 @@ def main() -> int:
     if args.alpha <= 0:
         raise ValueError("--alpha must be positive")
     if not args.embeddings.is_file():
-        raise FileNotFoundError(
-            f"{args.embeddings} missing; run `pixi run -e genepert fetch-embeddings` first"
-        )
+        raise FileNotFoundError(f"{args.embeddings} missing; run `pixi run -e genepert fetch-embeddings` first")
 
     run = begin_point_model_run(
         args,

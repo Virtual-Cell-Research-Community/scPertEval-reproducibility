@@ -103,11 +103,7 @@ def compute_degs_fast(self, adata) -> None:
     from illico import asymptotic_wilcoxon
 
     if (adata.obs[self.perturb_field] == self.control_key).sum() > 5000:
-        control_locs = (
-            adata.obs[adata.obs[self.perturb_field] == self.control_key]
-            .sample(5000, random_state=0)
-            .index
-        )
+        control_locs = adata.obs[adata.obs[self.perturb_field] == self.control_key].sample(5000, random_state=0).index
     else:
         control_locs = adata.obs[adata.obs[self.perturb_field] == self.control_key].index
 

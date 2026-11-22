@@ -176,8 +176,7 @@ def _make_dataset(data, controls, pert2id, *, device, include_controls):
         # intended ID here. Without this correction, upstream fails on its first control cell
         # by attempting to index a tensor with the characters in the string ``"ctrl"``.
         dataset.pert_conditions = pd.Series(
-            list(dataset.pert_conditions.iloc[: data.n_obs])
-            + [[pert2id["ctrl"]]] * controls.n_obs
+            list(dataset.pert_conditions.iloc[: data.n_obs]) + [[pert2id["ctrl"]]] * controls.n_obs
         )
     cache_matched_average_controls(dataset)
     return dataset
@@ -313,7 +312,9 @@ def main() -> None:
     pert2id = {gene: index for index, gene in enumerate(targets)}
     pert2id["ctrl"] = len(pert2id)
     datamodule = _build_datamodule(data, fold, pert2id, args.batch_size, device)
-    graph = GSPGraph(pert2id=pert2id, gene2id={gene: index for index, gene in enumerate(data.var_names)}, **copy.deepcopy(GRAPH_ARGS))
+    graph = GSPGraph(
+        pert2id=pert2id, gene2id={gene: index for index, gene in enumerate(data.var_names)}, **copy.deepcopy(GRAPH_ARGS)
+    )
 
     init_args = {
         "input_dim": data.n_vars,

@@ -82,10 +82,7 @@ def expected_test_conditions(split: dict, fold: int | str, capability: str) -> l
     if "perturbations" in split:
         return sorted(f"{context}::{perturbation}" for perturbation in split["perturbations"])
     if "drugs" in split and "doses" in split:
-        excluded = {
-            (item["drug"], float(item["dose"]))
-            for item in split.get("population_exclusions", [])
-        }
+        excluded = {(item["drug"], float(item["dose"])) for item in split.get("population_exclusions", [])}
         conditions = []
         for drug in split["drugs"]:
             for dose in split["doses"]:
@@ -170,8 +167,7 @@ def validate_prediction_h5ad(
                         if expected_counts[condition] != actual_counts[condition]
                     }
                     raise ValueError(
-                        "population prediction counts do not match observed treated-cell counts: "
-                        f"{differences}"
+                        f"population prediction counts do not match observed treated-cell counts: {differences}"
                     )
             else:
                 if minimum_cells_per_condition is None:

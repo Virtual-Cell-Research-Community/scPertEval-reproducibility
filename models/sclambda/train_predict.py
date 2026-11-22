@@ -57,9 +57,7 @@ from workflows.model_runs import add_point_run_arguments, begin_point_model_run
 DATA_DIR = HERE.parent / "data"
 # Populated by `pixi run -e sclambda fetch-embeddings` (models/pixi.toml) — not downloaded
 # here, so this script has no direct download dependency of its own.
-GENEPT_PICKLE = (
-    HERE / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
-)
+GENEPT_PICKLE = HERE / "cache" / "GenePT_emebdding_v2" / "GenePT_gene_protein_embedding_model_3_text.pickle."
 
 # sclambda's own Model.train() (sclambda/model.py) only prints every 10 epochs
 # (`if (epoch+1) % 10 == 0`), via plain print() (stdout, unlike GEARS' print_sys which goes
@@ -99,6 +97,8 @@ def _parse_sclambda_metrics(captured: str) -> list[dict]:
         row["val_corr"] = float(corrs[i]) if i < len(corrs) else None
         rows.append(row)
     return rows
+
+
 # scLAMBDA's own `Model.train()` only ever updates `self.model_best` inside its
 # `(epoch+1) % 10 == 0` validation checkpoints (or, if there are no validation perturbations
 # at all, on the very last epoch) — below 10 epochs it's never assigned and
@@ -138,7 +138,9 @@ def main() -> None:
     add_point_run_arguments(parser)
     args = parser.parse_args()
     if args.epochs < MIN_EPOCHS:
-        raise SystemExit(f"--epochs must be >= {MIN_EPOCHS} (scLAMBDA never checkpoints below that, see module docstring)")
+        raise SystemExit(
+            f"--epochs must be >= {MIN_EPOCHS} (scLAMBDA never checkpoints below that, see module docstring)"
+        )
 
     run = begin_point_model_run(
         args,

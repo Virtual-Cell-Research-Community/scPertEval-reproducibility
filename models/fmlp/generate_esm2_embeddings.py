@@ -28,8 +28,7 @@ PINNED_REVISION = "5fbca39631164edc1d402a5aa369f982f72ee282"
 PINNED_HIDDEN_SIZE = 5120
 PINNED_MAX_RESIDUES = 1024
 IMPLEMENTATION_REVISION = (
-    "shiftbioscience/Perturbation-Models-Outperform-Baselines@"
-    "15361aec8392fb45a75c8c9da88ca5e6510fca97"
+    "shiftbioscience/Perturbation-Models-Outperform-Baselines@15361aec8392fb45a75c8c9da88ca5e6510fca97"
 )
 
 
@@ -67,12 +66,7 @@ def _fasta_records(path: Path) -> dict[str, tuple[str | None, str]]:
         for line in stream:
             if line.startswith(">"):
                 retain()
-                fields = {
-                    key: value
-                    for item in line[1:].split()
-                    if ":" in item
-                    for key, value in [item.split(":", 1)]
-                }
+                fields = {key: value for item in line[1:].split() if ":" in item for key, value in [item.split(":", 1)]}
                 transcript = fields.get("transcript")
                 gene_symbol = fields.get("gene_symbol")
                 sequence = []
@@ -191,9 +185,7 @@ def generate_embeddings(args: argparse.Namespace) -> dict:
     missing = sorted(set(targets) - set(selected))
     overlength = sorted(gene for gene in targets if gene in selected and len(selected[gene]) > PINNED_MAX_RESIDUES)
     if missing or overlength:
-        raise ValueError(
-            f"frozen target coverage changed: missing={len(missing)}, overlength={len(overlength)}"
-        )
+        raise ValueError(f"frozen target coverage changed: missing={len(missing)}, overlength={len(overlength)}")
     selected_targets = targets[: args.smoke] if args.smoke else targets
 
     import torch
@@ -221,8 +213,7 @@ def generate_embeddings(args: argparse.Namespace) -> dict:
         raise ValueError(f"pinned ESM2 hidden size changed: observed={dimension}, expected={PINNED_HIDDEN_SIZE}")
     if not args.smoke and max_positions != PINNED_MAX_RESIDUES + 2:
         raise ValueError(
-            "pinned ESM2 positional table changed: "
-            f"observed={max_positions}, expected={PINNED_MAX_RESIDUES + 2}"
+            f"pinned ESM2 positional table changed: observed={max_positions}, expected={PINNED_MAX_RESIDUES + 2}"
         )
 
     revision_key = re.sub(r"[^A-Za-z0-9_.-]", "_", f"{args.model}@{args.revision}")

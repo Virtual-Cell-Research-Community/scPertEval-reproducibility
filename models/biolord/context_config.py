@@ -43,9 +43,7 @@ def assign_biolord_splits(
     assignments = np.full(data.n_obs, "train", dtype=object)
     assignments[(contexts == test_context) & ~controls] = "test"
     assignments[
-        contexts.isin(train_contexts)
-        & labels.isin(set(map(str, split["validation_conditions"])))
-        & ~controls
+        contexts.isin(train_contexts) & labels.isin(set(map(str, split["validation_conditions"]))) & ~controls
     ] = "valid"
 
     result = data.copy()
@@ -132,7 +130,6 @@ def relabel_biolord_predictions(
     actual_counts = {condition: int(counts.get(condition, 0)) for condition in expected}
     if actual_counts != expected_counts:
         raise ValueError(
-            "bioLORD predictions do not cover the frozen populations; "
-            f"expected {expected_counts}, got {actual_counts}"
+            f"bioLORD predictions do not cover the frozen populations; expected {expected_counts}, got {actual_counts}"
         )
     return result

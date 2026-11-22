@@ -217,9 +217,7 @@ def prepare_dataset(raw: Path, dataset_dir: Path, cell_type: str, num_hvgs: int)
         return out_path
 
     adata = ad.read_h5ad(raw)
-    adata.obs["gem_group"] = (
-        adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
-    )
+    adata.obs["gem_group"] = adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
 
     sc.pp.highly_variable_genes(adata, n_top_genes=num_hvgs)
     hvg = adata[:, adata.var["highly_variable"]].X
@@ -247,9 +245,7 @@ def prepare_context_dataset(
     adata = ad.read_h5ad(raw)
     if "cell_type" not in adata.obs:
         raise ValueError("context-transfer model view is missing obs['cell_type']")
-    adata.obs["gem_group"] = (
-        adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
-    )
+    adata.obs["gem_group"] = adata.obs["batch"].astype(str).to_numpy() if "batch" in adata.obs else "1"
     observed = set(adata.obs["cell_type"].astype(str))
     missing = sorted(set(contexts) - observed)
     if missing:
@@ -277,7 +273,9 @@ def prepare_context_dataset(
     return outputs
 
 
-def build_toml(fold: dict[str, list[str]], out_path: Path, dataset_name: str, dataset_dir: Path, cell_type: str) -> Path:
+def build_toml(
+    fold: dict[str, list[str]], out_path: Path, dataset_name: str, dataset_dir: Path, cell_type: str
+) -> Path:
     """cell-load's few-shot TOML format (see its README) — bare gene symbols, same convention
     our RAW file's obs['perturbation'] already uses, no relabeling needed."""
     val = ", ".join(f'"{g}"' for g in fold["val"])
@@ -319,7 +317,12 @@ def main() -> None:
         default="perturbation",
         help="obs column STATE uses as its perturbation identity (default: perturbation)",
     )
-    parser.add_argument("--num-hvgs", type=int, default=2000, help="number of HVGs computed for data.kwargs.embed_key=X_hvg (default: 2000)")
+    parser.add_argument(
+        "--num-hvgs",
+        type=int,
+        default=2000,
+        help="number of HVGs computed for data.kwargs.embed_key=X_hvg (default: 2000)",
+    )
     # All the following defaults come from ArcInstitute's own "STATE Training on
     # Replogle-Nadig" Colab (the same one this script's docstring already references),
     # not state's own bare library defaults (training/default.yaml: max_steps=400000,
@@ -339,7 +342,12 @@ def main() -> None:
     # at cell_set_len=64) so
     # EarlyStopping's `patience` means "N epochs with no improvement" the same way it does
     # for PRESAGE/scGPT, not an arbitrary sub-epoch step count — see module docstring.
-    parser.add_argument("--val-freq", type=int, default=272, help="training.val_freq (default: 272, the validated pilot's one-epoch cadence; see module docstring)")
+    parser.add_argument(
+        "--val-freq",
+        type=int,
+        default=272,
+        help="training.val_freq (default: 272, the validated pilot's one-epoch cadence; see module docstring)",
+    )
     parser.add_argument(
         "--early-stop-patience",
         type=int,
@@ -364,9 +372,16 @@ def main() -> None:
     # this default of 4: 0% GPU, no CPU progress, indefinitely), so predict's own workers are
     # unconditionally forced to 0 below regardless of what's passed here (see the
     # data_module.torch patch after the train subprocess call).
-    parser.add_argument("--num-workers", type=int, default=4, help="data.kwargs.num_workers (default: 4, per the Colab; training only — see below)")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=4,
+        help="data.kwargs.num_workers (default: 4, per the Colab; training only — see below)",
+    )
     parser.add_argument("--batch-size", type=int, default=64, help="training.batch_size (default: 64, per the Colab)")
-    parser.add_argument("--lr", type=float, default=1e-3, help="training.lr (default: 1e-3, per the Colab; library default is 1e-4)")
+    parser.add_argument(
+        "--lr", type=float, default=1e-3, help="training.lr (default: 1e-3, per the Colab; library default is 1e-4)"
+    )
     # model.kwargs.cell_set_len: how many cells the transformer backbone processes as one
     # set (n_positions/max_position_embeddings in pertsets.yaml). cell_load's own sampler
     # (data_modules/samplers.py) chunks each perturbation's cells into consecutive,
@@ -377,13 +392,23 @@ def main() -> None:
     # that, 32 measurably trains worse (val_loss plateau ~1.2 vs. ~0.87-0.89 at 64, two direct
     # full-scale diagnostics with hidden_dim=328 held fixed) — see module docstring. Kept at the
     # Colab's own 64, not the preprint's Table 3 value of 32.
-    parser.add_argument("--cell-set-len", type=int, default=64, help="model.kwargs.cell_set_len (default: 64, matches the Colab and Arc's own real k562 checkpoints — Table 3's 32 was tested and rejected, see module docstring)")
+    parser.add_argument(
+        "--cell-set-len",
+        type=int,
+        default=64,
+        help="model.kwargs.cell_set_len (default: 64, matches the Colab and Arc's own real k562 checkpoints — Table 3's 32 was tested and rejected, see module docstring)",
+    )
     # pertsets.yaml's own default (328, 37.7M params measured at cell_set_len=32). The
     # preprint's Table 3 claims 128 (~10M params) for Replogle-Nadig, but that does not hold up
     # empirically — see module docstring (real diagnostic + Arc's own released k562 checkpoints
     # both land on 328, not 128) — so the default here stays at pertsets.yaml's own value rather
     # than overriding to Table 3's.
-    parser.add_argument("--hidden-dim", type=int, default=328, help="model.kwargs.hidden_dim (default: 328, pertsets.yaml's own default — see module docstring for why Table 3's 128 was tested and rejected)")
+    parser.add_argument(
+        "--hidden-dim",
+        type=int,
+        default=328,
+        help="model.kwargs.hidden_dim (default: 328, pertsets.yaml's own default — see module docstring for why Table 3's 128 was tested and rejected)",
+    )
     parser.add_argument("--seed", type=int, default=42, help="training.train_seed and archival run seed")
     parser.add_argument("--runs-root", type=Path, default=RUN_DIR)
     parser.add_argument(
@@ -421,9 +446,7 @@ def main() -> None:
     else:
         context_split = json.loads(args.split_manifest.read_text())
         if args.dataset != context_split["id"]:
-            raise ValueError(
-                f"--dataset {args.dataset!r} must match split id {context_split['id']!r}"
-            )
+            raise ValueError(f"--dataset {args.dataset!r} must match split id {context_split['id']!r}")
         if args.fold < 0 or args.fold >= len(context_split["folds"]):
             raise ValueError(f"fold {args.fold} is outside the context split")
         split_manifest_path = args.split_manifest

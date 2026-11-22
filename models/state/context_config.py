@@ -24,10 +24,7 @@ def model_conditions(split: dict, *, capability: str) -> list[str]:
         return sorted(map(str, split["perturbations"]))
     if "drugs" not in split or "doses" not in split:
         raise ValueError("context split must declare perturbations or drugs and doses")
-    excluded = {
-        (item["drug"], float(item["dose"]))
-        for item in split.get("population_exclusions", [])
-    }
+    excluded = {(item["drug"], float(item["dose"])) for item in split.get("population_exclusions", [])}
     conditions = []
     for drug in split["drugs"]:
         for dose in split["doses"]:
@@ -92,9 +89,7 @@ def sample_heldout_controls(
         warnings.filterwarnings("ignore", message="Observation names are not unique")
         result = data[selected].copy()
     result.obs["source_obs_name"] = result.obs_names.astype(str)
-    result.obs_names = pd.Index(
-        [f"{test_context}::control-sample-{index}" for index in range(population_size)]
-    )
+    result.obs_names = pd.Index([f"{test_context}::control-sample-{index}" for index in range(population_size)])
     return result
 
 

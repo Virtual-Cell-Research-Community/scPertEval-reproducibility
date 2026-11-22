@@ -77,9 +77,7 @@ def installed_scperteval_revision() -> str | None:
 
 def expected_scperteval_revision(manifest: dict[str, Any]) -> str:
     """Resolve an explicit revision, with one checksum-preserving legacy declaration."""
-    expected = manifest.get("scperteval_revision") or LEGACY_SCPERTEVAL_REVISIONS.get(
-        manifest.get("id")
-    )
+    expected = manifest.get("scperteval_revision") or LEGACY_SCPERTEVAL_REVISIONS.get(manifest.get("id"))
     if not expected:
         raise ValueError("protocol manifest must pin scperteval_revision")
     return str(expected)
@@ -101,9 +99,7 @@ def assert_manifest_runnable(manifest: dict[str, Any]) -> None:
     """Keep review-gated production manifests inspectable but non-executable."""
     status = str(manifest.get("status", "ready"))
     if status.startswith("planned-pending-"):
-        raise RuntimeError(
-            f"protocol manifest is not approved for execution: status={status}"
-        )
+        raise RuntimeError(f"protocol manifest is not approved for execution: status={status}")
 
 
 def file_sha256(path: Path) -> str:

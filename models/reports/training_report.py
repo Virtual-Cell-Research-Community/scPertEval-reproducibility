@@ -47,6 +47,7 @@ Usage:
 Note: sacct's accounting history has a finite retention window (cluster-
 configured, commonly 30-90 days) - this only works for runs still in it.
 """
+
 import argparse
 import re
 import subprocess
@@ -185,9 +186,14 @@ def progress_str(model, reached, is_approx):
 
 
 SUMMARY_COLUMNS = [
-    ("model", "Model"), ("params", "Params"), ("gpu", "GPU"), ("folds", "Folds"),
-    ("avg_elapsed", "Avg Elapsed"), ("avg_maxrss", "Avg MaxRSS"),
-    ("avg_progress", "Avg Progress"), ("early_stop", "Early Stopped"),
+    ("model", "Model"),
+    ("params", "Params"),
+    ("gpu", "GPU"),
+    ("folds", "Folds"),
+    ("avg_elapsed", "Avg Elapsed"),
+    ("avg_maxrss", "Avg MaxRSS"),
+    ("avg_progress", "Avg Progress"),
+    ("early_stop", "Early Stopped"),
 ]
 
 
@@ -215,11 +221,18 @@ def build_summary_rows(args, by_model):
             avg_reached = sum(reached_vals) / len(reached_vals) if reached_vals else None
             avg_progress = progress_str(model, avg_reached, any(r["approx"] for r in group))
             folds_str = ",".join(sorted((r["fold"] for r in group), key=int))
-            rows.append({
-                "model": model, "params": params_str, "gpu": gpu, "folds": folds_str,
-                "avg_elapsed": seconds_to_hm(avg_elapsed_s), "avg_maxrss": avg_rss,
-                "avg_progress": avg_progress, "early_stop": stop_str,
-            })
+            rows.append(
+                {
+                    "model": model,
+                    "params": params_str,
+                    "gpu": gpu,
+                    "folds": folds_str,
+                    "avg_elapsed": seconds_to_hm(avg_elapsed_s),
+                    "avg_maxrss": avg_rss,
+                    "avg_progress": avg_progress,
+                    "early_stop": stop_str,
+                }
+            )
     return rows
 
 
@@ -276,15 +289,26 @@ def write_html(rows, path):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--since", default="now-2days", help="sacct -S value, e.g. 2026-07-17 or now-7days (default: now-2days)")
+    ap.add_argument(
+        "--since", default="now-2days", help="sacct -S value, e.g. 2026-07-17 or now-7days (default: now-2days)"
+    )
     ap.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
-    ap.add_argument("--require-log", action="store_true", help="only show rows whose slurm/logs/ .out or .err file still exists on disk")
-    ap.add_argument("--dataset", default="replogle22k562", help="used only to locate each model's checkpoint for the params column")
-    ap.add_argument("--out", default="figures/training_summary.html",
-                     help="also write the per-model x GPU-type summary table here (relative to models/, same convention as "
-                          "plot_training_curves.py's own --out) - .md for Markdown, .html for HTML (HTML merges a model's "
-                          "multiple GPU-type rows via rowspan on the model/params cells; Markdown can't). "
-                          "Pass '' to skip writing a file. Default: figures/training_summary.html")
+    ap.add_argument(
+        "--require-log",
+        action="store_true",
+        help="only show rows whose slurm/logs/ .out or .err file still exists on disk",
+    )
+    ap.add_argument(
+        "--dataset", default="replogle22k562", help="used only to locate each model's checkpoint for the params column"
+    )
+    ap.add_argument(
+        "--out",
+        default="figures/training_summary.html",
+        help="also write the per-model x GPU-type summary table here (relative to models/, same convention as "
+        "plot_training_curves.py's own --out) - .md for Markdown, .html for HTML (HTML merges a model's "
+        "multiple GPU-type rows via rowspan on the model/params cells; Markdown can't). "
+        "Pass '' to skip writing a file. Default: figures/training_summary.html",
+    )
     args = ap.parse_args()
 
     rows = run_sacct(args.models, args.since)
@@ -296,8 +320,14 @@ def main():
         base, _, step = r["JobID"].partition(".")
         rec = merged.setdefault(base, {})
         if step == "":
-            rec.update(name=r["JobName"], state=r["State"], elapsed=r["Elapsed"],
-                       node=r["NodeList"], reqmem=r["ReqMem"], jobid_raw=r["JobIDRaw"])
+            rec.update(
+                name=r["JobName"],
+                state=r["State"],
+                elapsed=r["Elapsed"],
+                node=r["NodeList"],
+                reqmem=r["ReqMem"],
+                jobid_raw=r["JobIDRaw"],
+            )
         elif step == "batch":
             rec.update(maxrss=r["MaxRSS"] or "-", gpu=gpu_type(r["AllocTRES"]))
 
@@ -311,19 +341,25 @@ def main():
         rec["log"] = "yes" if (out_path or err_path) else "no"
         if args.require_log and rec["log"] == "no":
             continue
-        rec["last_epoch"], rec["early_stop"], rec["reached"], rec["approx"] = analyze_progress(rec["name"], out_path, err_path)
+        rec["last_epoch"], rec["early_stop"], rec["reached"], rec["approx"] = analyze_progress(
+            rec["name"], out_path, err_path
+        )
         by_model[rec["name"]].append(rec)
 
-    cols = (f"{'model':<10} {'fold':<5} {'state':<14} {'elapsed':<10} {'gpu':<6} {'maxrss':<8} {'%mem':<6} "
-            f"{'log':<4} {'progress':<18} stopped")
+    cols = (
+        f"{'model':<10} {'fold':<5} {'state':<14} {'elapsed':<10} {'gpu':<6} {'maxrss':<8} {'%mem':<6} "
+        f"{'log':<4} {'progress':<18} stopped"
+    )
     print(cols)
     print("-" * len(cols))
     for model in args.models:
         for rec in sorted(by_model.get(model, []), key=lambda r: (r["fold"], r["jobid"])):
-            print(f"{model:<10} {rec['fold']:<5} {rec.get('state','-'):<14} {rec.get('elapsed','-'):<10} "
-                  f"{rec.get('gpu','?'):<6} {rec.get('maxrss','-'):<8} "
-                  f"{pct(rec.get('maxrss','-'), rec.get('reqmem','-')):<6} "
-                  f"{rec['log']:<4} {progress_str(model, rec['reached'], rec['approx']):<18} {rec['early_stop']}")
+            print(
+                f"{model:<10} {rec['fold']:<5} {rec.get('state', '-'):<14} {rec.get('elapsed', '-'):<10} "
+                f"{rec.get('gpu', '?'):<6} {rec.get('maxrss', '-'):<8} "
+                f"{pct(rec.get('maxrss', '-'), rec.get('reqmem', '-')):<6} "
+                f"{rec['log']:<4} {progress_str(model, rec['reached'], rec['approx']):<18} {rec['early_stop']}"
+            )
 
     summary_rows = build_summary_rows(args, by_model)
     print()

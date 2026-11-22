@@ -9,6 +9,7 @@ Space, Weight Exponent.
 
     python drf_table_figure.py
 """
+
 from __future__ import annotations
 
 import glob
@@ -66,8 +67,15 @@ ROWS = [
     ("sinkhorn_w2_top_k=50", "$W_2$ (Sinkhorn)", EM, "Single-cell", "Technical duplicate", APC, "Top-50 DEGs", EM),
     ("sinkhorn_w2_pca_k=50", "$W_2$ (Sinkhorn)", EM, "Single-cell", "Technical duplicate", APC, "PCA-50", EM),
 ]
-DESC = ["Base\nMetric", "Reference\nCentering", "Representation", "Positive\nControl",
-        "Negative\nControl", "Feature\nSpace", "Weight\nExponent"]
+DESC = [
+    "Base\nMetric",
+    "Reference\nCentering",
+    "Representation",
+    "Positive\nControl",
+    "Negative\nControl",
+    "Feature\nSpace",
+    "Weight\nExponent",
+]
 
 
 def latest_drf(ds: str):
@@ -108,14 +116,14 @@ def render(agg: dict, stat_idx: int, path: Path) -> None:
     tbl = ax.table(cellText=cells, colLabels=headers, cellColours=colors, cellLoc="center", loc="center")
     tbl.auto_set_font_size(False)
     tbl.set_fontsize(8)
-    tbl.scale(1, 2.0)   # tall rows: the two-line headers and Negative Control cells need two lines
+    tbl.scale(1, 2.0)  # tall rows: the two-line headers and Negative Control cells need two lines
     # Fit each column to its text, then give every dataset column a single uniform width
     # (= the widest dataset column) so all the DRF data cells are the same size.
     tbl.auto_set_column_width(list(range(ncol)))
     fig.canvas.draw()
     celld = tbl.get_celld()
     ds_w = max(celld[(0, j)].get_width() for j in range(len(DESC), ncol))
-    tbl._autoColumns = list(range(len(DESC)))   # keep descriptor cols auto-fit; freeze dataset cols
+    tbl._autoColumns = list(range(len(DESC)))  # keep descriptor cols auto-fit; freeze dataset cols
     for j in range(len(DESC), ncol):
         for i in range(len(ROWS) + 1):
             celld[(i, j)].set_width(ds_w)
@@ -126,7 +134,8 @@ def render(agg: dict, stat_idx: int, path: Path) -> None:
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
     pd.DataFrame(cells, columns=[h.replace("\n", " ") for h in headers]).to_csv(
-        str(path).replace(".png", ".csv"), index=False)
+        str(path).replace(".png", ".csv"), index=False
+    )
 
 
 def main() -> None:

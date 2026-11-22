@@ -214,9 +214,7 @@ def fast_create_dataset_file(self) -> None:
             pert_idx = self.get_pert_idx(pert_category)
             pert_de_category = adata_.obs["condition_name"][0]
             if de:
-                de_idx = np.where(
-                    adata_.var_names.isin(np.array(de_genes[pert_de_category][:num_de_genes]))
-                )[0]
+                de_idx = np.where(adata_.var_names.isin(np.array(de_genes[pert_de_category][:num_de_genes])))[0]
             else:
                 de_idx = [-1] * num_de_genes
             ctrl_idx = np.random.randint(0, n_ctrl, size=n)

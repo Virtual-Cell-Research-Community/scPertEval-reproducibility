@@ -122,10 +122,7 @@ def validate_matched_population_sizes(
             for condition in conditions
             if expected[condition] != observed[condition]
         }
-        raise ValueError(
-            "population prediction counts do not match observed treated-cell counts: "
-            f"{differences}"
-        )
+        raise ValueError(f"population prediction counts do not match observed treated-cell counts: {differences}")
     return expected
 
 
@@ -297,9 +294,7 @@ def evaluate_bundle(
 
     profile_capability = split.get("profile_evaluation_condition_capability", capability)
     if profile_capability not in {"point", "population"}:
-        raise ValueError(
-            "profile_evaluation_condition_capability must be 'point' or 'population'"
-        )
+        raise ValueError("profile_evaluation_condition_capability must be 'point' or 'population'")
     profile_conditions = expected_test_conditions(split, fold, profile_capability)
     truth_labels = truth.obs["perturbation"].astype(str)
     if profile_prediction_path is not None and profile_prediction_path != prediction_path:
@@ -309,9 +304,7 @@ def evaluate_bundle(
     prediction_labels = profile_source.obs["perturbation"].astype(str)
     profile_truth = truth[truth_labels.isin(["control", *profile_conditions])].copy()
     profile_prediction = profile_source[prediction_labels.isin(profile_conditions)].copy()
-    observed_profile_conditions = sorted(
-        profile_prediction.obs["perturbation"].astype(str).unique().tolist()
-    )
+    observed_profile_conditions = sorted(profile_prediction.obs["perturbation"].astype(str).unique().tolist())
     if observed_profile_conditions != profile_conditions:
         raise ValueError("prediction does not cover the shared profile-evaluation cohort")
     effects = observed_effect_strengths(profile_truth)
@@ -331,9 +324,7 @@ def evaluate_bundle(
     )
 
     if capability == "population":
-        population_variants = [
-            variant for variant in grid["variants"] if variant["id"].startswith("population-")
-        ]
+        population_variants = [variant for variant in grid["variants"] if variant["id"].startswith("population-")]
         population_policy = grid["population"]
         if population_policy.get("size_policy") != "match-observed":
             raise ValueError("only the match-observed population-size policy is supported")
@@ -375,18 +366,15 @@ def validate_comparable_cohorts(detail: pd.DataFrame) -> None:
         if len(set(cohorts.values())) <= 1:
             continue
         counts = ", ".join(f"{model}={len(cohort)}" for model, cohort in sorted(cohorts.items()))
-        labels = ", ".join(
-            f"{key}={value!r}" for key, value in zip(group_keys, values, strict=True)
-        )
+        labels = ", ".join(f"{key}={value!r}" for key, value in zip(group_keys, values, strict=True))
         raise ValueError(f"models use different evaluation cohorts for {labels}: {counts}")
 
 
 def summarize_evaluations(detail: pd.DataFrame) -> pd.DataFrame:
     """Average repeated draws, then aggregate uniformly, by median, and by effect strength."""
     keys = ["model", "dataset", "split", "capability", "variant", "factor", "level", "protocol", "better"]
-    per_perturbation = (
-        detail.groupby([*keys, "perturbation"], as_index=False, dropna=False)
-        .agg(score=("score", "mean"), effect_strength=("effect_strength", "first"))
+    per_perturbation = detail.groupby([*keys, "perturbation"], as_index=False, dropna=False).agg(
+        score=("score", "mean"), effect_strength=("effect_strength", "first")
     )
     rows = []
     for values, group in per_perturbation.groupby(keys, sort=False, dropna=False):
@@ -567,8 +555,7 @@ def compare_to_reference(
             raise ValueError(f"missing reference scenario for dataset={dataset!r}, split={split!r}")
         for scenario in scenarios[1:]:
             alternative = study[
-                (study["variant"] == scenario["variant"])
-                & (study["aggregation"] == scenario["aggregation"])
+                (study["variant"] == scenario["variant"]) & (study["aggregation"] == scenario["aggregation"])
             ]
             finite_reference = reference[np.isfinite(reference["score"].to_numpy(float))]
             finite_alternative = alternative[np.isfinite(alternative["score"].to_numpy(float))]
@@ -579,12 +566,16 @@ def compare_to_reference(
             alt = _rank_frame(finite_alternative[finite_alternative["model"].isin(common_models)])
             if ref["model"].duplicated().any() or alt["model"].duplicated().any():
                 raise ValueError("each model must have exactly one aggregate score per scenario")
-            paired = ref[["model", "score", "rank"]].merge(
-                alt[["model", "score", "rank"]],
-                on="model",
-                suffixes=("_reference", "_alternative"),
-                validate="one_to_one",
-            ).sort_values("model")
+            paired = (
+                ref[["model", "score", "rank"]]
+                .merge(
+                    alt[["model", "score", "rank"]],
+                    on="model",
+                    suffixes=("_reference", "_alternative"),
+                    validate="one_to_one",
+                )
+                .sort_values("model")
+            )
             reference_ranks = paired["rank_reference"].to_numpy(float)
             alternative_ranks = paired["rank_alternative"].to_numpy(float)
             spearman, kendall = _rank_correlations(reference_ranks, alternative_ranks)
@@ -629,9 +620,7 @@ def compare_to_reference(
                     "models": ";".join(common_models),
                     "spearman": spearman,
                     "kendall": kendall,
-                    "pairwise_reversal_fraction": _pairwise_reversal_fraction(
-                        reference_ranks, alternative_ranks
-                    ),
+                    "pairwise_reversal_fraction": _pairwise_reversal_fraction(reference_ranks, alternative_ranks),
                     "winner_changed": reference_winners != alternative_winners,
                     "reference_winners": ";".join(reference_winners),
                     "alternative_winners": ";".join(alternative_winners),
@@ -690,9 +679,8 @@ def paired_perturbation_bootstrap(
     population_keys = [*keys, "perturbation", "bootstrap_cluster"]
     if "held_out_context" in clustered_detail:
         population_keys.append("held_out_context")
-    per_population = (
-        clustered_detail.groupby(population_keys, as_index=False, dropna=False)
-        .agg(score=("score", "mean"), effect_strength=("effect_strength", "first"))
+    per_population = clustered_detail.groupby(population_keys, as_index=False, dropna=False).agg(
+        score=("score", "mean"), effect_strength=("effect_strength", "first")
     )
     scenario_summary = summarize_evaluations(detail)
     scenarios = _one_factor_scenarios(
@@ -761,8 +749,7 @@ def paired_perturbation_bootstrap(
 
             cluster_ids = sorted(complete_clusters)
             cluster_positions = {
-                cluster: np.flatnonzero(clusters.astype(str).to_numpy() == cluster)
-                for cluster in cluster_ids
+                cluster: np.flatnonzero(clusters.astype(str).to_numpy() == cluster) for cluster in cluster_ids
             }
 
             rng = _seed(seed, f"{dataset}|{split}|{scenario['id']}")
@@ -776,9 +763,7 @@ def paired_perturbation_bootstrap(
             column_index = {column: index for index, column in enumerate(matrix.columns)}
             for _ in range(n_bootstrap):
                 sampled_clusters = rng.integers(0, len(cluster_ids), size=len(cluster_ids))
-                sampled = np.concatenate(
-                    [cluster_positions[cluster_ids[index]] for index in sampled_clusters]
-                )
+                sampled = np.concatenate([cluster_positions[cluster_ids[index]] for index in sampled_clusters])
                 sampled_effects = effect_values[sampled]
                 reference_scores = np.array(
                     [
@@ -800,12 +785,16 @@ def paired_perturbation_bootstrap(
                         for model in common_models
                     ]
                 )
-                reference_ranks = pd.Series(reference_scores).rank(
-                    method="average", ascending=ref_direction[0] == "lower"
-                ).to_numpy(float)
-                alternative_ranks = pd.Series(alternative_scores).rank(
-                    method="average", ascending=alt_direction[0] == "lower"
-                ).to_numpy(float)
+                reference_ranks = (
+                    pd.Series(reference_scores)
+                    .rank(method="average", ascending=ref_direction[0] == "lower")
+                    .to_numpy(float)
+                )
+                alternative_ranks = (
+                    pd.Series(alternative_scores)
+                    .rank(method="average", ascending=alt_direction[0] == "lower")
+                    .to_numpy(float)
+                )
                 for index, model in enumerate(common_models):
                     rank_changes[model].append(alternative_ranks[index] - reference_ranks[index])
                 spearman, kendall = _rank_correlations(reference_ranks, alternative_ranks)
@@ -888,10 +877,7 @@ def paired_model_wilcoxon(detail: pd.DataFrame) -> pd.DataFrame:
     population_keys = [*keys, "perturbation", "bootstrap_cluster"]
     if "held_out_context" in clustered:
         population_keys.append("held_out_context")
-    per_population = (
-        clustered.groupby(population_keys, as_index=False, dropna=False)
-        .agg(score=("score", "mean"))
-    )
+    per_population = clustered.groupby(population_keys, as_index=False, dropna=False).agg(score=("score", "mean"))
     rows: list[dict] = []
     group_keys = ["dataset", "split", "variant", "factor", "level", "protocol", "better"]
     for values, group in per_population.groupby(group_keys, sort=False, dropna=False):
@@ -913,9 +899,7 @@ def paired_model_wilcoxon(detail: pd.DataFrame) -> pd.DataFrame:
             populations = populations.loc[finite]
             cluster_counts = populations["bootstrap_cluster"].astype(str).value_counts()
             complete_clusters = cluster_counts[cluster_counts == expected_contexts].index
-            populations = populations[
-                populations["bootstrap_cluster"].astype(str).isin(complete_clusters)
-            ]
+            populations = populations[populations["bootstrap_cluster"].astype(str).isin(complete_clusters)]
             paired = populations.groupby("bootstrap_cluster")[["a", "b"]].mean()
             if paired.empty:
                 continue

@@ -150,10 +150,7 @@ def _series_value_differences(left: pd.Series, right: pd.Series) -> tuple[int, s
             if finite.any()
             else float("nan")
         )
-        examples = [
-            f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}"
-            for index in differing[:3]
-        ]
+        examples = [f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}" for index in differing[:3]]
         return len(differing), f"max_abs_difference={max_abs:.17g}; " + "; ".join(examples)
 
     left_values = left.astype("string")
@@ -162,10 +159,7 @@ def _series_value_differences(left: pd.Series, right: pd.Series) -> tuple[int, s
     differing = np.flatnonzero(~equal.to_numpy())
     if not len(differing):
         return 0, ""
-    examples = [
-        f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}"
-        for index in differing[:3]
-    ]
+    examples = [f"row {index}: {left.iloc[index]!r} != {right.iloc[index]!r}" for index in differing[:3]]
     return len(differing), "; ".join(examples)
 
 
@@ -177,21 +171,14 @@ def _frame_difference_report(left: pd.DataFrame, right: pd.DataFrame, name: str)
     if left_columns != right_columns:
         left_only = sorted(set(left_columns) - set(right_columns))
         right_only = sorted(set(right_columns) - set(left_columns))
-        report.append(
-            f"{name}: column_order_or_membership_differs; left_only={left_only}; right_only={right_only}"
-        )
+        report.append(f"{name}: column_order_or_membership_differs; left_only={left_only}; right_only={right_only}")
     if not left.index.equals(right.index):
         left_index = left.index.astype(str)
         right_index = right.index.astype(str)
         limit = min(len(left_index), len(right_index))
         differing = np.flatnonzero(left_index[:limit].to_numpy() != right_index[:limit].to_numpy())
-        examples = [
-            f"row {index}: {left_index[index]!r} != {right_index[index]!r}"
-            for index in differing[:3]
-        ]
-        report.append(
-            f"{name}: index_differs; lengths={len(left_index)}/{len(right_index)}; " + "; ".join(examples)
-        )
+        examples = [f"row {index}: {left_index[index]!r} != {right_index[index]!r}" for index in differing[:3]]
+        report.append(f"{name}: index_differs; lengths={len(left_index)}/{len(right_index)}; " + "; ".join(examples))
     if list(left.index.names) != list(right.index.names):
         report.append(f"{name}: index_names={left.index.names!r}/{right.index.names!r}")
 
@@ -203,9 +190,7 @@ def _frame_difference_report(left: pd.DataFrame, right: pd.DataFrame, name: str)
         details = []
         if str(left_series.dtype) != str(right_series.dtype):
             details.append(f"dtype={left_series.dtype}/{right_series.dtype}")
-        if isinstance(left_series.dtype, pd.CategoricalDtype) and isinstance(
-            right_series.dtype, pd.CategoricalDtype
-        ):
+        if isinstance(left_series.dtype, pd.CategoricalDtype) and isinstance(right_series.dtype, pd.CategoricalDtype):
             if not left_series.cat.categories.equals(right_series.cat.categories):
                 details.append(
                     "categories="

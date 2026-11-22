@@ -165,9 +165,7 @@ def main() -> None:
         return Batch(
             gene_expression=torch.stack([item.gene_expression for item in items]),
             perturbations=torch.stack([item.perturbations for item in items]),
-            covariates={
-                args.context_key: torch.stack([item.covariates[args.context_key] for item in items])
-            },
+            covariates={args.context_key: torch.stack([item.covariates[args.context_key] for item in items])},
         )
 
     class MetricHistory(Callback):

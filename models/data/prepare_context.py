@@ -36,8 +36,7 @@ def _sciplex_gene_panel(data: ad.AnnData, config: dict) -> tuple[ad.AnnData, dic
     expected_conditions = int(config["n_point_conditions"])
     if len(conditions) != expected_conditions:
         raise ValueError(
-            f"sci-Plex gene selection found {len(conditions)} treated conditions; "
-            f"expected {expected_conditions}"
+            f"sci-Plex gene selection found {len(conditions)} treated conditions; expected {expected_conditions}"
         )
 
     sc.pp.highly_variable_genes(
@@ -67,8 +66,7 @@ def _sciplex_gene_panel(data: ad.AnnData, config: dict) -> tuple[ad.AnnData, dic
         use_raw=False,
     )
     de_by_condition = {
-        condition: list(map(str, data.uns[key]["names"][condition][:n_de_genes]))
-        for condition in conditions
+        condition: list(map(str, data.uns[key]["names"][condition][:n_de_genes])) for condition in conditions
     }
     de_genes = {gene for genes in de_by_condition.values() for gene in genes}
     selected = hvg_genes | de_genes
@@ -218,8 +216,7 @@ def _prepare_chemical_contexts(
         source_perturbation = source.obs["perturbation"].astype(str)
         source_control = source.obs["is_control"].astype(bool)
         mask = (
-            source_context.isin(config["contexts"])
-            & (source_control | source_perturbation.isin(drug_labels))
+            source_context.isin(config["contexts"]) & (source_control | source_perturbation.isin(drug_labels))
         ).to_numpy()
     finally:
         source.file.close()
@@ -238,9 +235,7 @@ def _prepare_chemical_contexts(
             )
         ]
         conditions = [
-            _chemical_model_label(drug["canonical_label"], dose)
-            for drug in config["drugs"]
-            for dose in config["doses"]
+            _chemical_model_label(drug["canonical_label"], dose) for drug in config["drugs"] for dose in config["doses"]
         ]
         # The point stratum includes all 36 conditions; the three population exclusions are
         # allowed below 50 but still must be present. Enforce the configured population floor
@@ -351,12 +346,8 @@ def _write_context_metadata(output: Path, result: ad.AnnData) -> dict:
         "path": counts_path.name,
         "sha256": file_checksum(counts_path),
         "n_rows": len(counts),
-        "minimum_treated_cells": int(
-            counts.loc[counts["model_perturbation"] != "control", "n_cells"].min()
-        ),
-        "maximum_treated_cells": int(
-            counts.loc[counts["model_perturbation"] != "control", "n_cells"].max()
-        ),
+        "minimum_treated_cells": int(counts.loc[counts["model_perturbation"] != "control", "n_cells"].min()),
+        "maximum_treated_cells": int(counts.loc[counts["model_perturbation"] != "control", "n_cells"].max()),
     }
 
 
@@ -438,15 +429,11 @@ def _input_provenance(
         derived = registry["derived"]
         expected_path = (registry_path.parent.parent / derived["path"]).resolve()
         if path.resolve() != expected_path:
-            raise ValueError(
-                f"input {name!r} resolves to {path.resolve()}, but registry declares {expected_path}"
-            )
+            raise ValueError(f"input {name!r} resolves to {path.resolve()}, but registry declares {expected_path}")
         if derived["checksum_type"] != "sha256" or len(derived["checksum"]) != 64:
             raise ValueError(f"registry {registry_path} does not pin a derived SHA-256 checksum")
         if stat.st_size != int(derived["size_bytes"]):
-            raise ValueError(
-                f"input {name!r} size {stat.st_size} differs from registry size {derived['size_bytes']}"
-            )
+            raise ValueError(f"input {name!r} size {stat.st_size} differs from registry size {derived['size_bytes']}")
         records[name] = {
             "path": str(path),
             "sha256": str(derived["checksum"]),
@@ -572,9 +559,7 @@ def main() -> int:
             "sampling": manifest["sampling"],
             "normalized_view": manifest["output"],
         }
-        args.counts_output.with_suffix(".manifest.json").write_text(
-            json.dumps(counts_manifest, indent=2) + "\n"
-        )
+        args.counts_output.with_suffix(".manifest.json").write_text(json.dumps(counts_manifest, indent=2) + "\n")
     args.output.with_suffix(".manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print(f"wrote {result.shape} context-transfer model view to {args.output}")
     return 0

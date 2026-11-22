@@ -130,9 +130,7 @@ def _predict_native_counts(
                 raise ValueError(f"condition {condition!r} is absent from scDisInFact training labels")
             specific = control_specific + centroids[condition_ids[condition]] - centroids[control_id]
             generated = model.generative(z_c=common, z_d=[specific], batch_ids=batch_ids)
-            predictions[condition] = (
-                generated["mu"].detach().cpu().numpy() * size_factors
-            ).astype(np.float32)
+            predictions[condition] = (generated["mu"].detach().cpu().numpy() * size_factors).astype(np.float32)
     return predictions
 
 

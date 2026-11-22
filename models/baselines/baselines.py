@@ -85,7 +85,9 @@ def no_change_baseline(adata: ad.AnnData, fold: dict, control_label: str = "cont
     """
     pert, _, test_genes = _fold_genes(adata, fold)
     control_mean = np.asarray(adata.X[pert == control_label].mean(axis=0)).ravel()
-    pred = ad.AnnData(X=np.tile(control_mean, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes})
+    pred = ad.AnnData(
+        X=np.tile(control_mean, (len(test_genes), 1)).astype(np.float32), obs={"perturbation": test_genes}
+    )
     pred.var_names = adata.var_names
     return pred
 
