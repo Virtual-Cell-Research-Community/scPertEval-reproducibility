@@ -23,8 +23,8 @@ remain the inputs to the migrated evaluator.
 The repository suite passes against the pinned revision. A deterministic synthetic fold was also
 scored once with the pre-migration evaluator and once with the migrated evaluator. All 101
 protocols completed, and all 404 protocol-by-perturbation rows matched exactly in numerical score
-and structured undefined reason. This is a migration check only; authoritative benchmark scores
-must still be recomputed from the retained production predictions.
+and structured undefined reason. This was a migration check only; the authoritative benchmark
+scores were subsequently recomputed from the retained production predictions as described below.
 
 The production-data staging audit was then repeated for all 12 benchmark folds at repository
 commit `7c43be7`. It produced the expected 340,075 protocol-by-evaluation-unit rows. The old and
@@ -48,11 +48,11 @@ host-dependent floating-point behavior in Sinkhorn divergence (maximum absolute 
 should therefore run on Beauty only, or otherwise use one homogeneous execution host, so that
 near-tied model rankings cannot depend on CPU-specific Sinkhorn numerics.
 
-## Full production staging
+## Full production evaluation and promotion
 
-The complete migrated evaluation was run on Beauty on 2026-11-22 and retained in the separate SDS
-staging tree `results/ranking-sensitivity-atlas-scperteval-58ccc-production-staging`. All 120
-expected bundles are present and current:
+The complete migrated evaluation was run on Beauty on 2026-11-22. After scientific review and a
+second provenance audit, it was promoted to the canonical SDS tree
+`results/ranking-sensitivity-atlas-v1`. All 120 expected bundles are present and current:
 
 - 65 perturbation-generalization bundles;
 - 28 genetic-context-transfer bundles;
@@ -71,15 +71,22 @@ task's mean pairwise model-order reversal fraction (`0.325818` to `0.325903`); i
 count remains 922 of 5,050 protocol pairs. The 36 light- and dark-mode figure files and their five
 direct source CSVs are mirrored under `figures/ranking-sensitivity-atlas-v1/`.
 
-This staging result has not replaced the authoritative pre-migration SDS result tree. Promotion is
-an explicit later decision after scientific review of the regenerated figures and source tables.
+The migrated ground-truth availability and matched-coverage audit was promoted alongside the score
+tree to `results/ground-truth-coverage-v1`. Its canonical audit contains 340,075 availability rows
+from all 12 folds. The four root-level coverage summaries were regenerated after promotion so their
+recorded input path and checksum refer to the canonical availability file.
+
+The promotion revalidated every result against its retained prediction and manifest, confirmed all
+3,219,043 score rows and all 12 analysis source-data checksums, and found no temporary files. At the
+user's request, the displaced pre-migration ranking and coverage trees were permanently deleted
+after validation rather than archived.
 
 ## Result-generation boundary
 
-The checked-in ground-truth coverage manifest and the current authoritative ranking score tree
-were generated with scPertEval commit `3950557`. They remain intact as the pre-migration evidence
-until the migrated workflow has been recomputed into staging, compared, and explicitly promoted.
-They must not be described as results from the new evaluator.
+The authoritative ranking score and ground-truth coverage trees now derive from scPertEval commit
+`58ccc91095ccb30bbe8f4470dff8b398d2eb4525`. Completion records, analysis manifests and coverage
+summaries bind the relevant input checksums and evaluator provenance. The retained model
+predictions were not regenerated or modified during this evaluator migration.
 
 The maintained DRF/DEG protocol-behavior workflow is a separate workstream. The frozen
 `analyses/scperteval-paper-v1` and protocol-behavior `production-v1` environments are historical
