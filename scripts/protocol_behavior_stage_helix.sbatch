@@ -14,7 +14,7 @@ set -euo pipefail
 PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 UV_BIN="${UV_BIN:-${HOME}/.local/bin/uv}"
 MANIFEST="${SCPERTEVAL_PROTOCOL_MANIFEST:-configs/protocol_behavior/production-v2.json}"
-OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-results/protocol_behavior/production-v2}"
+OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-results/protocol_behavior/production-v2-scperteval-main-staging}"
 STAGE_CLASS="${STAGE_CLASS:-cpu}"
 STAGE_ID="${STAGE_ID:-}"
 EXCLUDE_STAGE="${EXCLUDE_STAGE:-}"

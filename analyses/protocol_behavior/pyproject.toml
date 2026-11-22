@@ -11,7 +11,7 @@ dependencies = [
   "numpy>=1.26",
   "pandas>=2.1",
   "scipy>=1.12",
-  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@89fc21f3e59673651b3162355d9a32495e274253",
+  "scperteval[sinkhorn] @ git+https://github.com/Virtual-Cell-Research-Community/scPertEval.git@58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
   "torch==2.5.1",
 ]
 

@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "id": "protocol-behavior-production-v2",
+  "output_dir": "results/protocol_behavior/production-v2-scperteval-main-staging",
   "seed": 42,
   "minimum_cells": 50,
   "reference_subsample": 8192,
@@ -48,12 +49,16 @@
       "id": "essential-k562",
       "label": "Perturbation K562 essential",
       "path": "models/data/replogle-weissman-2022-k562-essential/raw.h5ad",
+      "data_manifest": "models/data/replogle-weissman-2022-k562-essential/split_manifest.json",
+      "data_manifest_output_key": "model_view",
       "cohort_manifest": "configs/experiments/replogle-weissman-2022-k562-essential-perturbation-generalization.json"
     },
     {
       "id": "genetic-k562-essential",
       "label": "Genetic K562 essential",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "data_manifest": "models/data/replogle-nadig-four-context-50-cell/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "replogle-weissman-2022-k562-essential"
@@ -62,6 +67,8 @@
       "id": "genetic-rpe1",
       "label": "Genetic RPE1",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "data_manifest": "models/data/replogle-nadig-four-context-50-cell/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "replogle-weissman-2022-rpe1"
@@ -70,6 +77,8 @@
       "id": "genetic-hepg2",
       "label": "Genetic HepG2",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "data_manifest": "models/data/replogle-nadig-four-context-50-cell/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "nadig-oconner-2024-hepg2"
@@ -78,6 +87,8 @@
       "id": "genetic-jurkat",
       "label": "Genetic Jurkat",
       "path": "models/data/replogle-nadig-four-context-50-cell/raw.h5ad",
+      "data_manifest": "models/data/replogle-nadig-four-context-50-cell/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/replogle-nadig-four-context-50-cell.json",
       "context_key": "context",
       "context_value": "nadig-oconner-2024-jurkat"
@@ -86,6 +97,8 @@
       "id": "chemical-a549",
       "label": "SciPlex3 A549",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "data_manifest": "models/data/sciplex3-nine-drug-context-transfer/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "A549"
@@ -94,6 +107,8 @@
       "id": "chemical-k562",
       "label": "SciPlex3 K562",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "data_manifest": "models/data/sciplex3-nine-drug-context-transfer/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "K562"
@@ -102,15 +117,17 @@
       "id": "chemical-mcf7",
       "label": "SciPlex3 MCF7",
       "path": "models/data/sciplex3-nine-drug-context-transfer/raw.h5ad",
+      "data_manifest": "models/data/sciplex3-nine-drug-context-transfer/raw.manifest.json",
+      "data_manifest_output_key": "output",
       "cohort_manifest": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
       "context_key": "context",
       "context_value": "MCF7"
     }
   ],
-  "status": "planned-pending-zach-feedback",
+  "status": "ready-scperteval-main-staging",
   "derived_from": "protocol-behavior-production-v1",
   "benchmark_alignment": "current-k562-essential-design",
-  "metric_review_status": "pending-zach-feedback",
-  "scperteval_revision": "89fc21f3e59673651b3162355d9a32495e274253",
+  "metric_review_status": "approved-frozen-design",
+  "scperteval_revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
   "high_memory_cpu_drf_stage": "drf.cpu.essential-k562"
 }
