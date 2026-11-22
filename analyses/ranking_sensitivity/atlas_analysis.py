@@ -11,6 +11,7 @@ import argparse
 import gzip
 import hashlib
 import json
+from collections.abc import Sequence
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
@@ -18,6 +19,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from .cross_perturbation import decompose
 
 DETAIL_COLUMNS = {
     "task",
@@ -100,44 +103,82 @@ def _read_completion(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
 
-def collect_details(details_root: Path, families: pd.DataFrame, task_manifest: pd.DataFrame) -> pd.DataFrame:
-    """Read checksum-valid detail bundles and return one validated canonical score table."""
-
+def _detail_paths(details_root: Path) -> list[Path]:
     paths = sorted(details_root.glob("*/*/*/seed-*.csv"))
     if not paths:
         raise FileNotFoundError(f"no detail score bundles below {details_root}")
+    return paths
+
+
+def collect_details(
+    details_root: Path | Sequence[Path],
+    families: pd.DataFrame,
+    task_manifest: pd.DataFrame,
+) -> pd.DataFrame:
+    """Read checksum-valid detail bundles and return one validated canonical score table.
+
+    Several roots may each contribute a disjoint protocol subset of the same model/fold/seed
+    bundles (for example reused v1 scores plus incrementally scored v2 protocols). Every root must
+    hold the same bundle identities, each bundle must bind the same retained prediction checksum in
+    every root, and the union of protocols per bundle must equal the frozen task manifest.
+    """
+
+    roots = [details_root] if isinstance(details_root, Path) else list(details_root)
+    if not roots:
+        raise ValueError("at least one details root is required")
     expected_protocols = {
         task: set(group["protocol_id"].astype(str)) for task, group in task_manifest.groupby("task", sort=False)
     }
-    frames: list[pd.DataFrame] = []
-    bundle_keys: set[tuple[str, str, str, int]] = set()
-    for path in paths:
-        completion_path = path.with_suffix(".complete.json")
-        if not completion_path.is_file():
-            raise FileNotFoundError(f"missing completion record for {path}")
-        completion = _read_completion(completion_path)
-        if completion.get("status") != "complete" or completion.get("output_sha256") != _sha256(path):
-            raise ValueError(f"stale or invalid completion record for {path}")
-        frame = pd.read_csv(path, keep_default_na=False)
-        missing = sorted(DETAIL_COLUMNS - set(frame.columns))
-        if missing:
-            raise ValueError(f"{path} is missing detail columns: {missing}")
-        frame["score_defined"] = _as_bool(frame["score_defined"], "score_defined")
-        frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
-        key_values = frame[["task", "fold", "model", "training_seed"]].drop_duplicates()
-        if len(key_values) != 1:
-            raise ValueError(f"{path} contains multiple bundle identities")
-        key = tuple(key_values.iloc[0].tolist())
-        typed_key = (str(key[0]), str(key[1]), str(key[2]), int(key[3]))
-        if typed_key in bundle_keys:
-            raise ValueError(f"duplicate detail bundle identity: {typed_key}")
-        bundle_keys.add(typed_key)
-        task = typed_key[0]
-        observed_protocols = set(frame["protocol_id"].astype(str))
-        if observed_protocols != expected_protocols.get(task, set()):
-            raise ValueError(f"{path} protocol set does not match the frozen task manifest")
-        frames.append(frame)
+    parts: dict[tuple[str, str, str, int], list[tuple[pd.DataFrame, str]]] = {}
+    root_identities: list[set[tuple[str, str, str, int]]] = []
+    for root in roots:
+        identities: set[tuple[str, str, str, int]] = set()
+        for path in _detail_paths(root):
+            frame, typed_key, prediction_sha256 = _read_bundle(path)
+            if typed_key in identities:
+                raise ValueError(f"duplicate detail bundle identity: {typed_key}")
+            identities.add(typed_key)
+            parts.setdefault(typed_key, []).append((frame, prediction_sha256))
+        root_identities.append(identities)
+    if any(identities != root_identities[0] for identities in root_identities[1:]):
+        raise ValueError("details roots do not contain the same model/fold/seed bundles")
 
+    frames: list[pd.DataFrame] = []
+    for typed_key, bundle_parts in sorted(parts.items()):
+        if len({prediction for _, prediction in bundle_parts}) != 1:
+            raise ValueError(f"details roots scored different predictions for {typed_key}")
+        protocol_sets = [set(frame["protocol_id"].astype(str)) for frame, _ in bundle_parts]
+        if sum(len(item) for item in protocol_sets) != len(set().union(*protocol_sets)):
+            raise ValueError(f"details roots overlap in protocols for {typed_key}")
+        if set().union(*protocol_sets) != expected_protocols.get(typed_key[0], set()):
+            raise ValueError(f"{typed_key} protocol set does not match the frozen task manifest")
+        frames.extend(frame for frame, _ in bundle_parts)
+    return _canonical_details(frames, families)
+
+
+def _read_bundle(path: Path) -> tuple[pd.DataFrame, tuple[str, str, str, int], str]:
+    completion_path = path.with_suffix(".complete.json")
+    if not completion_path.is_file():
+        raise FileNotFoundError(f"missing completion record for {path}")
+    completion = _read_completion(completion_path)
+    if completion.get("status") != "complete" or completion.get("output_sha256") != _sha256(path):
+        raise ValueError(f"stale or invalid completion record for {path}")
+    frame = pd.read_csv(path, keep_default_na=False)
+    missing = sorted(DETAIL_COLUMNS - set(frame.columns))
+    if missing:
+        raise ValueError(f"{path} is missing detail columns: {missing}")
+    frame["score_defined"] = _as_bool(frame["score_defined"], "score_defined")
+    frame["score"] = pd.to_numeric(frame["score"], errors="coerce")
+    key_values = frame[["task", "fold", "model", "training_seed"]].drop_duplicates()
+    if len(key_values) != 1:
+        raise ValueError(f"{path} contains multiple bundle identities")
+    key = tuple(key_values.iloc[0].tolist())
+    typed_key = (str(key[0]), str(key[1]), str(key[2]), int(key[3]))
+    prediction_sha256 = str(completion.get("inputs", {}).get("prediction_sha256", ""))
+    return frame, typed_key, prediction_sha256
+
+
+def _canonical_details(frames: list[pd.DataFrame], families: pd.DataFrame) -> pd.DataFrame:
     result = pd.concat(frames, ignore_index=True)
     keys = ["task", "fold", "model", "training_seed", "protocol_id", "evaluation_unit"]
     if result.duplicated(keys).any():
@@ -230,6 +271,9 @@ def _factor_level(row: pd.Series, factor: str) -> str:
         return str(row["metric_family"])
     if factor == "expression_space":
         return str(row["space"])
+    if factor == "cross_perturbation":
+        spec = decompose(str(row["metric_family"]))
+        return f"{spec.strategy} · {spec.score_function}"
     values = [str(row[column]) for column in FACTOR_COLUMNS[factor]]
     if factor == "feature_panel":
         ranking = f"/{values[1]}" if values[1] else ""
@@ -247,6 +291,9 @@ def factor_for_pair(first: pd.Series, second: pd.Series) -> tuple[str, str, str]
 
     Evaluation-family changes may necessarily bring a compatible score function or expression
     space with them. Score-function and expression-space contrasts remain strictly one-factor.
+    A cross-perturbation contrast changes only the strategy (direct comparison, or retrieval with
+    predictions or observations as queries) while keeping the distance and every other choice; it is
+    never combined with another change, and evaluation-family contrasts compare direct protocols only.
     """
 
     changed = []
@@ -254,15 +301,23 @@ def factor_for_pair(first: pd.Series, second: pd.Series) -> tuple[str, str, str]
         if tuple(str(first[column]) for column in columns) != tuple(str(second[column]) for column in columns):
             changed.append(factor)
     metric_changes = {column: str(first[column]) != str(second[column]) for column in METRIC_COMPONENT_COLUMNS}
+    spec_a = decompose(str(first["metric_family"]))
+    spec_b = decompose(str(second["metric_family"]))
+    strategy_changed = spec_a.strategy != spec_b.strategy
+    score_changed = spec_a.score_function != spec_b.score_function
     if changed:
         if len(changed) != 1 or any(metric_changes.values()):
             return None
         factor = changed[0]
+    elif strategy_changed:
+        if metric_changes["population"] or metric_changes["space"] or score_changed:
+            return None
+        factor = "cross_perturbation"
     elif metric_changes["population"]:
         factor = "evaluation_family"
-    elif metric_changes["space"] and not metric_changes["metric_family"]:
+    elif metric_changes["space"] and not score_changed:
         factor = "expression_space"
-    elif metric_changes["metric_family"] and not metric_changes["space"]:
+    elif score_changed and not metric_changes["space"]:
         factor = "score_function"
     else:
         return None
@@ -692,7 +747,7 @@ def _checksums(directory: Path) -> dict[str, str]:
 
 def analyse(
     *,
-    details_root: Path,
+    details_root: Path | Sequence[Path],
     availability_path: Path,
     pair_coverage_path: Path,
     families_path: Path,
@@ -704,7 +759,8 @@ def analyse(
     families = pd.read_csv(families_path, keep_default_na=False)
     task_manifest = pd.read_csv(task_manifest_path, keep_default_na=False)
     availability = validate_availability(pd.read_csv(availability_path, keep_default_na=False), task_manifest)
-    details = collect_details(details_root, families, task_manifest)
+    roots = [details_root] if isinstance(details_root, Path) else list(details_root)
+    details = collect_details(roots, families, task_manifest)
     pair_coverage = pd.read_csv(pair_coverage_path)
     source = output / "source-data"
     _write_canonical(details, source / "canonical-scores.csv.gz")
@@ -764,11 +820,21 @@ def analyse(
             "evaluation_family": "profile, population, or DE representation; compatible space and score may change",
             "score_function": "score function changes within a fixed representation and expression space",
             "expression_space": "expression space changes with representation and score function fixed",
+            "cross_perturbation": (
+                "direct comparison versus retrieval rank (prediction or observation queries) with the same "
+                "distance and all other choices fixed"
+            ),
             "other_factors": "strictly one-factor matched contrasts",
         },
         "tasks_pooled": False,
         "n_detail_rows": len(details),
-        "n_detail_bundles": len(list(details_root.glob("*/*/*/seed-*.complete.json"))),
+        "n_detail_bundles": len(details[["task", "fold", "model", "training_seed"]].drop_duplicates()),
+        "details_roots": [
+            {"path": str(root), "n_bundles": len(list(root.glob("*/*/*/seed-*.complete.json")))} for root in roots
+        ],
+        "n_protocols_by_task": {
+            str(task): int(group["protocol_id"].nunique()) for task, group in task_manifest.groupby("task")
+        },
         "n_protocol_pairs": len(pairs),
         "n_eligible_protocol_pairs": int(pairs["analysis_eligible"].sum()),
         "inputs": {
@@ -787,7 +853,13 @@ def analyse(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--details-root", type=Path, required=True)
+    parser.add_argument(
+        "--details-root",
+        type=Path,
+        action="append",
+        required=True,
+        help="detail bundle root; repeat to combine disjoint protocol subsets of the same bundles",
+    )
     parser.add_argument("--availability", type=Path, required=True)
     parser.add_argument("--pair-coverage", type=Path, required=True)
     parser.add_argument(
@@ -809,7 +881,7 @@ def main() -> int:
     )
     args = parser.parse_args()
     analyse(
-        details_root=args.details_root.resolve(),
+        details_root=[root.resolve() for root in args.details_root],
         availability_path=args.availability.resolve(),
         pair_coverage_path=args.pair_coverage.resolve(),
         families_path=args.families.resolve(),

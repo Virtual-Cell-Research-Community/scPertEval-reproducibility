@@ -1,0 +1,196 @@
+{
+  "schema_version": 1,
+  "id": "ranking-sensitivity-atlas-v2",
+  "status": "post-hoc-scope-extension-of-v1",
+  "evaluation_engine": {
+    "package": "scperteval",
+    "revision": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525"
+  },
+  "protocol_universe": {
+    "eligibility_config": "configs/evaluation/atlas-protocol-eligibility-v2.json",
+    "eligible_families": "configs/evaluation/atlas-protocol-eligibility-v2.csv",
+    "eligible_families_sha256": "020a70e56365ac22dd93f3cd52aa9c7650fef8e5e86d0f98289173ee96d7b92f",
+    "task_manifest": "configs/evaluation/atlas-task-protocol-manifest-v2.csv",
+    "task_manifest_sha256": "88b1e1bedb93103d1197da14bd8b6aed536acfd6a625c7a7262d12c3392d6564",
+    "n_families": 111,
+    "vote_weighting": "equal",
+    "literature_frequency_used_only_for_eligibility": true,
+    "n_protocols_by_task": {
+      "essential_perturbation_generalization": 111,
+      "genetic_context_transfer": 111,
+      "chemical_context_transfer": 104
+    }
+  },
+  "tasks": [
+    {
+      "id": "essential_perturbation_generalization",
+      "experiment": "configs/experiments/replogle-weissman-2022-k562-essential-perturbation-generalization.json",
+      "folds": {
+        "fold-0": 271,
+        "fold-1": 271,
+        "fold-2": 270,
+        "fold-3": 270,
+        "fold-4": 270
+      }
+    },
+    {
+      "id": "genetic_context_transfer",
+      "experiment": "configs/experiments/replogle-nadig-four-context-50-cell.json",
+      "folds": {
+        "holdout-k562-essential": 480,
+        "holdout-rpe1": 480,
+        "holdout-hepg2": 480,
+        "holdout-jurkat": 480
+      }
+    },
+    {
+      "id": "chemical_context_transfer",
+      "experiment": "configs/experiments/sciplex3-nine-drug-context-transfer.json",
+      "folds": {
+        "holdout-a549": 33,
+        "holdout-k562": 33,
+        "holdout-mcf7": 33
+      }
+    }
+  ],
+  "ground_truth_coverage": {
+    "availability_unit": "evaluation_unit",
+    "computed_without_model_predictions": true,
+    "pairwise_matching": "intersection_within_task_and_fold",
+    "same_evaluation_units_for_both_protocols": true,
+    "candidate_minimum_common_fraction": 0.75,
+    "candidate_is_frozen": true,
+    "freeze_after": "The 75% rule was frozen on 2026-11-21 for v1, before model ranks were inspected. v2 applies the same unchanged rule; the truth-only coverage of the 10 added protocols was computed after v1 ranks were inspected.",
+    "allowed_undefined_reasons": [
+      "constant_truth",
+      "no_ground_truth_positives",
+      "single_ground_truth_class",
+      "empty_feature_set",
+      "insufficient_observed_cells",
+      "target_gene_not_measured",
+      "non_finite_ground_truth_de_statistic"
+    ],
+    "report": [
+      "n_total",
+      "n_defined_per_protocol",
+      "n_common",
+      "common_fraction",
+      "undefined_reason_counts"
+    ]
+  },
+  "undefined_scores": {
+    "constant_prediction_varying_truth": {
+      "pearson": 0.0,
+      "cosine": 0.0
+    },
+    "constant_truth": {
+      "pearson": "NA",
+      "cosine": "NA"
+    },
+    "truth_has_positives_prediction_has_none": {
+      "recall": 0.0,
+      "precision": 0.0,
+      "f1": 0.0
+    },
+    "no_ground_truth_positives": {
+      "recall": "NA",
+      "average_precision": "NA",
+      "auprc": "NA"
+    },
+    "single_ground_truth_class": {
+      "auroc": "NA"
+    },
+    "set_comparison": {
+      "both_empty": 1.0,
+      "one_empty": 0.0
+    },
+    "invalid_or_nonfinite_model_output": "model_protocol_failure",
+    "insufficient_observed_cells": "ground_truth_ineligible",
+    "never_silently_replace_na_with_zero": true
+  },
+  "pairwise_protocol_comparison": {
+    "within": [
+      "task",
+      "fold"
+    ],
+    "match_on": "evaluation_unit",
+    "model_specific_failure_may_shrink_common_set": false,
+    "require_same_model_panel": true,
+    "compare": [
+      "winner",
+      "pairwise_model_order"
+    ],
+    "record_coverage": true
+  },
+  "aggregation": {
+    "primary": "mean",
+    "additional_literature_supported": [
+      "median"
+    ],
+    "effect_weighted": "excluded",
+    "cross_metric_composite": false
+  },
+  "headline_outputs": {
+    "separate_tasks": true,
+    "winner_share": {
+      "tie_credit": "fractional",
+      "eligible_protocols": "passes_frozen_common_coverage_rule",
+      "show_protocol_coverage": true
+    },
+    "global_protocol_pair_disagreement": true,
+    "factor_level_winner_change": true,
+    "concrete_factor_contrasts": true,
+    "winner_transition_matrix": false
+  },
+  "robustness": {
+    "bootstrap_role": "supplementary",
+    "replicates": 1000,
+    "seed": 42,
+    "paired_across_models_and_protocols": true,
+    "resampling_unit": "perturbation_identity",
+    "retain_all_contexts_per_sampled_identity": true
+  },
+  "illustrative_examples": {
+    "role": "selected_examples_after_primary_scores",
+    "n_bump_plots": 4,
+    "selection_disclosed_in_legend": true,
+    "complete_candidate_table_exported": true
+  },
+  "supersedes": {
+    "id": "ranking-sensitivity-atlas-v1",
+    "decided_on": "2026-11-22",
+    "post_hoc": true,
+    "change": "Adds the 10 recurring identity-matching (retrieval-rank) protocol families excluded from v1; effect-size and pooled-response cross-perturbation families stay excluded.",
+    "disclosure": "The scope change was decided after v1 model ranks had been inspected. v2 is the primary analysis; v1 is retained unchanged and reported as a supplementary analysis.",
+    "unchanged": [
+      "evaluation_engine",
+      "tasks",
+      "ground_truth_coverage.candidate_minimum_common_fraction",
+      "undefined_scores",
+      "pairwise_protocol_comparison",
+      "aggregation",
+      "headline_outputs",
+      "robustness"
+    ],
+    "documentation": "docs/ranking-sensitivity-atlas-v2-scope-change.md"
+  },
+  "scoring": {
+    "reuse": {
+      "protocols": "the 101 v1 families",
+      "source": "results/ranking-sensitivity-atlas-v1/details",
+      "unchanged": true
+    },
+    "added": {
+      "protocols": "the 10 v2 retrieval families absent from v1",
+      "destination": "results/ranking-sensitivity-atlas-v2/details",
+      "execution_host": "beauty",
+      "evaluator": "analyses/ranking_sensitivity/retrieval.py via atlas_runtime.py"
+    },
+    "bundle_match": "v1 and v2 completion records of one model/fold/seed must bind the same prediction checksum"
+  },
+  "factor_sensitivity": {
+    "cross_perturbation": "direct comparison versus retrieval rank with the same distance (squared error, MAE or cosine) and otherwise identical representation, space, centering, feature panel, target policy and weighting; predicted-query and observed-query retrieval are distinct levels",
+    "score_function": "score function changes within a fixed representation, expression space and cross-perturbation strategy",
+    "evaluation_family": "representation changes between direct comparisons only"
+  }
+}

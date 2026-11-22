@@ -11,7 +11,18 @@ from scperteval.blocks.spaces import FeatureSpace, SubsetSpace
 from scperteval.protocols import metrics
 from scperteval.types import Protocol
 
-DEFAULT_ELIGIBILITY = Path("configs/evaluation/atlas-protocol-eligibility-v1.csv")
+from .cross_perturbation import decompose
+from .retrieval import PerUnitDEGUnion, retrieval_rank
+
+ELIGIBILITY_VERSIONS = {
+    "v1": (Path("configs/evaluation/atlas-protocol-eligibility-v1.csv"), 101),
+    "v2": (Path("configs/evaluation/atlas-protocol-eligibility-v2.csv"), 111),
+}
+"""Frozen executable family tables and their expected family counts."""
+DEFAULT_ELIGIBILITY = ELIGIBILITY_VERSIONS["v1"][0]
+RETRIEVAL_HVG_K = 4000
+RETRIEVAL_UNION_DEGS = PerUnitDEGUnion(padj=0.05, top_k=25, rank_by="absolute_effect", reference="control")
+"""PerturBench-style union panel (``feature_set == "Other"``); mirrors the v2 eligibility config."""
 
 PROFILE_METRICS = {
     "MAE": metrics.mae,
@@ -50,11 +61,22 @@ DE_METRICS = {
 }
 
 
+def eligibility_path(version: str) -> Path:
+    """Return the frozen family table of one eligibility version."""
+    try:
+        return ELIGIBILITY_VERSIONS[version][0]
+    except KeyError as error:
+        raise ValueError(f"unknown eligibility version {version!r}; expected {sorted(ELIGIBILITY_VERSIONS)}") from error
+
+
 def load_eligible_families(path: Path = DEFAULT_ELIGIBILITY) -> pd.DataFrame:
     """Load and minimally validate the frozen executable family table."""
     frame = pd.read_csv(path, keep_default_na=False)
-    if len(frame) != 101 or frame["family_id"].nunique() != 101:
-        raise ValueError(f"expected 101 unique eligible Atlas families, found {len(frame)} rows")
+    expected = {Path(item).name: count for item, count in ELIGIBILITY_VERSIONS.values()}.get(Path(path).name)
+    if expected is None:
+        raise ValueError(f"{path} is not a registered eligibility table")
+    if len(frame) != expected or frame["family_id"].nunique() != expected:
+        raise ValueError(f"expected {expected} unique eligible Atlas families, found {len(frame)} rows")
     if set(frame["scope_decision"]) != {"included"}:
         raise ValueError("eligibility table contains non-included families")
     return frame
@@ -138,9 +160,66 @@ def _de_space(row: pd.Series) -> SubsetSpace:
     return gene_space(row)
 
 
+def retrieval_space(row: pd.Series) -> tuple[SubsetSpace, bool]:
+    """Resolve one retrieval family's dataset-wide gene axis and per-query target exclusion.
+
+    Retrieval stacks every perturbation into one matrix, so the gene axis must not vary by
+    perturbation. Forced target inclusion therefore adds every target gene of the fold
+    (``perturbed_genes``), and own-target exclusion is applied per query by the metric.
+    """
+    family_id = str(row["family_id"])
+    if str(row["space"]) != "GEX":
+        raise ValueError(f"{family_id}: retrieval is only defined in gene space")
+    feature_set = str(row["feature_set"]).lower()
+    if feature_set == "all":
+        base: SubsetSpace = spaces.full()
+    elif feature_set == "hvg":
+        base = spaces.hvg(_canonical_k(row) or 2000)
+    elif feature_set == "other":
+        base = spaces.hvg(RETRIEVAL_HVG_K) | RETRIEVAL_UNION_DEGS
+    else:
+        raise ValueError(f"{family_id}: unsupported retrieval feature set {row['feature_set']!r}")
+    operation = str(row["target_operation"])
+    if operation == "no_target_operation":
+        return base, False
+    if operation == "force_include_target":
+        return base | spaces.perturbed_genes(), False
+    if operation == "exclude_own_target":
+        if feature_set != "all":
+            raise ValueError(f"{family_id}: own-target exclusion is implemented on the full gene axis only")
+        return base, True
+    raise ValueError(f"{family_id}: unsupported target operation {operation!r}")
+
+
+def _retrieval_protocol(row: pd.Series) -> Protocol:
+    spec = decompose(str(row["metric_family"]))
+    space, exclude_query_target = retrieval_space(row)
+    return Protocol(
+        str(row["family_id"]),
+        partial(
+            retrieval_rank,
+            distance=spec.distance,
+            transpose=spec.transpose,
+            exclude_query_target=exclude_query_target,
+        ),
+        representation="centroid",
+        scope="dataset",
+        space=space,
+        centering="control_mean" if str(row["centering"]) == "control-centered" else None,
+        reference="control",
+        better="lower",
+        perfect=0.0,
+        group="atlas-retrieval",
+    )
+
+
 def build_protocol(row: pd.Series) -> Protocol:
     """Build one fully concrete protocol from its frozen semantic row."""
     family_id = str(row["family_id"])
+    if str(row.get("cross_perturbation_group", "")) == "identity_matching":
+        if str(row["population"]) != "PBULK":
+            raise ValueError(f"{family_id}: retrieval requires pseudobulk profiles")
+        return _retrieval_protocol(row)
     subset = gene_space(row)
     population = str(row["population"])
     metric_family = str(row["metric_family"])
@@ -193,7 +272,7 @@ def build_protocol(row: pd.Series) -> Protocol:
 
 
 def build_protocols(path: Path = DEFAULT_ELIGIBILITY) -> list[Protocol]:
-    """Build all 101 concrete protocols in stable manifest order."""
+    """Build every concrete protocol of one frozen family table in stable manifest order."""
     return [build_protocol(row) for _, row in load_eligible_families(path).iterrows()]
 
 

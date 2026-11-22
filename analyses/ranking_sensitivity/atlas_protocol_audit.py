@@ -25,6 +25,13 @@ from pathlib import Path
 from typing import Any
 
 CONFIG_PATH = Path("configs/evaluation/atlas-protocol-eligibility-v1.json")
+V1_OUTPUTS = {
+    "eligible_families": "atlas-protocol-eligibility-v1.csv",
+    "task_manifest": "atlas-task-protocol-manifest-v1.csv",
+    "scope_audit": "atlas-protocol-scope-audit-v1.csv",
+    "de_method_audit": "atlas-de-method-audit-v1.csv",
+    "summary": "docs/atlas-protocol-eligibility-v1.md",
+}
 
 
 @dataclass(frozen=True)
@@ -111,9 +118,16 @@ def scope_decision(family: Family, config: Mapping[str, Any]) -> tuple[str, str]
     identity = family.identity
     scope = config["scope"]
 
-    if scope["require_empty_cross_perturbation_group"] and identity["cross_perturbation_group"]:
+    group = identity["cross_perturbation_group"]
+    allowed_feature_sets = list(scope["allowed_feature_sets"])
+    if "cross_perturbation_groups" in scope:
+        groups = scope["cross_perturbation_groups"]
+        if group and group not in groups["included"]:
+            return "excluded", groups["excluded"].get(group, groups["unlisted_reason"])
+        allowed_feature_sets += groups.get("additional_feature_sets", {}).get(group, [])
+    elif scope["require_empty_cross_perturbation_group"] and group:
         return "excluded", "pooled_or_cross_perturbation"
-    if identity["feature_set"] not in scope["allowed_feature_sets"]:
+    if identity["feature_set"] not in allowed_feature_sets:
         return "excluded", "feature_set_out_of_scope"
     if identity["centering"] not in scope["allowed_centering"]:
         return "excluded", "centering_out_of_scope"
@@ -163,7 +177,11 @@ def required_extensions(family: Family) -> tuple[str, ...]:
         extensions.add("subset_then_pca")
 
     metric = identity["metric_family"]
-    if identity["population"] == "PBULK" and metric in {
+    if identity["cross_perturbation_group"] == "identity_matching":
+        extensions.add(f"dataset_retrieval_metric:{metric}")
+        if identity["feature_set"] == "Other":
+            extensions.add("dataset_union_panel")
+    elif identity["population"] == "PBULK" and metric in {
         "MAE",
         "clipped-r2",
         "cosine",
@@ -187,6 +205,8 @@ def implementation_status(extensions: Sequence[str]) -> str:
         category = extension.split(":", 1)[0]
         if category in {"symmetric_signed_de", "de_recovery_metric"}:
             category = "de_recovery_module"
+        if category in {"dataset_retrieval_metric", "dataset_union_panel"}:
+            category = "retrieval_module"
         categories.add(category)
     if len(categories) > 1:
         return "multiple_extensions"
@@ -197,6 +217,7 @@ def implementation_status(extensions: Sequence[str]) -> str:
         "subset_then_pca": "selector_or_composition",
         "scalar_metric": "new_scalar_metric",
         "de_recovery_module": "de_recovery_module",
+        "retrieval_module": "retrieval_module",
     }.get(category, "extension_required")
 
 
@@ -225,7 +246,11 @@ def family_record(family: Family, config: Mapping[str, Any]) -> dict[str, str | 
         "applicable_tasks": ";".join(task_applicability(family, config)) if decision == "included" else "",
     }
     record.update(family.identity)
-    canonical_k = config["canonical_parameters"]["feature_k_by_bin"].get(family.identity["feature_k_bin"], "review")
+    parameters = config["canonical_parameters"]
+    canonical_k = parameters.get("feature_k_by_feature_set", {}).get(
+        family.identity["feature_set"],
+        parameters["feature_k_by_bin"].get(family.identity["feature_k_bin"], "review"),
+    )
     record["canonical_feature_k"] = str(canonical_k)
     return record
 
@@ -341,6 +366,32 @@ def write_summary(
         if record["scope_decision"] == "excluded"
     )
 
+    outputs = config.get("outputs", V1_OUTPUTS)
+    version = str(config["id"]).rsplit("-", 1)[-1]
+    cross_perturbation = ""
+    groups = config["scope"].get("cross_perturbation_groups")
+    if groups:
+        included_groups = ", ".join(f"`{group}`" for group in groups["included"])
+        excluded_groups = "\n".join(
+            f"- `{group}` → `{reason}`" for group, reason in sorted(groups["excluded"].items())
+        )
+        extra_sets = "; ".join(
+            f"`{group}`: {', '.join(f'`{value}`' for value in values)}"
+            for group, values in sorted(groups.get("additional_feature_sets", {}).items())
+        )
+        supersedes = config.get("supersedes", {})
+        cross_perturbation = f"""
+## Cross-perturbation scope
+
+{supersedes.get("change", "")} {supersedes.get("post_hoc_note", "")}
+
+Included cross-perturbation groups: {included_groups}. Additional feature sets admitted only for
+these groups: {extra_sets or "none"}. Other recurring cross-perturbation groups remain excluded with
+a group-specific reason:
+
+{excluded_groups}
+"""
+
     def bullets(counter: Counter[str]) -> str:
         return "\n".join(f"- `{key}`: {value}" for key, value in sorted(counter.items()))
 
@@ -353,7 +404,7 @@ def write_summary(
                 f"scPertEval `{record['scperteval_support']}`"
             )
 
-    text = f"""# Atlas protocol eligibility audit v1
+    text = f"""# Atlas protocol eligibility audit {version}
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
 commit `{config['atlas']['revision']}` and `data/protocols.csv` SHA-256 `{source_sha256}`.
@@ -384,7 +435,7 @@ target policies all execute as `no_target_operation`; their raw Atlas values rem
 ### Scope exclusions
 
 {bullets(excluded)}
-
+{cross_perturbation}
 ## DE caller audit
 
 The DE caller does not define atomic-family eligibility in this version. Existing scPertEval callers remain the
@@ -402,16 +453,23 @@ Explicit target operations apply only to genetic tasks and require an unambiguou
 
 ## Files
 
-- `atlas-protocol-eligibility-v1.csv`: included families only.
-- `atlas-task-protocol-manifest-v1.csv`: one row per applicable task and included family.
-- `atlas-protocol-scope-audit-v1.csv`: every literature-eligible family and its inclusion/exclusion reason.
-- `atlas-de-method-audit-v1.csv`: DE caller usage and current scPertEval support.
+- `{outputs["eligible_families"]}`: included families only.
+- `{outputs["task_manifest"]}`: one row per applicable task and included family.
+- `{outputs["scope_audit"]}`: every literature-eligible family and its inclusion/exclusion reason.
+- `{outputs["de_method_audit"]}`: DE caller usage and current scPertEval support.
 """
     path.write_text(text)
 
 
-def build_audit(atlas_repo: Path, config_path: Path, output_dir: Path, summary_path: Path) -> dict[str, int]:
+def build_audit(
+    atlas_repo: Path,
+    config_path: Path,
+    output_dir: Path,
+    summary_path: Path | None = None,
+) -> dict[str, int]:
     config = load_config(config_path)
+    outputs = config.get("outputs", V1_OUTPUTS)
+    summary_path = summary_path or Path(outputs["summary"])
     rows, source_sha256 = read_atlas_csv(
         atlas_repo,
         config["atlas"]["revision"],
@@ -436,10 +494,10 @@ def build_audit(atlas_repo: Path, config_path: Path, output_dir: Path, summary_p
     de_records = de_method_audit(rows, config, in_scope_protocol_ids=in_scope_protocol_ids)
     task_records = task_protocol_records(eligible_records)
 
-    write_csv(output_dir / "atlas-protocol-eligibility-v1.csv", eligible_records)
-    write_csv(output_dir / "atlas-task-protocol-manifest-v1.csv", task_records)
-    write_csv(output_dir / "atlas-protocol-scope-audit-v1.csv", all_records)
-    write_csv(output_dir / "atlas-de-method-audit-v1.csv", de_records)
+    write_csv(output_dir / outputs["eligible_families"], eligible_records)
+    write_csv(output_dir / outputs["task_manifest"], task_records)
+    write_csv(output_dir / outputs["scope_audit"], all_records)
+    write_csv(output_dir / outputs["de_method_audit"], de_records)
     write_summary(
         summary_path,
         config=config,
@@ -456,7 +514,7 @@ def main() -> None:
     parser.add_argument("--atlas-repo", type=Path, required=True)
     parser.add_argument("--config", type=Path, default=CONFIG_PATH)
     parser.add_argument("--output-dir", type=Path, default=Path("configs/evaluation"))
-    parser.add_argument("--summary", type=Path, default=Path("docs/atlas-protocol-eligibility-v1.md"))
+    parser.add_argument("--summary", type=Path, help="summary path (default: the config's outputs.summary)")
     args = parser.parse_args()
     counts = build_audit(args.atlas_repo, args.config, args.output_dir, args.summary)
     print(json.dumps(counts, sort_keys=True))

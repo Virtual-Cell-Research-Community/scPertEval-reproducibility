@@ -37,7 +37,8 @@ def test_factor_grid_keeps_every_choice_in_taxonomy_order_and_blanks_sparse_cell
     rows = factor_data(factors)
 
     assert list(rows["row"].cat.categories)[-1] == AXIS_LABELS["representation"]
-    assert len(rows) == 8 * len(TASKS)
+    assert len(rows) == 9 * len(TASKS)
+    assert list(rows["row"].cat.categories)[1] == AXIS_LABELS["cross_perturbation"]
     metric = rows[rows["choice"] == "metric"].set_index("task")
     assert metric.loc[TASKS[0], ["label", "count"]].tolist() == ["25%", "5/20"]
     assert metric.loc[TASKS[1], "label"] == "–"
@@ -108,7 +109,7 @@ def _source_data(tmp_path: Path) -> tuple[Path, Path, Path]:
         }
     ).to_csv(ranking / "factor-sensitivity.csv", index=False)
     scope = tmp_path / "scope.csv"
-    pd.DataFrame({"scope_decision": ["included", "excluded"]}).to_csv(scope, index=False)
+    pd.DataFrame({"scope_decision": ["included"] * 10 + ["excluded"]}).to_csv(scope, index=False)
     return census, ranking, scope
 
 
@@ -118,15 +119,23 @@ def test_workflow_numbers_come_from_the_source_data(tmp_path: Path):
 
     assert numbers["works"] == 3
     assert numbers["census_tasks"] == 1
-    assert numbers["recurring_protocols"] == 2
-    assert numbers["implemented_protocols"] == 1
+    assert numbers["recurring_protocols"] == 11
+    assert numbers["implemented_protocols"] == 10
     assert numbers["models_per_task"] == [2]
 
 
 def test_figure_draws_five_panels_from_source_data(tmp_path: Path, monkeypatch):
     census, ranking, scope = _source_data(tmp_path)
-    monkeypatch.setattr("analyses.manuscript_figures.evaluation_practice.SCOPE_AUDIT", scope)
-    figure = evaluation_practice_figure(census, ranking)
+    figure = evaluation_practice_figure(census, ranking, scope_audit=scope)
 
     visible = [ax for ax in figure.axes if ax.get_visible()]
     assert len(visible) == 5
+
+
+def test_workflow_numbers_reject_a_scope_audit_smaller_than_the_ranked_universe(tmp_path: Path):
+    import pytest
+
+    census, ranking, scope = _source_data(tmp_path)
+    pd.DataFrame({"scope_decision": ["included"] * 9}).to_csv(scope, index=False)
+    with pytest.raises(ValueError, match="--scope-audit"):
+        workflow_numbers(census, ranking, scope)

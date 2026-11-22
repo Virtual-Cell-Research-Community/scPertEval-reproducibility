@@ -135,3 +135,35 @@ def test_task_manifest_expands_applicability_without_duplicate_votes() -> None:
         "genetic_context_transfer",
     ]
     assert {record["protocol_id"] for record in records} == {"family"}
+
+
+CONFIG_V2 = json.loads(Path("configs/evaluation/atlas-protocol-eligibility-v2.json").read_text())
+
+
+def test_v2_scope_admits_retrieval_and_keeps_other_cross_perturbation_groups_excluded() -> None:
+    retrieval = group_families(
+        [
+            row(
+                cross_perturbation_group="identity_matching",
+                wide_display_family="transposed-retrieval-rank-MAE",
+                centering="control-centered",
+                reference_population="control",
+            )
+        ],
+        CONFIG_V2,
+    )[0]
+    assert scope_decision(retrieval, CONFIG_V2) == ("included", "")
+
+    union_panel = group_families(
+        [row(cross_perturbation_group="identity_matching", feature_set="Other", wide_display_family="retrieval-rank-rmse")],
+        CONFIG_V2,
+    )[0]
+    assert scope_decision(union_panel, CONFIG_V2) == ("included", "")
+
+    direct_other = group_families([row(feature_set="Other")], CONFIG_V2)[0]
+    assert scope_decision(direct_other, CONFIG_V2) == ("excluded", "feature_set_out_of_scope")
+
+    effect = group_families([row(cross_perturbation_group="effect_size")], CONFIG_V2)[0]
+    assert scope_decision(effect, CONFIG_V2) == ("excluded", "cross_perturbation_effect_size_out_of_scope")
+    pooled = group_families([row(cross_perturbation_group="pooled_response", population="DE")], CONFIG_V2)[0]
+    assert scope_decision(pooled, CONFIG_V2) == ("excluded", "pooled_response_out_of_scope")

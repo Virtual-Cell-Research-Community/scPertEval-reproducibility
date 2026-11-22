@@ -10,17 +10,10 @@ import pandas as pd
 import scperteval as spe
 from scperteval.types import Protocol
 
-from .atlas_runtime import build_protocols, target_key_for_task
-from .truth_coverage_runtime import REASON_MAP, applicable_protocol_ids
+from .atlas_runtime import target_key_for_task
+from .truth_coverage_runtime import REASON_MAP, task_protocols
 
-
-def task_protocols(task: str) -> list[Protocol]:
-    """Resolve every frozen protocol applicable to one benchmark task."""
-    applicable = applicable_protocol_ids(task)
-    protocols = [protocol for protocol in build_protocols() if protocol.name in applicable]
-    if {protocol.name for protocol in protocols} != applicable:
-        raise ValueError("not every applicable protocol has a concrete runtime implementation")
-    return protocols
+__all__ = ["evaluate_prediction", "prepare_prediction_fold", "task_protocols"]
 
 
 def prepare_prediction_fold(

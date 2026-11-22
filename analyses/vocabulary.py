@@ -16,6 +16,7 @@ AXIS_LABELS = {
     "target_gene_policy": "Target-gene policy",
     "feature_weighting": "Feature weighting",
     "metric": "Metric",
+    "cross_perturbation": "Cross-perturbation evaluation",
     "aggregation": "Aggregation",
 }
 """Evaluation choice → label. Order follows the taxonomy (representation → metric → reporting)."""
@@ -39,6 +40,7 @@ RANKING_FACTORS = {
     "target_policy": "target_gene_policy",
     "weighting": "feature_weighting",
     "score_function": "metric",
+    "cross_perturbation": "cross_perturbation",
     "aggregation": "aggregation",
 }
 """Ranking-sensitivity factor code → evaluation choice."""

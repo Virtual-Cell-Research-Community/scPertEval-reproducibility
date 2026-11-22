@@ -27,9 +27,28 @@ from analyses.ranking_sensitivity.prediction_runtime import (
     prepare_prediction_fold,
     task_protocols,
 )
-from analyses.ranking_sensitivity.truth_coverage_runtime import load_truth_fold
+from analyses.ranking_sensitivity.truth_coverage_runtime import TASK_MANIFESTS, load_truth_fold
 from workflows.evaluate import _load_prediction_for_evaluation
 from workflows.preparation_utils import file_checksum
+
+
+@dataclass(frozen=True)
+class Selection:
+    """Which frozen protocol universe a run scores.
+
+    ``added_since`` scores only the protocols that ``version`` adds to an earlier version, writing
+    them to a separate result tree while the earlier version's scores are reused unchanged.
+    """
+
+    version: str = "v1"
+    added_since: str | None = None
+
+    @property
+    def is_default(self) -> bool:
+        return self.version == "v1" and self.added_since is None
+
+
+DEFAULT_SELECTION = Selection()
 
 
 @dataclass(frozen=True)
@@ -58,6 +77,8 @@ def _evaluator_sha256(project_root: Path) -> str:
     for relative in (
         "analyses/ranking_sensitivity/atlas_runtime.py",
         "analyses/ranking_sensitivity/prediction_runtime.py",
+        "analyses/ranking_sensitivity/retrieval.py",
+        "analyses/ranking_sensitivity/cross_perturbation.py",
     ):
         path = project_root / relative
         digest.update(relative.encode())
@@ -150,9 +171,11 @@ def _completion_record(
     prediction_manifest: Path,
     output: Path,
     project_root: Path,
+    selection: Selection = DEFAULT_SELECTION,
+    protocol_ids: list[str] | None = None,
 ) -> dict:
     prediction = _json(prediction_manifest)
-    return {
+    record = {
         "schema_version": 2,
         "status": "complete",
         "task": track.task,
@@ -164,15 +187,27 @@ def _completion_record(
             "prediction_manifest_sha256": _sha256(prediction_manifest),
             "split_manifest_sha256": _sha256(track.split_manifest),
             "experiment_manifest_sha256": _sha256(track.experiment_manifest),
-            "eligible_families_sha256": _sha256(project_root / "configs/evaluation/atlas-protocol-eligibility-v1.csv"),
-            "task_protocol_manifest_sha256": _sha256(
-                project_root / "configs/evaluation/atlas-task-protocol-manifest-v1.csv"
+            "eligible_families_sha256": _sha256(
+                project_root / f"configs/evaluation/atlas-protocol-eligibility-{selection.version}.csv"
             ),
+            "task_protocol_manifest_sha256": _sha256(project_root / TASK_MANIFESTS[selection.version]),
             "scperteval_revision": expected_scperteval_revision(project_root),
             "evaluator_sha256": _evaluator_sha256(project_root),
         },
         "output_sha256": file_checksum(output),
     }
+    if selection.is_default:
+        return record
+    record["schema_version"] = 3
+    record["protocol_selection"] = {
+        "eligibility_version": selection.version,
+        "added_since": selection.added_since,
+        "baseline_task_protocol_manifest_sha256": (
+            _sha256(project_root / TASK_MANIFESTS[selection.added_since]) if selection.added_since else None
+        ),
+        "protocol_ids": sorted(protocol_ids or []),
+    }
+    return record
 
 
 def _output_is_current(
@@ -184,6 +219,8 @@ def _output_is_current(
     prediction_manifest: Path,
     output: Path,
     project_root: Path,
+    selection: Selection = DEFAULT_SELECTION,
+    protocol_ids: list[str] | None = None,
 ) -> bool:
     completion = output.with_suffix(".complete.json")
     if not output.is_file() or not completion.is_file():
@@ -198,6 +235,8 @@ def _output_is_current(
             prediction_manifest=prediction_manifest,
             output=output,
             project_root=project_root,
+            selection=selection,
+            protocol_ids=protocol_ids,
         )
     except (KeyError, OSError, json.JSONDecodeError):
         return False
@@ -213,6 +252,7 @@ def evaluate_fold(
     fold_id: str,
     selected_models: set[str] | None,
     workers: int,
+    selection: Selection = DEFAULT_SELECTION,
 ) -> None:
     if fold_id not in track.fold_ids:
         raise ValueError(f"unknown fold {fold_id!r} for {track.key}; expected {track.fold_ids}")
@@ -220,6 +260,8 @@ def evaluate_fold(
     unknown = sorted((selected_models or set()) - set(track.models))
     if unknown:
         raise ValueError(f"models are not part of {track.key}: {unknown}")
+    protocols = task_protocols(track.task, selection.version, selection.added_since)
+    protocol_ids = [protocol.name for protocol in protocols]
     pending: list[tuple[str, int, Path, Path, Path]] = []
     for model in models:
         for seed in track.seeds:
@@ -237,6 +279,8 @@ def evaluate_fold(
                 prediction_manifest=prediction_manifest,
                 output=output,
                 project_root=project_root,
+                selection=selection,
+                protocol_ids=protocol_ids,
             ):
                 print(f"current {track.task}/{model}/{fold_id}/seed-{seed}", flush=True)
                 continue
@@ -247,7 +291,6 @@ def evaluate_fold(
     fold_index = track.fold_ids.index(fold_id)
     split = _json(track.split_manifest)
     truth, expected_units = load_truth_fold(track.truth, split, fold_index if track.key == "essential" else fold_id)
-    protocols = task_protocols(track.task)
     prepared = prepare_prediction_fold(
         truth,
         task=track.task,
@@ -280,6 +323,8 @@ def evaluate_fold(
             prediction_manifest=prediction_manifest,
             output=output,
             project_root=project_root,
+            selection=selection,
+            protocol_ids=protocol_ids,
         )
         _atomic_bytes(
             output.with_suffix(".complete.json"),
@@ -309,6 +354,12 @@ def main() -> int:
     parser.add_argument("--fold", action="append", help="fold id; repeat to select multiple (default: every fold)")
     parser.add_argument("--model", action="append", help="model id; repeat to select multiple (default: every model)")
     parser.add_argument("--workers", type=int, default=0)
+    parser.add_argument("--eligibility-version", choices=sorted(TASK_MANIFESTS), default="v1")
+    parser.add_argument(
+        "--added-since",
+        choices=sorted(TASK_MANIFESTS),
+        help="score only protocols absent from this earlier eligibility version",
+    )
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
@@ -326,6 +377,7 @@ def main() -> int:
             fold_id=fold_id,
             selected_models=set(args.model) if args.model else None,
             workers=args.workers,
+            selection=Selection(args.eligibility_version, args.added_since),
         )
     return 0
 

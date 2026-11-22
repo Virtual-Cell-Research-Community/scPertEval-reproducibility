@@ -62,7 +62,11 @@ from analyses.protocol_diversity.figure import axis_panel, decay_panel
 from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, RANKING_FACTORS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit-v1.csv"
+SCOPE_AUDITS = {
+    version: REPO_ROOT / f"configs/evaluation/atlas-protocol-scope-audit-{version}.csv" for version in ("v1", "v2")
+}
+SCOPE_AUDIT = SCOPE_AUDITS["v2"]
+"""Default protocol scope: v2 is the primary ranking-sensitivity analysis; pass v1 for the supplement."""
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
 DEFAULT_OUTPUT = Path("figures/evaluation-practice-v1")
@@ -83,6 +87,12 @@ def workflow_numbers(census: Path, ranking: Path, scope_audit: Path = SCOPE_AUDI
     shares = pd.read_csv(ranking / "winner-shares.csv")
     scope = pd.read_csv(scope_audit)
     per_task = shares.groupby("task").agg(models=("model", "nunique"), protocols=("n_protocols", "max"))
+    implemented = int((scope["scope_decision"] == "included").sum())
+    if int(per_task["protocols"].max()) > implemented:
+        raise ValueError(
+            f"ranking source data rank up to {int(per_task['protocols'].max())} protocols per task but the scope "
+            f"audit {scope_audit.name} implements only {implemented}; pass the matching --scope-audit"
+        )
     return {
         "works": int(corpus["works"]),
         "model_papers": int(corpus.get("works_model_paper", 0)),
@@ -92,7 +102,7 @@ def workflow_numbers(census: Path, ranking: Path, scope_audit: Path = SCOPE_AUDI
         "distinct_protocols": int(corpus["distinct_protocols"]),
         "census_tasks": int((tasks["papers"] >= MIN_CENSUS_TASK_WORKS).sum()),
         "recurring_protocols": len(scope),
-        "implemented_protocols": int((scope["scope_decision"] == "included").sum()),
+        "implemented_protocols": implemented,
         "protocols_per_task": [int(v) for v in sorted(per_task["protocols"].unique())],
         "models_per_task": [int(v) for v in sorted(per_task["models"].unique())],
         "benchmark_tasks": len(per_task),
@@ -289,7 +299,9 @@ def factor_panel(factors: pd.DataFrame, *, dark: bool = False, tag: str | None =
 # Composition ------------------------------------------------------------------------------------------
 
 
-def evaluation_practice_figure(census: Path, ranking: Path, *, dark: bool = False) -> Any:
+def evaluation_practice_figure(
+    census: Path, ranking: Path, *, dark: bool = False, scope_audit: Path = SCOPE_AUDIT
+) -> Any:
     """Draw the figure and return the Matplotlib figure (panel a is drawn onto a spacer row)."""
 
     decay = pd.read_csv(census / "consensus-decay.csv")
@@ -307,7 +319,8 @@ def evaluation_practice_figure(census: Path, ranking: Path, *, dark: bool = Fals
     spacer.set_visible(False)
     figure.savefig(io.BytesIO(), dpi=300)  # run the Plotnine layout at output resolution to read panel positions
     top = max(ax.get_position().y1 for ax in panels) + 0.035  # leave room for the panel tags of b and c
-    draw_workflow(figure, (0.0, top, 1.0, 0.995 - top), workflow_numbers(census, ranking), dark=dark)
+    numbers = workflow_numbers(census, ranking, scope_audit)
+    draw_workflow(figure, (0.0, top, 1.0, 0.995 - top), numbers, dark=dark)
     return figure
 
 
@@ -315,11 +328,11 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def render(census: Path, ranking: Path, output: Path) -> None:
+def render(census: Path, ranking: Path, output: Path, scope_audit: Path = SCOPE_AUDIT) -> None:
     output.mkdir(parents=True, exist_ok=True)
     with mpl.rc_context({"pdf.fonttype": 42, "svg.fonttype": "none"}):
         for dark in (False, True):
-            figure = evaluation_practice_figure(census, ranking, dark=dark)
+            figure = evaluation_practice_figure(census, ranking, dark=dark, scope_audit=scope_audit)
             for suffix in ("png", "pdf", "svg"):
                 figure.savefig(
                     output / f"evaluation-practice-{'dark' if dark else 'light'}.{suffix}",
@@ -332,13 +345,13 @@ def render(census: Path, ranking: Path, output: Path) -> None:
             for name in ("corpus-summary.csv", "task-summary.csv", "consensus-decay.csv", "single-choice-agreement.csv")
         ),
         *(ranking / name for name in ("winner-shares.csv", "task-protocol-disagreement.csv", "factor-sensitivity.csv")),
-        SCOPE_AUDIT,
+        scope_audit,
     ]
     (output / "figure-manifest.json").write_text(
         json.dumps(
             {
                 "figure": "evaluation-practice",
-                "numbers": workflow_numbers(census, ranking),
+                "numbers": workflow_numbers(census, ranking, scope_audit),
                 "min_factor_contrasts": MIN_FACTOR_CONTRASTS,
                 "inputs_sha256": {path.name: _sha256(path) for path in inputs},
             },
@@ -353,8 +366,14 @@ def main() -> int:
     parser.add_argument("--census", type=Path, default=Path("figures/protocol-diversity-v1/source-data"))
     parser.add_argument("--ranking", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
+    parser.add_argument(
+        "--scope-audit",
+        type=Path,
+        default=SCOPE_AUDIT,
+        help="Atlas scope audit matching the ranking source data (default: v2, the primary analysis)",
+    )
     args = parser.parse_args()
-    render(args.census, args.ranking, args.output)
+    render(args.census, args.ranking, args.output, args.scope_audit)
     return 0
 
 
