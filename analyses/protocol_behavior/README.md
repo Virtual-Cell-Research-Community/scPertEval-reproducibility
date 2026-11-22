@@ -1,10 +1,10 @@
 # Protocol-behavior analyses
 
 This directory is the maintained successor to the frozen original-paper analysis
-in `analyses/scperteval-paper-v1/`. It is deliberately a separate UV project:
-the protocol code needs target-versus-reference DE exports from the review-pending
-scPertEval `codex/de-extension` revision, while model training and the rest of the
-benchmark remain on the stable scPertEval release.
+in `analyses/scperteval-paper-v1/`. It is deliberately a separate UV project and
+pins scPertEval commit `58ccc91095ccb30bbe8f4470dff8b398d2eb4525`. The workflow
+uses current concrete `Protocol` objects, current feature spaces, pure DE metrics,
+and the current `prepare()` / `calibrate()` / `de()` interfaces.
 
 The lock pins the exact scPertEval commit recorded by each production manifest.
 A scientific stage refuses to run if the installed revision differs. This lets
@@ -32,8 +32,8 @@ Two production generations are explicit:
   byte-identical to the manifest used for the checksummed result tree at
   `results/protocol_behavior/production-v1`; treat both as immutable.
 - `production-v2.json` replaces GWPS with the current K562 Essential benchmark
-  and retains the four genetic and three SciPlex3 context units. It is planned,
-  not completed, and remains pending Zach's feedback on the scPertEval DEG branch.
+  and retains the four genetic and three SciPlex3 context units. Its outputs are
+  staged under `results/protocol_behavior/production-v2-scperteval-main-staging`.
 
 For every analysis unit the workflow computes six full-cell DE combinations
 (three methods × two references), 20 CPU DRF protocols, two GPU Sinkhorn
@@ -45,9 +45,18 @@ Concordance@k is top-k set overlap divided by k; it does not require matching
 effect directions or identical within-set ranks. The curves use the legacy
 fractional-anchor grid and report median per-perturbation AUCC.
 
-Every expensive stage has a completion record tied to the manifest checksum and output checksums.
-A repeated command validates and skips completed stages before loading the dataset. The final
-`completion.json` records checksums for all rendered artifacts.
+Before any stage runs, `--preflight` checks the existing prepared H5ADs against
+their data manifests and writes `inputs.json`. Every stage is then bound to the
+production/cohort/data manifests, isolated project and lock, workflow source,
+repository revision, scPertEval revision, and output checksums. A repeated command
+validates and skips completed stages before loading the dataset. The final
+`completion.json` inventories every stage and rendered artifact.
+
+```bash
+uv run reproduce-protocol-behavior --preflight
+uv run reproduce-protocol-behavior --status
+uv run reproduce-protocol-behavior --stage drf.cpu.chemical-a549
+```
 
 To validate or render the completed v1 result tree explicitly:
 
@@ -58,9 +67,8 @@ uv run reproduce-protocol-behavior \
   --finalize
 ```
 
-After v2's scPertEval revision is accepted and its inputs are materialized, use
-the chunked and resumable Slurm submission wrapper from an OTP-authenticated
-Helix session:
+If workstation execution is insufficient, the chunked Slurm wrapper remains
+available from an OTP-authenticated Helix session:
 
 ```bash
 bash scripts/submit_protocol_behavior_helix.sh

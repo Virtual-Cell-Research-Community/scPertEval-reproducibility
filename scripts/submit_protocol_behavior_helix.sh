@@ -9,7 +9,7 @@ if [[ ! -f pyproject.toml ]]; then
 fi
 
 mkdir -p logs
-OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-$(python3 -c "import json; print('results/protocol_behavior/' + json.load(open('${MANIFEST}'))['id'].removeprefix('protocol-behavior-'))")}"
+OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-$(python3 -c "import json; m=json.load(open('${MANIFEST}')); print(m.get('output_dir', 'results/protocol_behavior/' + m['id'].removeprefix('protocol-behavior-')))")}"
 STATUS="$(python3 -c "import json; print(json.load(open('${MANIFEST}')).get('status', 'ready'))")"
 if [[ "${STATUS}" == planned-pending-* ]]; then
   echo "Refusing to submit ${MANIFEST}: status is ${STATUS}. Update the reviewed manifest before launch." >&2

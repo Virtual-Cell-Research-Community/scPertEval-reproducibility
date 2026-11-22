@@ -18,14 +18,15 @@ import matplotlib.pyplot as plt
 
 from .production import (
     _declared_perturbations,
+    _reusable_record,
     _valid_de,
     _valid_drf,
-    expected_scperteval_revision,
     file_sha256,
     load_manifest,
-    manifest_sha256,
     production_stages,
     resolve_record_artifact,
+    stage_inputs,
+    validate_input_record,
 )
 
 FIGURE_STEMS = (
@@ -123,7 +124,7 @@ def render_drf(manifest: dict[str, Any], output: Path, figures: Path) -> list[Pa
         csv_path = figures / f"drf_table_{statistic}.csv"
         png_path = figures / f"drf_table_{statistic}.png"
         table.to_csv(csv_path)
-        _save_table(table, png_path, title=f"Dataset-rescaling factor ({statistic})")
+        _save_table(table, png_path, title=f"Dynamic range fraction ({statistic})")
         written.extend((csv_path, png_path))
     timing_table = timing.pivot(index="protocol", columns="analysis_unit", values="seconds")
     timing_table["TOTAL"] = timing_table.sum(axis=1)
@@ -410,10 +411,10 @@ def render_de(manifest: dict[str, Any], output: Path, figures: Path) -> list[Pat
 
 def validate_production(manifest_path: Path, output: Path) -> Path:
     manifest = load_manifest(manifest_path)
-    manifest_digest = manifest_sha256(manifest_path)
-    expected_revision = expected_scperteval_revision(manifest)
-    revision_required = "scperteval_revision" in manifest
+    validate_input_record(manifest_path, output, rehash_data=True)
+    inputs = stage_inputs(manifest_path, output)
     errors = []
+    stage_inventory = []
     for stage in production_stages(manifest):
         record = output / "stages" / stage.id / "stage.json"
         if not record.is_file():
@@ -426,11 +427,8 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
             continue
         if payload.get("status") != "complete":
             errors.append(f"stage is not complete: {stage.id}")
-        if payload.get("manifest_sha256") != manifest_digest:
-            errors.append(f"stage used a different manifest revision: {stage.id}")
-        observed_revision = payload.get("scperteval_revision")
-        if observed_revision not in {None, expected_revision} or (revision_required and observed_revision is None):
-            errors.append(f"stage used a different scPertEval revision: {stage.id}")
+        if payload.get("inputs") != inputs:
+            errors.append(f"stage used different inputs or evaluator environment: {stage.id}")
         checksums = payload.get("artifact_sha256", {})
         if not checksums:
             errors.append(f"stage has no artifact checksums: {stage.id}")
@@ -455,12 +453,38 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
             else:
                 perturbations = sorted(pd.read_csv(record.parent / "drf.csv")["perturbation"].astype(str).unique())
         stage_dir = record.parent
-        if stage.kind == "de" and not _valid_de(stage_dir / "de.h5", stage, perturbations):
+        stage_artifacts = (
+            [stage_dir / "de.h5"] if stage.kind == "de" else [stage_dir / "drf.csv", stage_dir / "timing.csv"]
+        )
+        if not _reusable_record(record, inputs, stage_artifacts):
+            errors.append(f"stage record or artifact checksums are not reusable: {stage.id}")
+        if stage.kind == "de" and not _valid_de(
+            stage_dir / "de.h5",
+            stage,
+            perturbations,
+            target=str(manifest["de"]["target"]),
+            subsample=int(manifest["reference_subsample"]),
+            seed=int(manifest["seed"]),
+        ):
             errors.append(f"DE artifact failed semantic validation: {stage.id}")
         if stage.kind in {"drf-cpu", "drf-gpu"}:
             protocols = list(manifest["gpu_protocols"] if stage.kind == "drf-gpu" else manifest["protocols"])
-            if not _valid_drf(stage_dir / "drf.csv", stage_dir / "timing.csv", protocols, perturbations):
+            if not _valid_drf(
+                stage_dir / "drf.csv",
+                stage_dir / "timing.csv",
+                protocols,
+                perturbations,
+                seed=int(manifest["seed"]),
+                subsample=int(manifest["reference_subsample"]),
+            ):
                 errors.append(f"DRF artifact failed frozen-cohort validation: {stage.id}")
+        stage_inventory.append(
+            {
+                "stage": stage.id,
+                "record_sha256": file_sha256(record),
+                "artifacts": payload.get("artifact_sha256", {}),
+            }
+        )
     figures = output / "figures"
     for stem in FIGURE_STEMS:
         for suffix in (".csv", ".png"):
@@ -502,9 +526,9 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
             {
                 "status": "complete",
                 "manifest": str(manifest_path),
-                "manifest_sha256": manifest_sha256(manifest_path),
-                "scperteval_revision": expected_scperteval_revision(manifest),
+                "inputs": inputs,
                 "n_compute_stages": len(production_stages(manifest)),
+                "stages": stage_inventory,
                 "artifacts": [
                     {
                         "path": str(path.relative_to(output)),
@@ -522,10 +546,19 @@ def validate_production(manifest_path: Path, output: Path) -> Path:
     return completion
 
 
-def render_and_validate(manifest_path: Path, output: Path) -> Path:
+def render_and_validate(
+    manifest_path: Path,
+    output: Path,
+    *,
+    baseline_results: Path | None = None,
+) -> Path:
     manifest = load_manifest(manifest_path)
     figures = output / "figures"
     figures.mkdir(parents=True, exist_ok=True)
     render_drf(manifest, output, figures)
     render_de(manifest, output, figures)
+    if baseline_results is not None:
+        from .equivalence import compare_results
+
+        compare_results(manifest_path, output, baseline_results)
     return validate_production(manifest_path, output)

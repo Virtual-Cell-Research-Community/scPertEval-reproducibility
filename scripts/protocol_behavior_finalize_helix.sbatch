@@ -14,7 +14,8 @@ set -euo pipefail
 PROJECT_ROOT="${SLURM_SUBMIT_DIR}"
 UV_BIN="${UV_BIN:-${HOME}/.local/bin/uv}"
 MANIFEST="${SCPERTEVAL_PROTOCOL_MANIFEST:-configs/protocol_behavior/production-v2.json}"
-OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-results/protocol_behavior/production-v2}"
+OUTPUT="${SCPERTEVAL_PROTOCOL_OUTPUT:-results/protocol_behavior/production-v2-scperteval-main-staging}"
+BASELINE="${SCPERTEVAL_PROTOCOL_BASELINE:-}"
 
 module load compiler/gnu/12.1
 cd "${PROJECT_ROOT}"
@@ -26,9 +27,10 @@ export MPLCONFIGDIR="${TMPDIR:-/tmp}/matplotlib-${SLURM_JOB_ID}"
 export PYTHONUNBUFFERED=1
 
 echo "[$(date -Is)] rendering and validating production artifacts"
+ARGS=(--manifest "${MANIFEST}" --output-dir "${OUTPUT}" --finalize)
+if [[ -n "${BASELINE}" ]]; then
+  ARGS+=(--baseline-results "${BASELINE}")
+fi
 "${UV_BIN}" run --project analyses/protocol_behavior --frozen \
-  python -m analyses.protocol_behavior.cli \
-  --manifest "${MANIFEST}" \
-  --output-dir "${OUTPUT}" \
-  --finalize
+  python -m analyses.protocol_behavior.cli "${ARGS[@]}"
 echo "[$(date -Is)] production workflow complete"

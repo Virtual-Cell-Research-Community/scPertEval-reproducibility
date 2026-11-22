@@ -22,6 +22,7 @@ export UV_PYTHON="3.11"
 export UV_PROJECT_ENVIRONMENT="${HOME}/.venvs/scPertEval-reproducibility-protocol-py311"
 export UV_CONCURRENT_BUILDS=1
 export UV_LINK_MODE=copy
+export SCPERTEVAL_DATA_ROOT="${SCPERTEVAL_DATA_ROOT:-/mnt/sds-hd/sd22b002/projects/scPertEval-reproducibility}"
 
 echo "[$(date -Is)] synchronizing the locked protocol-behavior environment"
 if ! "${UV_BIN}" sync --project analyses/protocol_behavior --frozen; then
@@ -30,4 +31,9 @@ if ! "${UV_BIN}" sync --project analyses/protocol_behavior --frozen; then
 fi
 "${UV_BIN}" run --project analyses/protocol_behavior --frozen python -c \
   "import geomloss, matplotlib, scperteval, torch; print(scperteval.__version__, torch.__version__)"
+"${UV_BIN}" run --project analyses/protocol_behavior --frozen \
+  python -m analyses.protocol_behavior.cli \
+  --manifest "${SCPERTEVAL_PROTOCOL_MANIFEST:-configs/protocol_behavior/production-v2.json}" \
+  --output-dir "${SCPERTEVAL_PROTOCOL_OUTPUT:-results/protocol_behavior/production-v2-scperteval-main-staging}" \
+  --preflight
 echo "[$(date -Is)] protocol-behavior environment is ready"

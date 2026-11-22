@@ -8,6 +8,7 @@ import json
 import os
 import resource
 import shutil
+import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,8 +20,20 @@ import numpy as np
 import pandas as pd
 import scperteval as spe
 
+from .protocols import resolve_frozen_protocols
+
 DEFAULT_MANIFEST = Path("configs/protocol_behavior/production-v2.json")
-DEFAULT_RESULTS = Path("results/protocol_behavior/production-v2")
+DEFAULT_RESULTS = Path("results/protocol_behavior/production-v2-scperteval-main-staging")
+REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
+PROTOCOL_PROJECT = Path(__file__).resolve().parent
+PROTOCOL_PYPROJECT = PROTOCOL_PROJECT / "pyproject.toml"
+PROTOCOL_LOCK = PROTOCOL_PROJECT / "uv.lock"
+WORKFLOW_FILES = (
+    Path(__file__).resolve(),
+    PROTOCOL_PROJECT / "cli.py",
+    PROTOCOL_PROJECT / "protocols.py",
+    PROTOCOL_PROJECT / "render.py",
+)
 LEGACY_SCPERTEVAL_REVISIONS = {
     "protocol-behavior-production-v1": "89fc21f3e59673651b3162355d9a32495e274253",
 }
@@ -59,6 +72,11 @@ def load_manifest(path: Path) -> dict[str, Any]:
     if not manifest["protocols"]:
         raise ValueError("protocol manifest must declare at least one protocol")
     return manifest
+
+
+def default_results(manifest: dict[str, Any]) -> Path:
+    """Return the manifest-declared safe output tree, with a legacy fallback."""
+    return Path(manifest.get("output_dir", DEFAULT_RESULTS))
 
 
 def manifest_sha256(path: Path) -> str:
@@ -110,6 +128,163 @@ def file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _canonical_sha256(value: Any) -> str:
+    payload = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _atomic_json(path: Path, payload: dict[str, Any]) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    temporary.replace(path)
+    return path
+
+
+def repository_revision() -> str:
+    """Return the exact reproducibility-repository commit executing the workflow."""
+    completed = subprocess.run(
+        ["git", "-C", str(REPOSITORY_ROOT), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def environment_fingerprint(manifest_path: Path, manifest: dict[str, Any]) -> dict[str, Any]:
+    """Fingerprint the evaluator environment and workflow sources used by every stage."""
+    sources = {str(path.relative_to(REPOSITORY_ROOT)): file_sha256(path) for path in WORKFLOW_FILES}
+    return {
+        "manifest_sha256": manifest_sha256(manifest_path),
+        "protocol_pyproject_sha256": file_sha256(PROTOCOL_PYPROJECT),
+        "protocol_uv_lock_sha256": file_sha256(PROTOCOL_LOCK),
+        "workflow_sources_sha256": _canonical_sha256(sources),
+        "workflow_sources": sources,
+        "repository_revision": repository_revision(),
+        "scperteval_revision": expected_scperteval_revision(manifest),
+    }
+
+
+def _resolve_repository_path(path: str | Path) -> Path:
+    value = Path(path)
+    return value if value.is_absolute() else REPOSITORY_ROOT / value
+
+
+def _resolve_data_path(path: str | Path) -> Path:
+    value = Path(path)
+    if value.is_absolute():
+        return value
+    data_root = Path(os.environ.get("SCPERTEVAL_DATA_ROOT", REPOSITORY_ROOT))
+    return data_root / value
+
+
+def _declared_data_output(spec: dict[str, Any]) -> tuple[Path, dict[str, Any], Path]:
+    manifest_name = spec.get("data_manifest")
+    output_key = spec.get("data_manifest_output_key")
+    if not manifest_name or not output_key:
+        raise ValueError(f"dataset {spec['id']!r} must declare data_manifest and data_manifest_output_key")
+    provenance_path = _resolve_data_path(manifest_name)
+    if not provenance_path.is_file():
+        raise FileNotFoundError(provenance_path)
+    provenance = json.loads(provenance_path.read_text())
+    declared = provenance.get(output_key)
+    if not isinstance(declared, dict) or "sha256" not in declared:
+        raise ValueError(f"{provenance_path} has no checksummed {output_key!r} output")
+    dataset_path = _resolve_data_path(spec["path"])
+    declared_name = declared.get("filename") or declared.get("path")
+    if declared_name and Path(str(declared_name)).name != dataset_path.name:
+        raise ValueError(f"{provenance_path} describes {declared_name!r}, not expected dataset {dataset_path.name!r}")
+    return dataset_path, declared, provenance_path
+
+
+def create_input_record(manifest_path: Path, output: Path) -> Path:
+    """Validate prepared data and write the deterministic production input record."""
+    manifest = load_manifest(manifest_path)
+    assert_manifest_runnable(manifest)
+    assert_scperteval_revision(manifest)
+    hashed_data: dict[Path, str] = {}
+    datasets: dict[str, Any] = {}
+    for spec in manifest["datasets"]:
+        dataset_path, declared, provenance_path = _declared_data_output(spec)
+        if not dataset_path.is_file():
+            raise FileNotFoundError(dataset_path)
+        resolved_dataset = dataset_path.resolve()
+        if resolved_dataset not in hashed_data:
+            hashed_data[resolved_dataset] = file_sha256(dataset_path)
+        observed = hashed_data[resolved_dataset]
+        if observed != declared["sha256"]:
+            raise RuntimeError(
+                f"prepared dataset checksum mismatch for {spec['id']}: "
+                f"observed={observed}, declared={declared['sha256']}"
+            )
+        cohort_path = _resolve_repository_path(spec["cohort_manifest"])
+        if not cohort_path.is_file():
+            raise FileNotFoundError(cohort_path)
+        stat = dataset_path.stat()
+        datasets[spec["id"]] = {
+            "path": str(Path(spec["path"])),
+            "sha256": observed,
+            "size_bytes": stat.st_size,
+            "mtime_ns": stat.st_mtime_ns,
+            "data_manifest": str(Path(spec["data_manifest"])),
+            "data_manifest_sha256": file_sha256(provenance_path),
+            "cohort_manifest": str(Path(spec["cohort_manifest"])),
+            "cohort_manifest_sha256": file_sha256(cohort_path),
+        }
+    payload = {
+        "status": "complete",
+        "environment": environment_fingerprint(manifest_path, manifest),
+        "datasets": datasets,
+    }
+    payload["input_fingerprint_sha256"] = _canonical_sha256(payload)
+    return _atomic_json(output / "inputs.json", payload)
+
+
+def validate_input_record(manifest_path: Path, output: Path, *, rehash_data: bool = False) -> dict[str, Any]:
+    """Validate the production input record without rehashing large H5ADs per stage."""
+    manifest = load_manifest(manifest_path)
+    path = output / "inputs.json"
+    if not path.is_file():
+        raise RuntimeError(f"missing production input record {path}; run --preflight first")
+    payload = json.loads(path.read_text())
+    fingerprint = payload.pop("input_fingerprint_sha256", None)
+    if fingerprint != _canonical_sha256(payload):
+        raise RuntimeError("production input record fingerprint is invalid")
+    payload["input_fingerprint_sha256"] = fingerprint
+    if payload.get("status") != "complete":
+        raise RuntimeError("production input validation is not complete")
+    if payload.get("environment") != environment_fingerprint(manifest_path, manifest):
+        raise RuntimeError("production input record belongs to a different code or evaluator environment")
+    for spec in manifest["datasets"]:
+        recorded = payload.get("datasets", {}).get(spec["id"])
+        if not recorded:
+            raise RuntimeError(f"production input record is missing dataset {spec['id']}")
+        dataset_path, declared, provenance_path = _declared_data_output(spec)
+        stat = dataset_path.stat()
+        if (stat.st_size, stat.st_mtime_ns) != (recorded["size_bytes"], recorded["mtime_ns"]):
+            raise RuntimeError(f"prepared dataset changed after preflight: {dataset_path}")
+        if file_sha256(provenance_path) != recorded["data_manifest_sha256"]:
+            raise RuntimeError(f"prepared-data manifest changed after preflight: {provenance_path}")
+        cohort_path = _resolve_repository_path(spec["cohort_manifest"])
+        if file_sha256(cohort_path) != recorded["cohort_manifest_sha256"]:
+            raise RuntimeError(f"cohort manifest changed after preflight: {cohort_path}")
+        if declared["sha256"] != recorded["sha256"]:
+            raise RuntimeError(f"prepared-data manifest now declares a different checksum: {provenance_path}")
+        if rehash_data and file_sha256(dataset_path) != recorded["sha256"]:
+            raise RuntimeError(f"prepared dataset checksum changed after preflight: {dataset_path}")
+    return payload
+
+
+def stage_inputs(manifest_path: Path, output: Path) -> dict[str, Any]:
+    """Return the exact provenance block every reusable stage must match."""
+    record = validate_input_record(manifest_path, output)
+    return {
+        **record["environment"],
+        "input_record_sha256": file_sha256(output / "inputs.json"),
+    }
+
+
 def _artifact_key(path: Path, record_path: Path) -> str:
     """Store an artifact relative to its stage record so mount aliases remain irrelevant."""
     return str(path.resolve().relative_to(record_path.parent.resolve()))
@@ -152,7 +327,7 @@ def _declared_perturbations(spec: dict[str, Any]) -> list[str] | None:
     cohort_path = spec.get("cohort_manifest")
     if cohort_path is None:
         return None
-    cohort = json.loads(Path(cohort_path).read_text())
+    cohort = json.loads(_resolve_repository_path(cohort_path).read_text())
     if "perturbations" in cohort:
         return list(map(str, cohort["perturbations"]))
     if {"drugs", "doses", "population_exclusions"} <= set(cohort):
@@ -168,10 +343,7 @@ def _declared_perturbations(spec: dict[str, Any]) -> list[str] | None:
 
 
 def _load_analysis_unit(spec: dict[str, Any], *, minimum_cells: int | None = None) -> ad.AnnData:
-    path = Path(spec["path"])
-    data_root = os.environ.get("SCPERTEVAL_DATA_ROOT")
-    if data_root and not path.is_absolute():
-        path = Path(data_root) / path
+    path = _resolve_data_path(spec["path"])
     if not path.is_file():
         raise FileNotFoundError(path)
     data = ad.read_h5ad(path)
@@ -224,20 +396,28 @@ def _record_path(output: Path, stage: Stage) -> Path:
 
 
 def _write_record(path: Path, record: dict[str, Any]) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=2, sort_keys=True) + "\n")
-    return path
+    return _atomic_json(path, record)
 
 
-def _valid_de(path: Path, stage: Stage, perturbations: list[str]) -> bool:
+def _valid_de(
+    path: Path,
+    stage: Stage,
+    perturbations: list[str],
+    *,
+    target: str = "gt_all_cells",
+    subsample: int | None = None,
+    seed: int | None = None,
+) -> bool:
     if not path.is_file() or stage.method is None or stage.reference is None:
         return False
     try:
         with h5py.File(path) as handle:
             observed = [value.decode() for value in handle["perturbations"][:]]
             return (
-                handle.attrs["target"] == "gt_all_cells"
+                handle.attrs["target"] == target
                 and handle.attrs["reference"] == stage.reference
+                and (subsample is None or int(handle.attrs["subsample"]) == subsample)
+                and (seed is None or int(handle.attrs["seed"]) == seed)
                 and observed == perturbations
                 and handle[stage.method]["statistic"].shape == (len(perturbations), len(handle["genes"]))
                 and handle[stage.method]["pvalue_adj"].shape == (len(perturbations), len(handle["genes"]))
@@ -246,7 +426,7 @@ def _valid_de(path: Path, stage: Stage, perturbations: list[str]) -> bool:
         return False
 
 
-def _reusable_record(record_path: Path, manifest_digest: str, artifacts: list[Path]) -> bool:
+def _reusable_record(record_path: Path, inputs: dict[str, Any], artifacts: list[Path]) -> bool:
     if not record_path.is_file() or any(not artifact.is_file() for artifact in artifacts):
         return False
     try:
@@ -260,7 +440,7 @@ def _reusable_record(record_path: Path, manifest_digest: str, artifacts: list[Pa
     resolved = {artifact.resolve(): artifact for artifact in artifacts}
     return (
         record.get("status") == "complete"
-        and record.get("manifest_sha256") == manifest_digest
+        and record.get("inputs") == inputs
         and set(expected) == set(resolved)
         and all(expected[path] == file_sha256(artifact) for path, artifact in resolved.items())
     )
@@ -272,7 +452,7 @@ def run_de_stage(
     output: Path,
     *,
     workers: int,
-    manifest_digest: str,
+    inputs: dict[str, Any],
     force: bool = False,
 ) -> Path:
     assert stage.dataset and stage.method and stage.reference
@@ -281,7 +461,7 @@ def run_de_stage(
     artifact = stage_dir / "de.h5"
     record_path = stage_dir / "stage.json"
 
-    if not force and _reusable_record(record_path, manifest_digest, [artifact]):
+    if not force and _reusable_record(record_path, inputs, [artifact]):
         return record_path
 
     data = _load_analysis_unit(spec, minimum_cells=int(manifest["minimum_cells"]))
@@ -315,7 +495,14 @@ def run_de_stage(
         raise RuntimeError(f"expected one DE artifact from scPertEval, found {len(candidates)}")
     candidates[0].replace(artifact)
     temporary.rmdir()
-    if not _valid_de(artifact, stage, perturbations):
+    if not _valid_de(
+        artifact,
+        stage,
+        perturbations,
+        target=str(manifest["de"]["target"]),
+        subsample=int(manifest["reference_subsample"]),
+        seed=int(manifest["seed"]),
+    ):
         raise RuntimeError(f"invalid completed DE artifact: {artifact}")
     artifact_key = _artifact_key(artifact, record_path)
     return _write_record(
@@ -323,8 +510,7 @@ def run_de_stage(
         {
             "stage": stage.id,
             "status": "complete",
-            "manifest_sha256": manifest_digest,
-            "scperteval_revision": expected_scperteval_revision(manifest),
+            "inputs": inputs,
             "artifact": artifact_key,
             "artifact_sha256": {artifact_key: file_sha256(artifact)},
             "n_cells": data.n_obs,
@@ -342,6 +528,9 @@ def _valid_drf(
     timing_path: Path,
     protocols: list[str],
     perturbations: list[str] | None = None,
+    *,
+    seed: int | None = None,
+    subsample: int | None = None,
 ) -> bool:
     if not drf_path.is_file() or not timing_path.is_file():
         return False
@@ -350,7 +539,21 @@ def _valid_drf(
         timing = pd.read_csv(timing_path)
     except (OSError, pd.errors.ParserError):
         return False
-    if not {"protocol", "perturbation", "drf"} <= set(drf) or not {"protocol", "seconds"} <= set(timing):
+    required = {
+        "protocol",
+        "perturbation",
+        "positive",
+        "negative",
+        "raw_positive",
+        "raw_negative",
+        "undefined_reason",
+        "drf",
+        "dataset",
+        "de_method",
+        "subsample",
+        "seed",
+    }
+    if not required <= set(drf) or not {"dataset", "protocol", "seconds"} <= set(timing):
         return False
     expected_protocols = set(protocols)
     if set(drf["protocol"].astype(str)) != expected_protocols:
@@ -358,6 +561,12 @@ def _valid_drf(
     if set(timing["protocol"].astype(str)) != expected_protocols or timing["protocol"].duplicated().any():
         return False
     if not np.isfinite(timing["seconds"].to_numpy(dtype=float)).all():
+        return False
+    if seed is not None and set(drf["seed"].astype(int)) != {seed}:
+        return False
+    if subsample is not None and set(drf["subsample"].astype(int)) != {subsample}:
+        return False
+    if set(drf["de_method"].astype(str)) != {"t-test"}:
         return False
     pairs = drf[["protocol", "perturbation"]].astype(str)
     if pairs.duplicated().any():
@@ -377,7 +586,7 @@ def run_drf_stage(
     output: Path,
     *,
     workers: int,
-    manifest_digest: str,
+    inputs: dict[str, Any],
     gpu: bool,
     force: bool = False,
 ) -> Path:
@@ -388,11 +597,19 @@ def run_drf_stage(
     timing_path = stage_dir / "timing.csv"
     record_path = stage_dir / "stage.json"
     protocols = list(manifest["gpu_protocols"] if gpu else manifest["protocols"])
+    protocol_objects = resolve_frozen_protocols(protocols)
     declared_perturbations = _declared_perturbations(spec)
     if (
         not force
-        and _reusable_record(record_path, manifest_digest, [drf_path, timing_path])
-        and _valid_drf(drf_path, timing_path, protocols, declared_perturbations)
+        and _reusable_record(record_path, inputs, [drf_path, timing_path])
+        and _valid_drf(
+            drf_path,
+            timing_path,
+            protocols,
+            declared_perturbations,
+            seed=int(manifest["seed"]),
+            subsample=int(manifest["reference_subsample"]),
+        )
     ):
         return record_path
 
@@ -402,7 +619,7 @@ def run_drf_stage(
     started = time.perf_counter()
     prepared = spe.prepare(
         data,
-        protocols,
+        protocol_objects,
         subsample=int(manifest["reference_subsample"]),
         seed=int(manifest["seed"]),
         min_cells=int(manifest["minimum_cells"]),
@@ -411,15 +628,26 @@ def run_drf_stage(
     )
     frames: list[pd.DataFrame] = []
     timings: list[dict[str, Any]] = []
-    for protocol in protocols:
+    for protocol in protocol_objects:
         protocol_started = time.perf_counter()
         result = spe.calibrate(prepared, protocol, de_method="t-test", calibrator="drf")
         elapsed = time.perf_counter() - protocol_started
         frames.append(result.per_perturbation)
-        timings.append({"dataset": stage.dataset, "protocol": protocol, "seconds": elapsed})
-    pd.concat(frames, ignore_index=True).to_csv(drf_path, index=False)
-    pd.DataFrame(timings).to_csv(timing_path, index=False)
-    if not _valid_drf(drf_path, timing_path, protocols, perturbations):
+        timings.append({"dataset": stage.dataset, "protocol": protocol.name, "seconds": elapsed})
+    drf_temporary = drf_path.with_name(f".{drf_path.name}.tmp")
+    timing_temporary = timing_path.with_name(f".{timing_path.name}.tmp")
+    pd.concat(frames, ignore_index=True).to_csv(drf_temporary, index=False)
+    pd.DataFrame(timings).to_csv(timing_temporary, index=False)
+    drf_temporary.replace(drf_path)
+    timing_temporary.replace(timing_path)
+    if not _valid_drf(
+        drf_path,
+        timing_path,
+        protocols,
+        perturbations,
+        seed=int(manifest["seed"]),
+        subsample=int(manifest["reference_subsample"]),
+    ):
         raise RuntimeError(f"invalid completed DRF artifacts for {stage.dataset}")
     artifact_keys = {_artifact_key(path, record_path): path for path in (drf_path, timing_path)}
     return _write_record(
@@ -427,8 +655,7 @@ def run_drf_stage(
         {
             "stage": stage.id,
             "status": "complete",
-            "manifest_sha256": manifest_digest,
-            "scperteval_revision": expected_scperteval_revision(manifest),
+            "inputs": inputs,
             "artifacts": list(artifact_keys),
             "artifact_sha256": {key: file_sha256(path) for key, path in artifact_keys.items()},
             "n_cells": data.n_obs,
@@ -456,24 +683,70 @@ def run_stage(
         raise ValueError(f"unknown production stage {stage_id!r}")
     stage = matches[0]
     actual_workers = int(workers or manifest.get("workers", 16))
-    digest = manifest_sha256(manifest_path)
-    if stage.kind == "de":
-        return run_de_stage(
-            manifest,
-            stage,
-            output,
-            workers=actual_workers,
-            manifest_digest=digest,
-            force=force,
+    inputs = stage_inputs(manifest_path, output)
+    failure_path = output / "stages" / stage.id / "failure.json"
+    try:
+        if stage.kind == "de":
+            result = run_de_stage(
+                manifest,
+                stage,
+                output,
+                workers=actual_workers,
+                inputs=inputs,
+                force=force,
+            )
+        elif stage.kind in {"drf-cpu", "drf-gpu"}:
+            result = run_drf_stage(
+                manifest,
+                stage,
+                output,
+                workers=actual_workers,
+                inputs=inputs,
+                gpu=stage.kind == "drf-gpu",
+                force=force,
+            )
+        else:
+            raise AssertionError(stage.kind)
+    except Exception as error:
+        _write_record(
+            failure_path,
+            {
+                "stage": stage.id,
+                "status": "failed",
+                "inputs": inputs,
+                "error_type": type(error).__name__,
+                "error": str(error),
+            },
         )
-    if stage.kind in {"drf-cpu", "drf-gpu"}:
-        return run_drf_stage(
-            manifest,
-            stage,
-            output,
-            workers=actual_workers,
-            manifest_digest=digest,
-            gpu=stage.kind == "drf-gpu",
-            force=force,
-        )
-    raise AssertionError(stage.kind)
+        raise
+    failure_path.unlink(missing_ok=True)
+    return result
+
+
+def stage_status(manifest_path: Path, output: Path) -> dict[str, Any]:
+    """Summarize checksum-valid complete, failed, and pending production stages."""
+    manifest = load_manifest(manifest_path)
+    stages = production_stages(manifest)
+    try:
+        inputs = stage_inputs(manifest_path, output)
+        input_error = None
+    except (OSError, RuntimeError, ValueError) as error:
+        inputs = None
+        input_error = str(error)
+    groups: dict[str, list[str]] = {"complete": [], "failed": [], "pending": []}
+    for stage in stages:
+        stage_dir = output / "stages" / stage.id
+        artifacts = [stage_dir / "de.h5"] if stage.kind == "de" else [stage_dir / "drf.csv", stage_dir / "timing.csv"]
+        record = stage_dir / "stage.json"
+        if inputs is not None and _reusable_record(record, inputs, artifacts):
+            groups["complete"].append(stage.id)
+        elif (stage_dir / "failure.json").is_file():
+            groups["failed"].append(stage.id)
+        else:
+            groups["pending"].append(stage.id)
+    return {
+        "expected": len(stages),
+        "counts": {name: len(values) for name, values in groups.items()},
+        "stages": groups,
+        "input_error": input_error,
+    }

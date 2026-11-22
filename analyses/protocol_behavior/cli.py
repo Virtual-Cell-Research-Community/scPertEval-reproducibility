@@ -5,7 +5,15 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from .production import DEFAULT_MANIFEST, DEFAULT_RESULTS, load_manifest, production_stages, run_stage
+from .production import (
+    DEFAULT_MANIFEST,
+    create_input_record,
+    default_results,
+    load_manifest,
+    production_stages,
+    run_stage,
+    stage_status,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -23,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--exclude-stage", action="append", default=[], help=argparse.SUPPRESS)
     parser.add_argument("--finalize", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--preflight", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--status", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--baseline-results", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--workers", type=int, default=16)
     parser.add_argument("--force", action="store_true")
     return parser
@@ -44,7 +55,8 @@ def _selected_stages(args: argparse.Namespace):
 def main(argv: list[str] | None = None) -> int:
     """Run the selected production stage(s), or finalize all completed stages."""
     args = build_parser().parse_args(argv)
-    output = args.output_dir or DEFAULT_RESULTS
+    manifest = load_manifest(args.manifest)
+    output = args.output_dir or default_results(manifest)
     stages = _selected_stages(args)
     if args.list_stages:
         print("\n".join(stage.id for stage in stages))
@@ -59,17 +71,26 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"completed production stage {args.stage}: {record}")
         return 0
+    if args.preflight:
+        record = create_input_record(args.manifest, output)
+        print(f"validated production inputs: {record}")
+        return 0
+    if args.status:
+        import json
+
+        print(json.dumps(stage_status(args.manifest, output), indent=2, sort_keys=True))
+        return 0
     if args.finalize:
         from .render import render_and_validate
 
-        completion = render_and_validate(args.manifest, output)
+        completion = render_and_validate(args.manifest, output, baseline_results=args.baseline_results)
         print(f"rendered and validated protocol-behavior production results: {completion}")
         return 0
     for stage in stages:
         run_stage(args.manifest, stage.id, output, workers=args.workers, force=args.force)
     from .render import render_and_validate
 
-    completion = render_and_validate(args.manifest, output)
+    completion = render_and_validate(args.manifest, output, baseline_results=args.baseline_results)
     print(f"completed protocol-behavior production workflow: {completion}")
     return 0
 
