@@ -66,7 +66,7 @@ SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit-v1.csv"
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
 DEFAULT_OUTPUT = Path("figures/evaluation-practice-v1")
-FIGURE_HEIGHT_IN = 7.4
+FIGURE_HEIGHT_IN = 6.3
 SEQUENTIAL = ("#F2F0F7", "#54278F")
 """Single-hue sequential ramp (purple) for winner-change rates; distinct from every task hue."""
 
@@ -125,7 +125,7 @@ def workflow_boxes(n: dict[str, Any]) -> list[tuple[float, float, str, str]]:
                 f"{n['distinct_protocols']} distinct protocols"
             ),
         ),
-        (0.605, 0.76, "Census (b, c)", f"Protocol sharing within\n{n['census_tasks']} prediction tasks"),
+        (0.605, 0.76, "Census (B, C)", f"Protocol sharing within\n{n['census_tasks']} prediction tasks"),
         (
             0.605,
             0.24,
@@ -135,7 +135,7 @@ def workflow_boxes(n: dict[str, Any]) -> list[tuple[float, float, str, str]]:
         (
             0.87,
             0.24,
-            "Ranking sensitivity (d, e)",
+            "Ranking sensitivity (D, E)",
             (
                 f"{n['benchmark_tasks']} benchmark tasks\n{_span(n['models_per_task'])} models per task\n"
                 f"{_span(n['protocols_per_task'])} protocols per task"
@@ -190,7 +190,7 @@ def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[
     figure.text(
         0.005,
         rect[1] + rect[3],
-        "a",
+        "A",
         fontsize=TAG_SIZE,
         fontweight="bold",
         va="top",
@@ -296,8 +296,8 @@ def evaluation_practice_figure(census: Path, ranking: Path, *, dark: bool = Fals
     agreement = pd.read_csv(census / "single-choice-agreement.csv")
     disagreement = pd.read_csv(ranking / "task-protocol-disagreement.csv")
     factors = pd.read_csv(ranking / "factor-sensitivity.csv")
-    census_row = decay_panel(decay, dark=dark, tag="b") | axis_panel(agreement, dark=dark, tag="c", show_labels=False)
-    ranking_row = disagreement_panel(disagreement, dark=dark, tag="d") | factor_panel(factors, dark=dark, tag="e")
+    census_row = decay_panel(decay, dark=dark, tag="B") | axis_panel(agreement, dark=dark, tag="C", show_labels=False)
+    ranking_row = disagreement_panel(disagreement, dark=dark, tag="D") | factor_panel(factors, dark=dark, tag="E")
     composition = (plot_spacer() / census_row / ranking_row) + theme(
         figure_size=(TEXT_WIDTH_IN, FIGURE_HEIGHT_IN), dpi=300
     )

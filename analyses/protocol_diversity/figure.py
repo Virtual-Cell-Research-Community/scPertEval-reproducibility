@@ -49,6 +49,7 @@ from analyses.protocol_diversity.diversity import (
     all_papers,
     consensus_decay,
     corpus_summary,
+    pair_sharing_within,
     papers_by_task,
     pinned_atlas_revision,
     rank_frequency,
@@ -211,26 +212,33 @@ def supplementary_table(
 
 
 def to_latex(table: pd.DataFrame) -> str:
+    """Compact LaTeX table: one header row per task, then its datasets (fits the manuscript text width)."""
+
+    def cells(row) -> str:
+        values = (
+            f"{row.papers} & {row.protocols} & {row.single_paper_protocol_fraction:.0%} & "
+            f"{row.most_common_protocol_paper_fraction:.0%} & {row.pair_sharing:.0%} \\\\"
+        )
+        return values.replace("%", r"\%")
+
     lines = [
-        r"\begin{tabular}{llrrrrr}",
+        r"\begin{tabular}{lrrrrr}",
         r"\toprule",
         (
-            r"Task & Dataset & Papers & Protocols & \makecell{Single-paper\\protocols} & "
-            r"\makecell{Most common\\protocol} & \makecell{Paper pairs\\sharing $\geq 1$} \\"
+            r"Task and dataset & Works & Protocols & \makecell{Single-work\\protocols} & "
+            r"\makecell{Most common\\protocol} & \makecell{Pairs sharing\\$\geq 1$ protocol} \\"
         ),
         r"\midrule",
     ]
-    previous = None
     for row in table.itertuples():
-        if row.dataset == "All" and previous is not None:
-            lines.append(r"\midrule")
-        task = row.task if row.dataset == "All" else ""
-        lines.append(
-            f"{task} & {row.dataset} & {row.papers} & {row.protocols} & "
-            f"{row.single_paper_protocol_fraction:.0%} & {row.most_common_protocol_paper_fraction:.0%} & "
-            f"{row.pair_sharing:.0%} \\\\".replace("%", r"\%")
-        )
-        previous = row
+        if row.task == ALL_TASKS:
+            lines.append(f"All works, all tasks & {cells(row)}")
+            continue
+        if row.dataset == "All":
+            lines += [r"\addlinespace", rf"\multicolumn{{6}}{{l}}{{\textit{{{row.task}}}}} \\"]
+            lines.append(rf"\quad All datasets & {cells(row)}")
+        else:
+            lines.append(rf"\quad {row.dataset} & {cells(row)}")
     lines += [r"\bottomrule", r"\end{tabular}", ""]
     return "\n".join(lines)
 
@@ -270,6 +278,12 @@ def write_source_data(atlas_repo: Path, revision: str | None, output: Path) -> N
         "consensus-decay.csv": consensus_decay(groups),
         "single-choice-agreement.csv": single_axis_agreement(groups),
         "rank-frequency.csv": rank_frequency(groups),
+        "pair-sharing-by-year.csv": pair_sharing_within(
+            groups, {p["work_id"]: p["year"] for p in atlas.papers}, "year"
+        ),
+        "pair-sharing-by-role.csv": pair_sharing_within(
+            groups, {p["work_id"]: p["publication_role"] for p in atlas.papers}, "publication_role"
+        ),
         "supplementary-table.csv": table,
     }
     for name, frame in outputs.items():

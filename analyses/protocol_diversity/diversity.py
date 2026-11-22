@@ -164,6 +164,21 @@ def pair_sharing(papers: Mapping[str, Iterable[str]]) -> float:
     return sum(bool(a & b) for a, b in pairs) / len(pairs) if pairs else float("nan")
 
 
+def pair_sharing_within(
+    groups: Mapping[str, Mapping[str, set[str]]], attribute: Mapping[str, str], name: str
+) -> pd.DataFrame:
+    """Pair sharing among papers of a task that share a work attribute (e.g. publication year or role)."""
+
+    records = []
+    for group, papers in groups.items():
+        values: dict[str, dict[str, set[str]]] = defaultdict(dict)
+        for work, cols in papers.items():
+            values[attribute.get(work, "")][work] = cols
+        for value, subset in sorted(values.items()):
+            records.append({"group": group, name: value, "papers": len(subset), "pair_sharing": pair_sharing(subset)})
+    return pd.DataFrame.from_records(records)
+
+
 def consensus_decay(groups: Mapping[str, Mapping[str, set[str]]]) -> pd.DataFrame:
     """Pair sharing and distinct-protocol counts as taxonomy axes are added."""
 

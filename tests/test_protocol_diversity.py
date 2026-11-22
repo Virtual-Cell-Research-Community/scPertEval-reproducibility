@@ -5,6 +5,7 @@ from analyses.protocol_diversity.diversity import (
     corpus_summary,
     intervention_label,
     pair_sharing,
+    pair_sharing_within,
     pinned_atlas_revision,
     protocol_prefix,
     rank_frequency,
@@ -86,3 +87,12 @@ def test_corpus_summary_counts_only_works_with_protocol_records():
     assert summary["works"] == 2
     assert summary["works_model_paper"] == 1
     assert summary["distinct_protocols"] == 1
+
+
+def test_pair_sharing_within_compares_only_papers_with_the_same_attribute():
+    groups = {"t": {"a": {"x"}, "b": {"x"}, "c": {"x"}, "d": {"y"}}}
+    table = pair_sharing_within(groups, {"a": "2024", "b": "2024", "c": "2025", "d": "2025"}, "year")
+    rows = table.set_index("year")
+    assert rows.loc["2024", "pair_sharing"] == 1.0
+    assert rows.loc["2025", "pair_sharing"] == 0.0
+    assert rows.loc["2025", "papers"] == 2
