@@ -160,3 +160,46 @@ python -m analyses.ranking_sensitivity.figure \
 The main figure combines cluster-bootstrap reversal intervals with examples
 selected by the rule frozen in `configs/evaluation/ranking-sensitivity-v1.json`.
 The supplement contains every task and evaluation-choice slope plot.
+
+## v2: retrieval-rank extension (primary)
+
+v2 adds the ten recurring retrieval-rank families to the 101 v1 families (111 in total; 104 for
+the chemical task). The change is post hoc and is documented in
+`docs/ranking-sensitivity-atlas-v2-scope-change.md`; v1 stays frozen and is reported in the
+supplement. Regenerate the universe from the same Atlas revision:
+
+```bash
+python -m analyses.ranking_sensitivity.atlas_protocol_audit \
+  --atlas-repo /path/to/PerturbationEvaluationAtlas \
+  --config configs/evaluation/atlas-protocol-eligibility-v2.json
+```
+
+Only the added protocols are evaluated; v1 scores are reused. Pass the same flags to the
+truth-coverage runtime (`--eligibility-version v2 --added-since v1`) and the production scorer,
+which writes schema-3 completion records into a separate result tree. Run the scorer on Beauty only:
+
+```bash
+python scripts/evaluate_atlas_production_benchmark.py \
+  --project-root . --model-data-root /path/to/models/data --runs-root /path/to/runs \
+  --results-root /path/to/results/ranking-sensitivity-atlas-v2 \
+  --track chemical-context --eligibility-version v2 --added-since v1 --workers 16
+```
+
+Append the new availability rows to the v1 table, summarize them with
+`--config configs/evaluation/ranking-sensitivity-atlas-v2.json`, then analyse both detail roots
+together:
+
+```bash
+python -m analyses.ranking_sensitivity.atlas_analysis \
+  --details-root results/ranking-sensitivity-atlas-v1/details \
+  --details-root results/ranking-sensitivity-atlas-v2/details \
+  --availability results/ground-truth-coverage-v2/availability.csv \
+  --pair-coverage results/ground-truth-coverage-v2/pairwise-coverage-summary.csv \
+  --families configs/evaluation/atlas-protocol-eligibility-v2.csv \
+  --task-manifest configs/evaluation/atlas-task-protocol-manifest-v2.csv \
+  --output results/ranking-sensitivity-atlas-v2/analysis-v2
+```
+
+Retrieval ranks are dataset-scope (the candidate set is every evaluation unit of the fold) and are
+implemented in `retrieval.py`. Factor sensitivity adds a cross-perturbation factor: direct
+comparison versus retrieval with the same distance and every other choice fixed.

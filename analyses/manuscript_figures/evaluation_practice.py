@@ -13,7 +13,7 @@ source data; nothing is recomputed here.
 From the repository root:
 
     uv run python -m analyses.manuscript_figures.evaluation_practice \\
-      --ranking /path/to/figures/ranking-sensitivity-atlas-v1/source-data
+      --ranking /path/to/figures/ranking-sensitivity-atlas-v2/source-data
 """
 
 from __future__ import annotations

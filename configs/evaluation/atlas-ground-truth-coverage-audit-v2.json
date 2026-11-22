@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "generated_on": "2026-11-22",
+  "reproducibility_repository_commit": "caee425",
+  "scperteval_commit": "58ccc91095ccb30bbe8f4470dff8b398d2eb4525",
+  "atlas_commit": "0be116b2a871132c2b3f0c9e896e2fb544a41fe5",
+  "execution_host": "beauty",
+  "construction": "v1 availability (results/ground-truth-coverage-v1/availability.csv, 340,075 rows, unchanged) plus truth-self-evaluation of the 10 protocols added in v2 on all 12 folds",
+  "post_hoc_note": "The 75% rule is the unchanged v1 rule frozen before v1 ranks were inspected; the added protocols' coverage was computed after v1 ranks had been inspected.",
+  "authoritative_result_directory": "/home/pschaefer/sds-hd/sd22b002/projects/scPertEval-reproducibility/results/ground-truth-coverage-v2",
+  "availability": {
+    "rows": 373488,
+    "v1_rows": 340075,
+    "added_rows": 33413,
+    "defined_rows": 369883,
+    "undefined_rows": 3605,
+    "added_undefined_rows": 348,
+    "sha256": "aa698292e9863e513e8e16df4b7f2e9ad8b3da3c32a84a994a9b989a7dd0ec71"
+  },
+  "output_sha256": {
+    "protocol-coverage-by-fold.csv": "fe05c1a5e313d9d3eb6df4f4b1ae9946cb638e598d083c78f7c009da748e93e0",
+    "pairwise-coverage-by-fold.csv": "b5a8738df7feb1e77495f8c493b92eb8b066d368874e2ef29910f967809dbe8c",
+    "pairwise-coverage-summary.csv": "8e66a8a92fac6e8f15e46465c99b05ac70ef1fc26321f3968fbe1484cbd024d8",
+    "coverage-summary.json": "20668cd34f3696d691bf98b544d1557599554f8e201fa35bc1c3b2591f1db1fd"
+  },
+  "undefined_reason_counts": {
+    "target_gene_not_measured": 1740,
+    "constant_truth": 678,
+    "empty_feature_set": 587,
+    "no_ground_truth_positives": 543,
+    "single_ground_truth_class": 57
+  },
+  "added_undefined_reason_counts": {
+    "target_gene_not_measured": 348
+  },
+  "candidate_minimum_common_fraction": 0.75,
+  "candidate_is_frozen": true,
+  "tasks": {
+    "chemical_context_transfer": {
+      "protocol_pairs": 5356,
+      "pairs_meeting_candidate": 5253,
+      "fraction_meeting_candidate": 0.9807692307692307,
+      "minimum_fold_common_fraction": 0.6363636363636364,
+      "median_minimum_fold_common_fraction": 1.0
+    },
+    "essential_perturbation_generalization": {
+      "protocol_pairs": 6105,
+      "pairs_meeting_candidate": 6105,
+      "fraction_meeting_candidate": 1.0,
+      "minimum_fold_common_fraction": 0.9666666666666667,
+      "median_minimum_fold_common_fraction": 1.0
+    },
+    "genetic_context_transfer": {
+      "protocol_pairs": 6105,
+      "pairs_meeting_candidate": 6105,
+      "fraction_meeting_candidate": 1.0,
+      "minimum_fold_common_fraction": 0.775,
+      "median_minimum_fold_common_fraction": 0.98125
+    }
+  }
+}
