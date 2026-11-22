@@ -32,8 +32,14 @@ Two production generations are explicit:
   byte-identical to the manifest used for the checksummed result tree at
   `results/protocol_behavior/production-v1`; treat both as immutable.
 - `production-v2.json` replaces GWPS with the current K562 Essential benchmark
-  and retains the four genetic and three SciPlex3 context units. Its outputs are
-  staged under `results/protocol_behavior/production-v2-scperteval-main-staging`.
+  and retains the four genetic and three SciPlex3 context units. The current
+  result tree, at scPertEval `774e600`, is
+  `results/protocol_behavior/production-v2-scperteval-774e600` (completed on Beauty,
+  2026-11-22). The earlier staging tree at `58ccc91`
+  (`production-v2-scperteval-main-staging`) has identical DEG agreement and
+  concordance tables; its DRF values differ only for `de_auprc`, `de_auroc` and
+  `de_overlap_k=50` (by at most 0.011), because scPertEval `774e600` ranks DE
+  genes by significance by default and keeps exact ties.
 
 For every analysis unit the workflow computes six full-cell DE combinations
 (three methods × two references), 20 CPU DRF protocols, two GPU Sinkhorn
