@@ -28,7 +28,13 @@ import pandas as pd
 from analyses.vocabulary import ATLAS_AXES as AXES
 from analyses.vocabulary import TARGET_CONTEXT_LABELS
 
-ATLAS_FILES = ("data/protocols.csv", "data/protocol_contexts.csv", "data/manifest.json", "public/data/datasets.json")
+ATLAS_FILES = (
+    "data/papers.csv",
+    "data/protocols.csv",
+    "data/protocol_contexts.csv",
+    "data/manifest.json",
+    "public/data/datasets.json",
+)
 ELIGIBILITY_CONFIG = Path(__file__).resolve().parents[2] / "configs/evaluation/atlas-protocol-eligibility-v1.json"
 
 
@@ -40,6 +46,7 @@ def pinned_atlas_revision(config: Path = ELIGIBILITY_CONFIG) -> str:
 
 @dataclass(frozen=True)
 class AtlasInputs:
+    papers: list[dict[str, str]]
     protocols: list[dict[str, str]]
     contexts: list[dict[str, str]]
     manifest: dict
@@ -61,6 +68,7 @@ def read_atlas(atlas_repo: Path, revision: str | None) -> AtlasInputs:
             ).stdout
     rows = {p: list(csv.DictReader(io.StringIO(b.decode("utf-8")))) for p, b in payloads.items() if p.endswith(".csv")}
     return AtlasInputs(
+        papers=rows["data/papers.csv"],
         protocols=rows["data/protocols.csv"],
         contexts=rows["data/protocol_contexts.csv"],
         manifest=json.loads(payloads["data/manifest.json"]),
@@ -128,6 +136,24 @@ def all_papers(atlas: AtlasInputs) -> dict[str, set[str]]:
     for row in atlas.protocols:
         papers[row["work_id"]].add(row["matrix_column"])
     return dict(papers)
+
+
+def corpus_summary(atlas: AtlasInputs) -> pd.DataFrame:
+    """Size of the annotated corpus: works with protocol records by publication role, records and protocols."""
+
+    works = {row["work_id"] for row in atlas.protocols}
+    roles = defaultdict(int)
+    for paper in atlas.papers:
+        if paper["work_id"] in works:
+            roles[paper["publication_role"]] += 1
+    records = [
+        ("works", len(works)),
+        *((f"works_{role}", count) for role, count in sorted(roles.items())),
+        ("protocol_records", len(atlas.protocols)),
+        ("protocol_context_records", len(atlas.contexts)),
+        ("distinct_protocols", len({row["matrix_column"] for row in atlas.protocols})),
+    ]
+    return pd.DataFrame(records, columns=["quantity", "value"])
 
 
 def pair_sharing(papers: Mapping[str, Iterable[str]]) -> float:

@@ -22,6 +22,7 @@ from plotnine import (
     element_line,
     element_text,
     geom_line,
+    geom_path,
     geom_point,
     geom_segment,
     ggplot,
@@ -30,7 +31,6 @@ from plotnine import (
     scale_fill_manual,
     scale_linetype_manual,
     scale_x_continuous,
-    scale_x_discrete,
     scale_x_log10,
     scale_y_continuous,
     theme,
@@ -48,6 +48,7 @@ from analyses.figure_style import (
 from analyses.protocol_diversity.diversity import (
     all_papers,
     consensus_decay,
+    corpus_summary,
     papers_by_task,
     pinned_atlas_revision,
     rank_frequency,
@@ -61,7 +62,6 @@ MIN_TASK_PAPERS = 20
 MIN_TABLE_DATASET_PAPERS = 10
 ALL_TASKS = "All papers"
 DEFAULT_OUTPUT = Path("figures/protocol-diversity-v1")
-CUMULATIVE_TICKS = [AXIS_LABELS[ATLAS_AXES[0]]] + [f"+ {AXIS_LABELS[a].lower()}" for a in ATLAS_AXES[1:]]
 
 
 def task_order(groups) -> list[str]:
@@ -90,27 +90,44 @@ def task_scales(tasks: list[str]) -> list:
     ]
 
 
-def decay_panel(decay: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
-    """Paper pairs sharing ≥ 1 protocol as evaluation choices are added one at a time."""
+def choice_rows() -> dict[str, int]:
+    """Evaluation choice → y position, taxonomy order from top to bottom (shared by panels b and c)."""
 
-    frame = with_task_columns(decay)
-    frame["tick"] = pd.Categorical(frame["level"].map(lambda lv: CUMULATIVE_TICKS[lv - 1]), CUMULATIVE_TICKS)
+    return {axis: len(ATLAS_AXES) - i for i, axis in enumerate(ATLAS_AXES)}
+
+
+def choice_scale(show_labels: bool = True) -> Any:
+    rows = choice_rows()
+    return scale_y_continuous(
+        breaks=list(rows.values()),
+        labels=[AXIS_LABELS[a] for a in rows] if show_labels else [""] * len(rows),
+        name="",
+        limits=(0.5, len(rows) + 0.5),
+        expand=(0, 0),
+    )
+
+
+def decay_panel(decay: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
+    """Paper pairs sharing ≥ 1 protocol as evaluation choices are added from top to bottom."""
+
+    c = colors(dark)
+    frame = with_task_columns(decay).sort_values(["group", "level"])
+    frame["y"] = frame["axis"].map(choice_rows())
     tasks = list(frame["task"].cat.categories)
     return (
-        ggplot(frame, aes("tick", "pair_sharing", group="task", color="task", linetype="task"))
-        + geom_line(size=0.6)
+        ggplot(frame, aes("pair_sharing", "y", group="task", color="task", linetype="task"))
+        + geom_path(size=0.6)
         + geom_point(size=1.0)
         + task_scales(tasks)
-        + scale_y_continuous(labels=percent, limits=(0, 1), breaks=[0, 0.25, 0.5, 0.75, 1])
-        + scale_x_discrete(name="Protocol specified up to")
-        + labs(y="Paper pairs sharing ≥ 1 protocol", tag=tag)
+        + scale_x_continuous(labels=percent, limits=(0, 1), breaks=[0, 0.5, 1], expand=(0, 0.02))
+        + choice_scale()
+        + labs(x="Paper pairs sharing ≥ 1 protocol,\nchoices added top to bottom", tag=tag)
         + paper_theme(dark)
         + theme(
-            axis_text_x=element_text(rotation=35, ha="right"),
-            panel_grid_major_x=element_blank(),
+            panel_grid_major_y=element_line(color=c["grid"], size=0.35),
             legend_position="inside",
-            legend_position_inside=(1, 1),
-            legend_justification_inside=(1, 1),
+            legend_position_inside=(1, 0),
+            legend_justification_inside=(1, 0),
             legend_key_size=7,
             legend_title=element_blank(),
             legend_text=element_text(size=SMALL_SIZE),
@@ -118,14 +135,14 @@ def decay_panel(decay: pd.DataFrame, *, dark: bool = False, tag: str | None = No
     )
 
 
-def axis_panel(agreement: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
+def axis_panel(agreement: pd.DataFrame, *, dark: bool = False, tag: str | None = None, show_labels: bool = True) -> Any:
     """Pair sharing per evaluation choice alone: grey bar = median over tasks, points = tasks."""
 
     c = colors(dark)
     frame = with_task_columns(agreement)
     tasks = list(frame["task"].cat.categories)
     offsets = {t: 0.25 - 0.5 * i / max(len(tasks) - 1, 1) for i, t in enumerate(tasks)}
-    rows = {axis: len(ATLAS_AXES) - i for i, axis in enumerate(ATLAS_AXES)}
+    rows = choice_rows()
     frame["y"] = frame["axis"].map(rows) + frame["group"].map(offsets)
     median = frame.groupby("axis", as_index=False)["pair_sharing"].median()
     median["y"] = median["axis"].map(rows)
@@ -137,10 +154,14 @@ def axis_panel(agreement: pd.DataFrame, *, dark: bool = False, tag: str | None =
         + geom_point(zero, aes("pair_sharing", "y", color="task"), fill=c["background"], size=1.2, stroke=0.5)
         + scale_color_manual(values=TASK_COLORS, guide=None)
         + scale_fill_manual(values=TASK_COLORS, guide=None)
-        + scale_x_continuous(labels=percent, limits=(0, 1), breaks=[0, 0.5, 1], name="Paper pairs sharing ≥ 1 value")
-        + scale_y_continuous(
-            breaks=list(rows.values()), labels=[AXIS_LABELS[a] for a in rows], name="", expand=(0, 0.5)
+        + scale_x_continuous(
+            labels=percent,
+            limits=(0, 1),
+            breaks=[0, 0.5, 1],
+            expand=(0, 0.02),
+            name="Paper pairs agreeing on\nthis choice alone",
         )
+        + choice_scale(show_labels)
         + labs(tag=tag)
         + paper_theme(dark)
         + theme(panel_grid_major_y=element_blank(), panel_grid_major_x=element_line(color=c["grid"], size=0.35))
@@ -219,7 +240,7 @@ def census_figure(source: Path, *, dark: bool) -> Any:
 
     decay = pd.read_csv(source / "consensus-decay.csv")
     agreement = pd.read_csv(source / "single-choice-agreement.csv")
-    figure = decay_panel(decay, dark=dark, tag="a") | axis_panel(agreement, dark=dark, tag="b")
+    figure = decay_panel(decay, dark=dark, tag="a") | axis_panel(agreement, dark=dark, tag="b", show_labels=False)
     return figure + theme(figure_size=(TEXT_WIDTH_IN, 2.8), dpi=300)
 
 
@@ -244,6 +265,7 @@ def write_source_data(atlas_repo: Path, revision: str | None, output: Path) -> N
     source = output / "source-data"
     source.mkdir(parents=True, exist_ok=True)
     outputs = {
+        "corpus-summary.csv": corpus_summary(atlas),
         "task-summary.csv": summary,
         "consensus-decay.csv": consensus_decay(groups),
         "single-choice-agreement.csv": single_axis_agreement(groups),

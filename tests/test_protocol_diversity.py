@@ -1,6 +1,8 @@
 import math
 
 from analyses.protocol_diversity.diversity import (
+    AtlasInputs,
+    corpus_summary,
     intervention_label,
     pair_sharing,
     pinned_atlas_revision,
@@ -64,3 +66,23 @@ def test_single_axis_agreement_compares_one_axis_and_keeps_metric_suffix():
 
 def test_census_reads_the_atlas_revision_pinned_for_ranking_sensitivity():
     assert len(pinned_atlas_revision()) == 40
+
+
+def test_corpus_summary_counts_only_works_with_protocol_records():
+    atlas = AtlasInputs(
+        papers=[
+            {"work_id": "w1", "publication_role": "model_paper"},
+            {"work_id": "w2", "publication_role": "benchmark_paper"},
+            {"work_id": "w3", "publication_role": "model_paper"},
+        ],
+        protocols=[{"work_id": "w1", "matrix_column": "x"}, {"work_id": "w2", "matrix_column": "x"}],
+        contexts=[],
+        manifest={},
+        dataset_names={},
+        sha256={},
+        revision="test",
+    )
+    summary = dict(corpus_summary(atlas).values.tolist())
+    assert summary["works"] == 2
+    assert summary["works_model_paper"] == 1
+    assert summary["distinct_protocols"] == 1
