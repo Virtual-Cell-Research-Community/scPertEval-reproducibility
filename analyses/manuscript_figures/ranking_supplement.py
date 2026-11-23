@@ -43,6 +43,7 @@ from plotnine import (
     scale_fill_manual,
     scale_x_continuous,
     scale_y_continuous,
+    scale_y_reverse,
     theme,
 )
 
@@ -290,6 +291,8 @@ def bump_plots(source: Path, *, dark: bool = False, eligibility: Path = ELIGIBIL
         title = f"      {task_label(first['task'])}: {axis_label(first['factor']).lower()} changes"
         plots.append(
             _bump_plot(relabelled, dark=dark, tag=tag)
+            # Rank 1 (best) at the top; the base plot's reversed limits do not reverse the axis in Plotnine.
+            + scale_y_reverse(breaks=[], expand=(0, 0.6))
             + labs(title=title)
             + theme(
                 axis_title=element_blank(),
