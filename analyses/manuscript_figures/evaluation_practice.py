@@ -5,8 +5,8 @@ analysis into one manuscript figure. Reads only the two analyses' exported
 source data; nothing is recomputed here.
 
     a  workflow: corpus → taxonomy annotation → census (b, c) and scPertEval → ranking sensitivity (d, e)
-    b  census: paper pairs sharing a protocol as evaluation choices are added
-    c  census: paper pairs agreeing on each evaluation choice alone
+    b  census: paper pairs that disagree on each evaluation choice alone, and on the full protocol
+    c  census: paper pairs that disagree on any of the evaluation choices combined so far
     d  ranking: protocol pairs selecting different winning models, per benchmark task
     e  ranking: winner-change rate when one evaluation choice changes
 
@@ -58,7 +58,13 @@ from analyses.figure_style import (
     paper_theme,
     percent,
 )
-from analyses.protocol_diversity.figure import axis_panel, decay_panel
+from analyses.protocol_diversity.figure import (
+    add_task_legend,
+    combined_panel,
+    legend_band,
+    single_choice_panel,
+    task_order,
+)
 from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, RANKING_FACTORS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -66,7 +72,7 @@ SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit.csv"
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
 DEFAULT_OUTPUT = Path("figures/evaluation-practice")
-FIGURE_HEIGHT_IN = 5.9
+FIGURE_HEIGHT_IN = 6.2
 WORKFLOW_TOP_PT = 2.0
 """Figure margin above the workflow (panel a)."""
 WORKFLOW_MARGIN_PT = 3.0
@@ -408,8 +414,9 @@ def evaluation_practice_figure(
     workflow_pt = workflow_height_pt(workflow_boxes(numbers)) + 2 * WORKFLOW_MARGIN_PT
     # Plotnine 0.15 measures plot margins as a fraction of the figure width.
     reserve = theme(plot_margin_top=(WORKFLOW_TOP_PT + workflow_pt + WORKFLOW_GAP_PT) / (TEXT_WIDTH_IN * 72))
-    census_row = (decay_panel(decay, dark=dark, tag="B") + reserve) | (
-        axis_panel(agreement, dark=dark, tag="C", show_labels=False) + reserve
+    reserve += legend_band()
+    census_row = (single_choice_panel(agreement, decay, dark=dark, tag="B") + reserve) | (
+        combined_panel(decay, dark=dark, tag="C") + reserve
     )
     ranking_row = disagreement_panel(disagreement, dark=dark, tag="D") | factor_panel(factors, dark=dark, tag="E")
     # Every plot gets the figure size: Plotnine converts plot margins with each plot's own size.
@@ -419,6 +426,7 @@ def evaluation_practice_figure(
     height_pt = FIGURE_HEIGHT_IN * 72
     bottom = 1 - (WORKFLOW_TOP_PT + workflow_pt) / height_pt
     draw_workflow(figure, (0.0, bottom, 1.0, workflow_pt / height_pt), numbers, dark=dark)
+    add_task_legend(figure, task_order(decay["group"]), dark=dark)
     return figure
 
 

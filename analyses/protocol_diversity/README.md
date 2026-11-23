@@ -29,15 +29,19 @@ ranking-sensitivity analysis uses. `--revision <rev>` overrides it, and
   generalization, and contexts mixing intervention kinds. The figure shows tasks
   with at least 20 papers.
 - **Pair sharing**: fraction of paper pairs within a task that share at least
-  one protocol, recomputed as protocol identity is specified one taxonomy axis
-  at a time (census panel a).
-- **Single-axis agreement**: pair sharing when papers are compared on one
-  evaluation choice alone (census panel b). Unlike the cumulative panel, it does not depend on the
-  order in which axes are added.
+  one protocol; the census panels show its complement, the fraction of pairs that
+  disagree (share no protocol).
+- **Single choice** (census panel a): pairs that disagree when papers are compared
+  on one evaluation choice alone, plus a full-protocol row (all choices). It does
+  not depend on the order of the choices.
+- **Choices combined** (census panel b): pairs that disagree when protocol
+  identity is specified one taxonomy axis at a time, in taxonomy order. The row
+  labels ("+ Embedding", …, "= Full protocol") mark that each row adds one choice
+  to the rows above it; the step sizes depend on that order.
 
 The task definition is deliberately coarse: split design (e.g. scaffold versus
 random holdouts) is recorded only as free text in the Atlas. Finer tasks need
-not raise agreement: restricted to one dataset, pair sharing stays at 2–29%
+not raise agreement: restricted to one dataset, pair sharing stays at 4–32%
 (supplementary table).
 
 ## Outputs

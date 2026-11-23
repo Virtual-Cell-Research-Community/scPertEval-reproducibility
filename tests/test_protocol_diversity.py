@@ -96,3 +96,47 @@ def test_pair_sharing_within_compares_only_papers_with_the_same_attribute():
     assert rows.loc["2024", "pair_sharing"] == 1.0
     assert rows.loc["2025", "pair_sharing"] == 0.0
     assert rows.loc["2025", "papers"] == 2
+
+
+def test_census_panels_mark_the_full_protocol_and_cumulative_rows():
+    from analyses.protocol_diversity.figure import FULL_PROTOCOL, choice_rows, combined_labels
+
+    rows = choice_rows()
+    labels = combined_labels()
+    choices = [key for key in rows if key != FULL_PROTOCOL]
+    assert rows[FULL_PROTOCOL] < min(rows[c] for c in choices)
+    assert [rows[c] for c in choices] == sorted((rows[c] for c in choices), reverse=True)
+    assert not labels[choices[0]].startswith("+")
+    assert all(labels[c].startswith("+ ") for c in choices[1:])
+    assert labels[FULL_PROTOCOL].startswith("= ")
+
+
+def test_census_figure_draws_one_legend_for_both_panels(tmp_path):
+    import pandas as pd
+
+    from analyses.protocol_diversity.figure import census_figure
+    from analyses.vocabulary import ATLAS_AXES
+
+    groups = ["Genetic single, Few-shot", "Chemical single, Zero-shot"]
+    pd.DataFrame(
+        [
+            {
+                "group": g,
+                "level": i + 1,
+                "axis": a,
+                "papers": 25,
+                "distinct_protocols": i + 2,
+                "pair_sharing": 0.9 - i / 10,
+            }
+            for g in groups
+            for i, a in enumerate(ATLAS_AXES)
+        ]
+    ).to_csv(tmp_path / "consensus-decay.csv", index=False)
+    pd.DataFrame(
+        [{"group": g, "axis": a, "distinct_values": 3, "pair_sharing": 0.6} for g in groups for a in ATLAS_AXES]
+    ).to_csv(tmp_path / "single-choice-agreement.csv", index=False)
+
+    figure = census_figure(tmp_path, dark=False)
+
+    assert len(figure.legends) == 1
+    assert [t.get_text() for t in figure.legends[0].get_texts()] == groups
