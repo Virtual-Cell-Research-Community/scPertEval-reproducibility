@@ -1,7 +1,7 @@
 # Atlas protocol eligibility audit
 
 This audit freezes the ranking-sensitivity protocol universe against PerturbationEvaluationAtlas
-commit `0b0fca9dc997fd531c686fedeb95aa66c68c4d24` and `data/protocols.csv` SHA-256 `f05050d5e270870faad74843ad421eec3d86785d243837f76ae1411a3ab21514`.
+commit `5e33d89a6b54e36a64acf69c94e0ae7ba5f6383c` and `data/protocols.csv` SHA-256 `f05050d5e270870faad74843ad421eec3d86785d243837f76ae1411a3ab21514`.
 
 Eligibility means that an operationally distinct family occurs in at least
 2 independent works. Reporting aggregation and DE caller are

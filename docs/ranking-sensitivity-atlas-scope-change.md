@@ -33,6 +33,12 @@ display. Eligibility (at least two independent works) and the scope rules are un
 
 ## Universe at Atlas `0b0fca9`
 
+The Atlas pin was later moved to `5e33d89` (2026-11-23). That commit only rebuilt the Atlas data
+manifest from a clean checkout: the manifest committed with `0b0fca9` recorded its parent `0c67e99`
+with `source_dirty: true`, because the tables had been built before the record edits were committed.
+Every Atlas data table is byte-identical between `0b0fca9` and `5e33d89`, and the eligibility audit at
+`5e33d89` regenerates every file in `configs/evaluation` byte for byte, so all results below stand.
+
 `atlas_protocol_audit.py` with `configs/evaluation/atlas-protocol-eligibility.json` reads Atlas
 `0b0fca9` (`data/protocols.csv` SHA-256 `f05050d5…`). It yields 150 literature-eligible families, of
 which 115 are in scope (`docs/atlas-protocol-eligibility.md`).

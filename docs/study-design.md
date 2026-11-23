@@ -309,7 +309,9 @@ conversion rule is recorded in each prediction manifest.
 ## Sensitivity panel
 
 The executable protocol universe is derived from PerturbationEvaluationAtlas
-commit `0b0fca9dc997fd531c686fedeb95aa66c68c4d24` (prespecified against `0be116b`; see below).
+commit `5e33d89a6b54e36a64acf69c94e0ae7ba5f6383c` (prespecified against `0be116b`; see below). Its
+data tables are byte-identical to `0b0fca9`, the revision the scores were computed from; `5e33d89`
+only rebuilt the data manifest from a clean checkout.
 An operational family is
 eligible when it occurs in at least two independent works. Literature frequency
 selects families but does not weight them. Ranking-equivalent variants receive
@@ -321,7 +323,7 @@ effect-weighted perturbation aggregation. Limma-dependent evaluation is
 postponed. The prespecified universe, derived from Atlas `0be116b`, contained 101 families. After
 model ranks over it had been inspected, two post-hoc changes followed
 (`docs/ranking-sensitivity-atlas-scope-change.md`): the recurring retrieval-rank families were
-admitted, and the universe was re-derived from the curated Atlas `0b0fca9` with every protocol
+admitted, and the universe was re-derived from the curated Atlas `0b0fca9` (data identical to `5e33d89`) with every protocol
 rescored under scPertEval `774e600`. The analysed universe contains 115 families, normalized by
 task in `configs/evaluation/atlas-task-protocol-manifest.csv`.
 

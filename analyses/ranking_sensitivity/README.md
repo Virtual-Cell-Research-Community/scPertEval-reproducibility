@@ -32,7 +32,7 @@ included universe, the complete scope audit, the separate DE-caller audit, and
 the human-readable summary. Reporting aggregation and DE caller are deliberately
 not part of atomic-family identity.
 
-The universe, derived from Atlas `0b0fca9`, has 115 families (115, 115 and 104 per
+The universe, derived from Atlas `5e33d89` (data identical to `0b0fca9`), has 115 families (115, 115 and 104 per
 task). It includes 13 retrieval-rank families (Atlas
 `cross_perturbation_group == identity_matching`). Retrieval admission and the
 re-derivation from the curated Atlas were both decided post hoc, after model ranks
