@@ -32,7 +32,6 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 from matplotlib.textpath import text_to_path
 from plotnine import (
     aes,
-    coord_flip,
     element_blank,
     geom_col,
     geom_text,
@@ -65,7 +64,7 @@ from analyses.protocol_diversity.figure import (
     single_choice_panel,
     task_order,
 )
-from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, RANKING_FACTORS
+from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, CENSUS_TASKS, RANKING_FACTORS
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit.csv"
@@ -82,8 +81,9 @@ WORKFLOW_GAP_PT = 6.0
 SEQUENTIAL = ("#F2F0F7", "#54278F")
 """Single-hue sequential ramp (purple) for winner-change rates; distinct from every task hue."""
 
-TASK_TICKS = {task: "\n".join(label.rsplit(" ", 1)) for task, label in BENCHMARK_TASKS.items()}
-SHORT_TASK_TICKS = dict(zip(BENCHMARK_TASKS, ["Perturbation", "Genetic", "Chemical"], strict=True))
+TASK_TICKS = {task: CENSUS_TASKS[task].replace(" ", "\n").replace(",", "") for task in BENCHMARK_TASKS}
+"""Benchmark task → three-line census-task label (e.g. Genetic / single / Few-shot), so that d and e name
+tasks as b and c do while fitting one heatmap column."""
 
 
 # Workflow panel (a) ---------------------------------------------------------------------------------
@@ -311,36 +311,35 @@ def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[
 
 def disagreement_data(disagreement: pd.DataFrame) -> pd.DataFrame:
     rows = disagreement.set_index("task").reindex(list(BENCHMARK_TASKS)).reset_index()
-    rows["tick"] = pd.Categorical(rows["task"].map(TASK_TICKS), [TASK_TICKS[t] for t in reversed(BENCHMARK_TASKS)])
+    rows["tick"] = pd.Categorical(rows["task"].map(TASK_TICKS), list(TASK_TICKS.values()))
     rows["label"] = [
-        f"{rate:.0%} ({int(k):,}/{int(n):,})"
+        f"{rate:.0%}\n{int(k):,}/{int(n):,}"
         for rate, k, n in zip(
             rows["winner_disagreement_rate"], rows["n_winner_disagreements"], rows["n_protocol_pairs"], strict=True
         )
     ]
-    inside = rows["winner_disagreement_rate"] > 0.55
-    rate = rows["winner_disagreement_rate"]
-    rows["label_y"] = np.where(inside, rate - 0.02, rate + 0.02)
-    rows["label_ha"] = np.where(inside, "right", "left")
+    rows["label_y"] = rows["winner_disagreement_rate"] + 0.03
     return rows
 
 
 def disagreement_panel(disagreement: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
-    """Fraction of all eligible protocol pairs that select different winning models, per task."""
+    """Fraction of all eligible protocol pairs that select different winning models, one column per task.
+
+    Columns follow the task order of panel e, so each task's overall rate sits above its breakdown.
+    """
 
     c = colors(dark)
     rows = disagreement_data(disagreement)
     return (
         ggplot(rows, aes("tick", "winner_disagreement_rate", fill="task"))
-        + geom_col(width=0.55, show_legend=False)
-        + geom_text(aes(y="label_y", label="label", ha="label_ha"), size=SMALL_SIZE, color=c["foreground"])
+        + geom_col(width=0.6, show_legend=False)
+        + geom_text(aes(y="label_y", label="label"), va="bottom", size=SMALL_SIZE, color=c["foreground"])
         + scale_fill_manual(values=BENCHMARK_TASK_COLORS)
         + scale_y_continuous(limits=(0, 1), breaks=[0, 0.5, 1], labels=percent, expand=(0, 0))
         + scale_x_discrete(name="")
         + labs(y="Protocol pairs selecting\ndifferent winning models", tag=tag)
-        + coord_flip()
         + paper_theme(dark)
-        + theme(panel_grid_major_y=element_blank())
+        + theme(panel_grid_major_x=element_blank())
     )
 
 
@@ -359,7 +358,7 @@ def factor_data(factors: pd.DataFrame) -> pd.DataFrame:
         for k, n, s in zip(rows["n_winner_changes"], rows["n_matched_contrasts"], shown, strict=True)
     ]
     rows["row"] = pd.Categorical(rows["choice"].map(AXIS_LABELS), [AXIS_LABELS[ch] for ch in reversed(choices)])
-    rows["tick"] = pd.Categorical(rows["task"].map(SHORT_TASK_TICKS), list(SHORT_TASK_TICKS.values()))
+    rows["tick"] = pd.Categorical(rows["task"].map(TASK_TICKS), list(TASK_TICKS.values()))
     return rows
 
 
@@ -376,8 +375,8 @@ def factor_panel(factors: pd.DataFrame, *, dark: bool = False, tag: str | None =
         + geom_text(aes(label="label", color="ink"), size=SMALL_SIZE, nudge_y=0.15)
         + geom_text(aes(label="count", color="ink"), size=SMALL_SIZE - 1, nudge_y=-0.2)
     )
-    for task, tick in SHORT_TASK_TICKS.items():
-        header = pd.DataFrame({"tick": pd.Categorical([tick], list(SHORT_TASK_TICKS.values())), "y": [header_y]})
+    for task, tick in TASK_TICKS.items():
+        header = pd.DataFrame({"tick": pd.Categorical([tick], list(TASK_TICKS.values())), "y": [header_y]})
         plot += geom_tile(
             header, aes("tick", "y"), height=0.16, width=0.95, fill=BENCHMARK_TASK_COLORS[task], inherit_aes=False
         )
@@ -386,7 +385,7 @@ def factor_panel(factors: pd.DataFrame, *, dark: bool = False, tag: str | None =
         + scale_fill_gradient(low=SEQUENTIAL[0], high=SEQUENTIAL[1], limits=(0, 1), na_value=c["grid"])
         + scale_color_identity()
         + scale_y_discrete(name="")
-        + scale_x_discrete(name="Winner-change rate\nper benchmark task")
+        + scale_x_discrete(name="Winner-change rate when one\nevaluation choice changes")
         + labs(tag=tag)
         + paper_theme(dark)
         + theme(panel_grid=element_blank())

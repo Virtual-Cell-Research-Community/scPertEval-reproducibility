@@ -10,7 +10,7 @@ from analyses.manuscript_figures.evaluation_practice import (
     factor_data,
     workflow_numbers,
 )
-from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS
+from analyses.vocabulary import AXIS_LABELS, BENCHMARK_TASKS, CENSUS_TASKS
 
 TASKS = list(BENCHMARK_TASKS)
 
@@ -45,20 +45,20 @@ def test_factor_grid_keeps_every_choice_in_taxonomy_order_and_blanks_sparse_cell
     assert pd.isna(metric.loc[TASKS[1], "rate"])
 
 
-def test_long_disagreement_bars_carry_their_label_inside():
+def test_disagreement_columns_follow_the_task_order_and_census_names():
     disagreement = pd.DataFrame(
         {
-            "task": TASKS,
+            "task": list(reversed(TASKS)),
             "n_protocol_pairs": [100, 100, 100],
-            "n_winner_disagreements": [20, 50, 80],
-            "winner_disagreement_rate": [0.2, 0.5, 0.8],
+            "n_winner_disagreements": [80, 50, 20],
+            "winner_disagreement_rate": [0.8, 0.5, 0.2],
         }
     )
-    rows = disagreement_data(disagreement).set_index("task")
+    rows = disagreement_data(disagreement)
 
-    assert rows.loc[TASKS[0], "label"] == "20% (20/100)"
-    assert rows.loc[TASKS[2], "label_ha"] == "right"
-    assert rows.loc[TASKS[0], "label_ha"] == "left"
+    assert rows["task"].tolist() == TASKS
+    assert rows["tick"].tolist() == [CENSUS_TASKS[t].replace(" ", "\n").replace(",", "") for t in TASKS]
+    assert rows.loc[0, "label"] == "20%\n20/100"
 
 
 def _source_data(tmp_path: Path) -> tuple[Path, Path, Path]:

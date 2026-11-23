@@ -174,3 +174,26 @@ def test_collect_details_merges_disjoint_roots_bound_to_the_same_prediction(tmp_
         collect_details([tmp_path / "v1", tmp_path / "overlap"], families, manifest)
     with pytest.raises(ValueError, match="task manifest"):
         collect_details([tmp_path / "v1"], families, manifest)
+
+
+def test_single_contrast_counts_are_integers_even_when_pairs_hold_object_dtype():
+    from analyses.ranking_sensitivity.atlas_analysis import summarize_comparisons
+
+    pairs = pd.DataFrame(
+        {
+            "comparison_id": ["t|a|b", "t|a|c"],
+            "task": ["t", "t"],
+            "analysis_eligible": [True, False],
+            "factor": ["feature_panel", ""],
+            "level_a": ["HVG · k=2000", ""],
+            "level_b": ["All · k=all", ""],
+            "winner_changed": pd.Series([True, None], dtype=object),
+            "pairwise_reversal_fraction": [0.5, None],
+        }
+    )
+    aggregation = pd.DataFrame(columns=pairs.columns)
+
+    _, factor_summary, concrete = summarize_comparisons(pairs, aggregation)
+
+    assert concrete["n_winner_changes"].tolist() == [1]
+    assert factor_summary["n_winner_changes"].tolist() == [1]

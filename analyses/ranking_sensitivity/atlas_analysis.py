@@ -639,7 +639,10 @@ def summarize_comparisons(
     pairs: pd.DataFrame,
     aggregation_pairs: pd.DataFrame,
 ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    eligible = pairs[pairs["analysis_eligible"]].copy()
+    # Rows of ineligible pairs leave winner_changed empty, so the column arrives as object dtype; summing a
+    # single-row object group would return the bool itself (written as True/False instead of 1/0).
+    eligible = pairs[pairs["analysis_eligible"]].astype({"winner_changed": bool})
+    aggregation_pairs = aggregation_pairs.astype({"winner_changed": bool})
     task_summary = (
         eligible.groupby("task", sort=True)
         .agg(
