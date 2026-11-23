@@ -225,7 +225,9 @@ def legend_band() -> Any:
     return theme(plot_margin_bottom=LEGEND_BAND_PT / (TEXT_WIDTH_IN * 72))
 
 
-def add_task_legend(figure: Any, tasks: list[str], *, dark: bool) -> None:
+def add_task_legend(
+    figure: Any, tasks: list[str], *, dark: bool, top: float | None = None, frame: bool = False, gap_pt: float = 2.0
+) -> None:
     """One legend for both census panels, centred under them in the band kept by :func:`legend_band`.
 
     Plotnine would centre a bottom legend under one panel, where it does not fit, and a legend beside
@@ -234,13 +236,14 @@ def add_task_legend(figure: Any, tasks: list[str], *, dark: bool) -> None:
 
     from matplotlib.lines import Line2D
 
-    figure.savefig(io.BytesIO(), dpi=figure.dpi)  # run the Plotnine layout so that the axis titles are placed
-    titles = [t for t in figure.texts if t.get_text() in (SINGLE_CHOICE_TITLE, COMBINED_TITLE)]
-    if len(titles) != 2:
-        raise ValueError("the census axis titles were not found in the figure")
-    top = min(t.get_window_extent().y0 for t in titles) / (figure.get_figheight() * figure.dpi) - 2 / (
-        figure.get_figheight() * 72
-    )
+    if top is None:
+        figure.savefig(io.BytesIO(), dpi=figure.dpi)  # run the Plotnine layout so that the axis titles are placed
+        titles = [t for t in figure.texts if t.get_text() in (SINGLE_CHOICE_TITLE, COMBINED_TITLE)]
+        if len(titles) != 2:
+            raise ValueError("the census axis titles were not found in the figure")
+        top = min(t.get_window_extent().y0 for t in titles) / (figure.get_figheight() * figure.dpi) - gap_pt / (
+            figure.get_figheight() * 72
+        )
     background = colors(dark)["background"]
     handles = [
         Line2D(
@@ -261,14 +264,19 @@ def add_task_legend(figure: Any, tasks: list[str], *, dark: bool) -> None:
         loc="upper center",
         bbox_to_anchor=(0.5, top),
         ncol=3,
-        frameon=False,
+        frameon=frame,
+        fancybox=False,
+        edgecolor=colors(dark)["muted"],
+        facecolor=background,
+        framealpha=1,
         prop={"family": font_family(), "size": SMALL_SIZE},
         handlelength=1.6,
         columnspacing=1.4,
         labelspacing=0.3,
         borderaxespad=0,
-        borderpad=0,
+        borderpad=0.6 if frame else 0,
     )
+    legend.get_frame().set_linewidth(0.5)
     for text in legend.get_texts():
         text.set_color(colors(dark)["foreground"])
 
@@ -316,12 +324,15 @@ def supplementary_table(
 
 
 def to_latex(table: pd.DataFrame) -> str:
-    """Compact LaTeX table: one header row per task, then its datasets (fits the manuscript text width)."""
+    """Compact LaTeX table: one header row per task, then its datasets (fits the manuscript text width).
+
+    The last column reports disagreement (pairs sharing no protocol), as the census panels of Fig. 2 do.
+    """
 
     def cells(row) -> str:
         values = (
             f"{row.papers} & {row.protocols} & {row.single_paper_protocol_fraction:.0%} & "
-            f"{row.most_common_protocol_paper_fraction:.0%} & {row.pair_sharing:.0%} \\\\"
+            f"{row.most_common_protocol_paper_fraction:.0%} & {1 - row.pair_sharing:.0%} \\\\"
         )
         return values.replace("%", r"\%")
 
@@ -330,7 +341,7 @@ def to_latex(table: pd.DataFrame) -> str:
         r"\toprule",
         (
             r"Task and dataset & Works & Protocols & \makecell{Single-work\\protocols} & "
-            r"\makecell{Most common\\protocol} & \makecell{Pairs sharing\\$\geq 1$ protocol} \\"
+            r"\makecell{Most common\\protocol} & \makecell{Pairs sharing\\no protocol} \\"
         ),
         r"\midrule",
     ]

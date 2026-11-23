@@ -140,3 +140,27 @@ def test_census_figure_draws_one_legend_for_both_panels(tmp_path):
 
     assert len(figure.legends) == 1
     assert [t.get_text() for t in figure.legends[0].get_texts()] == groups
+
+
+def test_census_table_reports_pairs_sharing_no_protocol():
+    import pandas as pd
+
+    from analyses.protocol_diversity.figure import ALL_TASKS, to_latex
+
+    table = pd.DataFrame(
+        [
+            {
+                "task": ALL_TASKS,
+                "dataset": "All",
+                "papers": 10,
+                "protocols": 20,
+                "single_paper_protocol_fraction": 0.5,
+                "most_common_protocol_paper_fraction": 0.3,
+                "pair_sharing": 0.25,
+            }
+        ]
+    )
+    latex = to_latex(table)
+
+    assert r"Pairs sharing\\no protocol" in latex
+    assert r"All works, all tasks & 10 & 20 & 50\% & 30\% & 75\% \\" in latex
