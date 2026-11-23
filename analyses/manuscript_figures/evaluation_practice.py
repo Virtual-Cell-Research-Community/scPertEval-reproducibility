@@ -336,8 +336,10 @@ def disagreement_panel(disagreement: pd.DataFrame, *, dark: bool = False, tag: s
         + geom_text(aes(y="label_y", label="label"), va="bottom", size=SMALL_SIZE, color=c["foreground"])
         + scale_fill_manual(values=BENCHMARK_TASK_COLORS)
         + scale_y_continuous(limits=(0, 1), breaks=[0, 0.5, 1], labels=percent, expand=(0, 0))
-        + scale_x_discrete(name="")
-        + labs(y="Protocol pairs selecting\ndifferent winning models", tag=tag)
+        # The title sits under the columns, like e's: a y-axis title would sit at the far left, because
+        # Plotnine aligns this panel with the long row labels of b.
+        + scale_x_discrete(name="Protocol pairs selecting\ndifferent winning models")
+        + labs(y="", tag=tag)
         + paper_theme(dark)
         + theme(panel_grid_major_x=element_blank())
     )

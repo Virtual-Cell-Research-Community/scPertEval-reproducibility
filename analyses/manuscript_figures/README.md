@@ -52,3 +52,5 @@ uv run python -m analyses.manuscript_figures.ranking_supplement \
 
 Writes `figures/ranking-supplement/ranking-{name}-{light,dark}.{png,pdf,svg}` and
 `figure-manifest.json`. Benchmark tasks are named by their census task, as in Fig. 2.
+`ranking-winner-shares` (tag A) and `ranking-level-contrasts` (tag B) are the two panels of one
+supplementary figure; the manuscript stacks the two files so that each keeps its own height.

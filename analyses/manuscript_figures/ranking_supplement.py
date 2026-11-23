@@ -160,7 +160,7 @@ def _ink(color: str) -> str:
     return "#171717" if 0.2126 * red + 0.7152 * green + 0.0722 * blue > 0.6 else "#FFFFFF"
 
 
-def winner_share_plot(shares: pd.DataFrame, *, dark: bool = False) -> Any:
+def winner_share_plot(shares: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
     c = colors(dark)
     rows = winner_share_data(shares)
     palette = {MODEL_LABELS.get(m, m): MODEL_COLORS[m] for m in rows["model"].unique()}
@@ -175,7 +175,7 @@ def winner_share_plot(shares: pd.DataFrame, *, dark: bool = False) -> Any:
         + scale_fill_manual(values=palette, breaks=list(rows["model_label"].cat.categories), name=None)
         + scale_color_identity()
         + scale_y_continuous(limits=(0, 1), breaks=[0, 0.25, 0.5, 0.75, 1], labels=percent, expand=(0, 0))
-        + labs(x="", y="Share of protocols won by each model (tied winners share credit)")
+        + labs(x="", y="Share of protocols won by each model (tied winners share credit)", tag=tag)
         + guides(fill=guide_legend(nrow=2))
         + paper_theme(dark)
         + theme(
@@ -226,7 +226,7 @@ def contrast_data(contrasts: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     return pooled, points
 
 
-def contrast_plot(contrasts: pd.DataFrame, *, dark: bool = False) -> Any:
+def contrast_plot(contrasts: pd.DataFrame, *, dark: bool = False, tag: str | None = None) -> Any:
     c = colors(dark)
     pooled, points = contrast_data(contrasts)
     task_colors = {task_label(t): BENCHMARK_TASK_COLORS[t] for t in TASK_ORDER}
@@ -242,6 +242,7 @@ def contrast_plot(contrasts: pd.DataFrame, *, dark: bool = False) -> Any:
             x="Matched protocol pairs selecting a different winner\n"
             "(grey bar: all tasks; points: tasks with ≥ 3 pairs; numbers: winner changes / pairs)",
             y="",
+            tag=tag,
         )
         + paper_theme(dark)
         + theme(
@@ -309,12 +310,17 @@ def bump_plots(source: Path, *, dark: bool = False, eligibility: Path = ELIGIBIL
 
 
 FIGURES = {
-    "winner-shares": (lambda source, dark: winner_share_plot(_read(source, "winner-shares.csv"), dark=dark), 2.5),
-    "level-contrasts": (
-        lambda source, dark: contrast_plot(_read(source, "concrete-factor-contrasts.csv"), dark=dark),
-        5.2,
+    # Panels A and B of one supplementary figure; LaTeX stacks the two files, so that each keeps its own
+    # height (a Plotnine composition would give both the same panel height).
+    "winner-shares": (
+        lambda source, dark: winner_share_plot(_read(source, "winner-shares.csv"), dark=dark, tag="A"),
+        2.3,
     ),
-    "bump-examples": (lambda source, dark: bump_plots(source, dark=dark), 6.2),
+    "level-contrasts": (
+        lambda source, dark: contrast_plot(_read(source, "concrete-factor-contrasts.csv"), dark=dark, tag="B"),
+        5.0,
+    ),
+    "bump-examples": (lambda source, dark: bump_plots(source, dark=dark), 4.2),
 }
 
 
