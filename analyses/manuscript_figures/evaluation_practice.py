@@ -115,8 +115,8 @@ def _span(values: list[int]) -> str:
     return f"{values[0]}" if values[0] == values[-1] else f"{values[0]}–{values[-1]}"
 
 
-WorkflowBox = tuple[float, str, str, list[tuple[str, str]]]
-"""(x, lane, title, rows): horizontal centre in axes coordinates, ``main``/``upper``/``lower`` lane,
+WorkflowBox = tuple[int, str, str, list[tuple[str, str]]]
+"""(column, lane, title, rows): column 0–3 from left to right, ``main``/``upper``/``lower`` lane,
 bold title, and (number, label) rows."""
 
 
@@ -125,7 +125,7 @@ def workflow_boxes(n: dict[str, Any]) -> list[WorkflowBox]:
 
     return [
         (
-            0.115,
+            0,
             "main",
             "Literature corpus",
             [
@@ -136,7 +136,7 @@ def workflow_boxes(n: dict[str, Any]) -> list[WorkflowBox]:
             ],
         ),
         (
-            0.34,
+            1,
             "main",
             "Taxonomy annotation",
             [
@@ -145,13 +145,13 @@ def workflow_boxes(n: dict[str, Any]) -> list[WorkflowBox]:
             ],
         ),
         (
-            0.605,
+            2,
             "upper",
             "Census (B, C)",
             [(f"{n['census_tasks']}", "prediction tasks"), (f"≥ {MIN_CENSUS_TASK_WORKS}", "works per task")],
         ),
         (
-            0.605,
+            2,
             "lower",
             "scPertEval",
             [
@@ -160,7 +160,7 @@ def workflow_boxes(n: dict[str, Any]) -> list[WorkflowBox]:
             ],
         ),
         (
-            0.87,
+            3,
             "lower",
             "Ranking sensitivity (D, E)",
             [
@@ -179,8 +179,17 @@ WORKFLOW_TITLE_GAP_PT = 3.0
 WORKFLOW_LINE_PT = SMALL_SIZE * 1.35
 WORKFLOW_LANE_GAP_PT = 10.0
 """Vertical space between the upper and the lower lane."""
-WORKFLOW_HALF_WIDTH = 0.105
+WORKFLOW_HALF_WIDTH = 0.1025
 """Half box width in axes coordinates (the axes span the full text width)."""
+WORKFLOW_COLUMN_GAP = 0.05
+"""Horizontal space between neighbouring columns, which every arrow spans; axes coordinates."""
+WORKFLOW_LEFT = 0.015
+WORKFLOW_SIDE_PAD_PT = 3.0
+"""Minimum space between a box edge and its widest line."""
+
+
+def workflow_column_x(column: int) -> float:
+    return WORKFLOW_LEFT + WORKFLOW_HALF_WIDTH + column * (2 * WORKFLOW_HALF_WIDTH + WORKFLOW_COLUMN_GAP)
 
 
 def workflow_box_height_pt(n_rows: int) -> float:
@@ -233,8 +242,9 @@ def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[
     }
     text = {"family": font_family(), "color": c["foreground"]}
     edges = []
-    for x, lane, title, rows in boxes:
-        y = lane_y[lane]
+    title_font = FontProperties(family=font_family(), size=WORKFLOW_TITLE_PT, weight="bold")
+    for column_index, lane, title, rows in boxes:
+        x, y = workflow_column_x(column_index), lane_y[lane]
         half_h = workflow_box_height_pt(len(rows)) / 2 / height_pt
         edges.append((x - WORKFLOW_HALF_WIDTH, x + WORKFLOW_HALF_WIDTH, y))
         ax.add_patch(
@@ -252,7 +262,11 @@ def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[
         ax.text(x, top, title, ha="center", va="top", fontsize=WORKFLOW_TITLE_PT, fontweight="bold", **text)
         number_w = max(width(number) for number, _ in rows)
         label_w = max(width(label) for _, label in rows)
-        column = x - (number_w + space_pt / width_pt + label_w) / 2 + number_w
+        table_w = number_w + space_pt / width_pt + label_w
+        title_w = text_to_path.get_text_width_height_descent(title, title_font, ismath=False)[0] / width_pt
+        if max(table_w, title_w) + 2 * WORKFLOW_SIDE_PAD_PT / width_pt > 2 * WORKFLOW_HALF_WIDTH:
+            raise ValueError(f"the text of workflow box {title!r} is wider than the box")
+        column = x - table_w / 2 + number_w
         first = top - (WORKFLOW_TITLE_PT + WORKFLOW_TITLE_GAP_PT) / height_pt
         for i, (number, label) in enumerate(rows):
             row_y = first - (i + 0.5) * WORKFLOW_LINE_PT / height_pt
