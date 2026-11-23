@@ -72,7 +72,7 @@ SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit.csv"
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
 DEFAULT_OUTPUT = Path("figures/evaluation-practice")
-FIGURE_HEIGHT_IN = 6.2
+FIGURE_HEIGHT_IN = 6.4
 WORKFLOW_TOP_PT = 2.0
 """Figure margin above the workflow (panel a)."""
 WORKFLOW_MARGIN_PT = 3.0

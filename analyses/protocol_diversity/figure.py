@@ -97,7 +97,7 @@ FULL_PROTOCOL = "full_protocol"
 """Row key for protocols compared on every evaluation choice (the last cumulative level)."""
 SINGLE_CHOICE_TITLE = "Pairs of works that disagree\non this choice alone"
 COMBINED_TITLE = "Pairs of works that disagree on\nany of the choices combined so far"
-LEGEND_BAND_PT = 24.0
+LEGEND_BAND_PT = 42.0
 """Height reserved below the census panels for the shared task legend."""
 FULL_PROTOCOL_GAP = 0.4
 """Extra vertical space that separates the full-protocol row from the evaluation-choice rows."""
@@ -226,7 +226,7 @@ def legend_band() -> Any:
 
 
 def add_task_legend(
-    figure: Any, tasks: list[str], *, dark: bool, top: float | None = None, frame: bool = False, gap_pt: float = 2.0
+    figure: Any, tasks: list[str], *, dark: bool, top: float | None = None, frame: bool = True, gap_pt: float = 9.0
 ) -> None:
     """One legend for both census panels, centred under them in the band kept by :func:`legend_band`.
 
@@ -367,7 +367,7 @@ def census_figure(source: Path, *, dark: bool) -> Any:
     panels = (single_choice_panel(agreement, decay, dark=dark, tag="a") + band) | (
         combined_panel(decay, dark=dark, tag="b") + band
     )
-    figure = (panels & theme(figure_size=(TEXT_WIDTH_IN, 3.0), dpi=300)).draw()
+    figure = (panels & theme(figure_size=(TEXT_WIDTH_IN, 3.2), dpi=300)).draw()
     figure.set_facecolor(colors(dark)["background"])
     add_task_legend(figure, task_order(decay["group"]), dark=dark)
     return figure
