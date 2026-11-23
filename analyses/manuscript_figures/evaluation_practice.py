@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import io
 import json
 from pathlib import Path
 from typing import Any
@@ -28,7 +27,9 @@ from typing import Any
 import matplotlib as mpl
 import numpy as np
 import pandas as pd
+from matplotlib.font_manager import FontProperties
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
+from matplotlib.textpath import text_to_path
 from plotnine import (
     aes,
     coord_flip,
@@ -46,7 +47,6 @@ from plotnine import (
     scale_y_discrete,
     theme,
 )
-from plotnine.composition import plot_spacer
 
 from analyses.figure_style import (
     BENCHMARK_TASK_COLORS,
@@ -66,7 +66,13 @@ SCOPE_AUDIT = REPO_ROOT / "configs/evaluation/atlas-protocol-scope-audit.csv"
 MIN_FACTOR_CONTRASTS = 10
 MIN_CENSUS_TASK_WORKS = 20
 DEFAULT_OUTPUT = Path("figures/evaluation-practice")
-FIGURE_HEIGHT_IN = 6.3
+FIGURE_HEIGHT_IN = 5.9
+WORKFLOW_TOP_PT = 2.0
+"""Figure margin above the workflow (panel a)."""
+WORKFLOW_MARGIN_PT = 3.0
+"""Space above and below the workflow boxes inside panel a."""
+WORKFLOW_GAP_PT = 6.0
+"""Space between panel a and the tags of panels b and c."""
 SEQUENTIAL = ("#F2F0F7", "#54278F")
 """Single-hue sequential ramp (purple) for winner-change rates; distinct from every task hue."""
 
@@ -109,63 +115,132 @@ def _span(values: list[int]) -> str:
     return f"{values[0]}" if values[0] == values[-1] else f"{values[0]}–{values[-1]}"
 
 
-def workflow_boxes(n: dict[str, Any]) -> list[tuple[float, float, str, str]]:
-    """(x, y, title, body) in axes coordinates; two branches leave the annotation step."""
+WorkflowBox = tuple[float, str, str, list[tuple[str, str]]]
+"""(x, lane, title, rows): horizontal centre in axes coordinates, ``main``/``upper``/``lower`` lane,
+bold title, and (number, label) rows."""
+
+
+def workflow_boxes(n: dict[str, Any]) -> list[WorkflowBox]:
+    """The five workflow steps; the annotation step branches into an upper and a lower lane."""
 
     return [
         (
             0.115,
-            0.5,
+            "main",
             "Literature corpus",
-            (
-                f"{n['works']} works\n{n['model_papers']} model papers\n{n['benchmarks']} benchmarks\n"
-                f"{n['competitions']} competitions"
-            ),
+            [
+                (f"{n['works']}", "works"),
+                (f"{n['model_papers']}", "model papers"),
+                (f"{n['benchmarks']}", "benchmarks"),
+                (f"{n['competitions']}", "competitions"),
+            ],
         ),
         (
             0.34,
-            0.5,
+            "main",
             "Taxonomy annotation",
-            (
-                f"Controlled vocabulary\n{n['protocol_records']:,} protocol records\n"
-                f"{n['distinct_protocols']} distinct protocols"
-            ),
+            [
+                (f"{n['protocol_records']:,}", "protocol records"),
+                (f"{n['distinct_protocols']:,}", "distinct protocols"),
+            ],
         ),
-        (0.605, 0.76, "Census (B, C)", f"Protocol sharing within\n{n['census_tasks']} prediction tasks"),
         (
             0.605,
-            0.24,
+            "upper",
+            "Census (B, C)",
+            [(f"{n['census_tasks']}", "prediction tasks"), (f"≥ {MIN_CENSUS_TASK_WORKS}", "works per task")],
+        ),
+        (
+            0.605,
+            "lower",
             "scPertEval",
-            f"{n['recurring_protocols']} protocols used in ≥ 2 works\n{n['implemented_protocols']} in scope, implemented",
+            [
+                (f"{n['recurring_protocols']}", "protocols used in ≥ 2 works"),
+                (f"{n['implemented_protocols']}", "in scope, implemented"),
+            ],
         ),
         (
             0.87,
-            0.24,
+            "lower",
             "Ranking sensitivity (D, E)",
-            (
-                f"{n['benchmark_tasks']} benchmark tasks\n{_span(n['models_per_task'])} models per task\n"
-                f"{_span(n['protocols_per_task'])} protocols per task"
-            ),
+            [
+                (f"{n['benchmark_tasks']}", "benchmark tasks"),
+                (_span(n["models_per_task"]), "models per task"),
+                (_span(n["protocols_per_task"]), "protocols per task"),
+            ],
         ),
     ]
 
 
+WORKFLOW_PAD_PT = 4.0
+"""Space between a box edge and its title (top) or last row (bottom)."""
+WORKFLOW_TITLE_PT = SMALL_SIZE + 0.5
+WORKFLOW_TITLE_GAP_PT = 3.0
+WORKFLOW_LINE_PT = SMALL_SIZE * 1.35
+WORKFLOW_LANE_GAP_PT = 10.0
+"""Vertical space between the upper and the lower lane."""
+WORKFLOW_HALF_WIDTH = 0.105
+"""Half box width in axes coordinates (the axes span the full text width)."""
+
+
+def workflow_box_height_pt(n_rows: int) -> float:
+    return 2 * WORKFLOW_PAD_PT + WORKFLOW_TITLE_PT + WORKFLOW_TITLE_GAP_PT + n_rows * WORKFLOW_LINE_PT
+
+
+def workflow_height_pt(boxes: list[WorkflowBox]) -> float:
+    """Height the workflow needs: the two lanes stacked, or the tallest main box if that is taller."""
+
+    def tallest(lane: str) -> float:
+        return max(workflow_box_height_pt(len(rows)) for _, box_lane, _, rows in boxes if box_lane == lane)
+
+    return max(tallest("upper") + WORKFLOW_LANE_GAP_PT + tallest("lower"), tallest("main"))
+
+
 def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[str, Any], *, dark: bool) -> None:
-    """Draw the workflow with Matplotlib into ``rect`` (figure coordinates), spanning the full text width."""
+    """Draw the workflow with Matplotlib into ``rect`` (figure coordinates), spanning the full text width.
+
+    Each box is as tall as its content. Its rows form a table centred in the box: numbers are
+    right-aligned in one column so that their digits line up, labels are left-aligned beside them.
+    """
 
     c = colors(dark)
     ax = figure.add_axes(rect)
     ax.set_axis_off()
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    half_w, half_h = 0.105, 0.2
+    width_pt, height_pt = (size * 72 for size in ax.get_window_extent().size / figure.dpi)
+    font = FontProperties(family=font_family(), size=SMALL_SIZE)
+    space_pt = text_to_path.get_text_width_height_descent("0 0", font, ismath=False)[0] - (
+        2 * text_to_path.get_text_width_height_descent("0", font, ismath=False)[0]
+    )
+
+    def width(s: str) -> float:
+        return text_to_path.get_text_width_height_descent(s, font, ismath=False)[0] / width_pt
+
     boxes = workflow_boxes(n)
-    text = {"family": font_family(), "color": c["foreground"], "ha": "center"}
-    for x, y, title, body in boxes:
+    if workflow_height_pt(boxes) > height_pt:
+        raise ValueError(
+            f"the workflow needs {workflow_height_pt(boxes):.0f} pt but its row is {height_pt:.0f} pt tall"
+        )
+    lanes = {
+        lane: max(workflow_box_height_pt(len(r)) for _, b, _, r in boxes if b == lane) for lane in ("upper", "lower")
+    }
+    stack = (lanes["upper"] + WORKFLOW_LANE_GAP_PT + lanes["lower"]) / height_pt
+    lane_y = {
+        "main": 0.5,
+        "upper": 0.5 + stack / 2 - lanes["upper"] / 2 / height_pt,
+        "lower": 0.5 - stack / 2 + lanes["lower"] / 2 / height_pt,
+    }
+    text = {"family": font_family(), "color": c["foreground"]}
+    edges = []
+    for x, lane, title, rows in boxes:
+        y = lane_y[lane]
+        half_h = workflow_box_height_pt(len(rows)) / 2 / height_pt
+        edges.append((x - WORKFLOW_HALF_WIDTH, x + WORKFLOW_HALF_WIDTH, y))
         ax.add_patch(
             FancyBboxPatch(
-                (x - half_w, y - half_h),
-                2 * half_w,
+                (x - WORKFLOW_HALF_WIDTH, y - half_h),
+                2 * WORKFLOW_HALF_WIDTH,
                 2 * half_h,
                 boxstyle="round,pad=0,rounding_size=0.012",
                 linewidth=0.6,
@@ -173,26 +248,32 @@ def draw_workflow(figure: Any, rect: tuple[float, float, float, float], n: dict[
                 facecolor=c["background"],
             )
         )
-        ax.text(x, y + half_h - 0.045, title, va="top", fontsize=SMALL_SIZE + 0.5, fontweight="bold", **text)
-        ax.text(x, y + half_h - 0.14, body, va="top", fontsize=SMALL_SIZE, linespacing=1.3, **text)
-    (
-        (corpus_x, corpus_y, *_),
-        (annot_x, annot_y, *_),
-        (census_x, census_y, *_),
-        (impl_x, impl_y, *_),
-        (
-            rank_x,
-            rank_y,
-            *_,
-        ),
-    ) = boxes
-    for start, end in [
-        ((corpus_x + half_w, corpus_y), (annot_x - half_w, annot_y)),
-        ((annot_x + half_w, annot_y + 0.06), (census_x - half_w, census_y)),
-        ((annot_x + half_w, annot_y - 0.06), (impl_x - half_w, impl_y)),
-        ((impl_x + half_w, impl_y), (rank_x - half_w, rank_y)),
+        top = y + half_h - WORKFLOW_PAD_PT / height_pt
+        ax.text(x, top, title, ha="center", va="top", fontsize=WORKFLOW_TITLE_PT, fontweight="bold", **text)
+        number_w = max(width(number) for number, _ in rows)
+        label_w = max(width(label) for _, label in rows)
+        column = x - (number_w + space_pt / width_pt + label_w) / 2 + number_w
+        first = top - (WORKFLOW_TITLE_PT + WORKFLOW_TITLE_GAP_PT) / height_pt
+        for i, (number, label) in enumerate(rows):
+            row_y = first - (i + 0.5) * WORKFLOW_LINE_PT / height_pt
+            ax.text(column, row_y, number, ha="right", va="center_baseline", fontsize=SMALL_SIZE, **text)
+            ax.text(
+                column + space_pt / width_pt, row_y, label, ha="left", va="center_baseline", fontsize=SMALL_SIZE, **text
+            )
+
+    corpus, annotation, census, implemented, ranking = edges
+    branch = 0.3 * (lane_y["upper"] - lane_y["main"])
+    for (_, start_x, start_y), (end_x, _, end_y) in [
+        (corpus, annotation),
+        ((None, annotation[1], annotation[2] + branch), census),
+        ((None, annotation[1], annotation[2] - branch), implemented),
+        (implemented, ranking),
     ]:
-        ax.add_patch(FancyArrowPatch(start, end, arrowstyle="-|>", mutation_scale=6, linewidth=0.6, color=c["muted"]))
+        ax.add_patch(
+            FancyArrowPatch(
+                (start_x, start_y), (end_x, end_y), arrowstyle="-|>", mutation_scale=6, linewidth=0.6, color=c["muted"]
+            )
+        )
     figure.text(
         0.005,
         rect[1] + rect[3],
@@ -298,25 +379,32 @@ def factor_panel(factors: pd.DataFrame, *, dark: bool = False, tag: str | None =
 def evaluation_practice_figure(
     census: Path, ranking: Path, *, dark: bool = False, scope_audit: Path = SCOPE_AUDIT
 ) -> Any:
-    """Draw the figure and return the Matplotlib figure (panel a is drawn onto a spacer row)."""
+    """Draw the figure and return the Matplotlib figure.
+
+    Plotnine gives every row of a composition the same panel height, so panel a cannot be a
+    (shorter) spacer row. Instead, panels b and c reserve a top margin exactly as tall as the
+    workflow, and the workflow is drawn into it after the Plotnine layout has run.
+    """
 
     decay = pd.read_csv(census / "consensus-decay.csv")
     agreement = pd.read_csv(census / "single-choice-agreement.csv")
     disagreement = pd.read_csv(ranking / "task-protocol-disagreement.csv")
     factors = pd.read_csv(ranking / "factor-sensitivity.csv")
-    census_row = decay_panel(decay, dark=dark, tag="B") | axis_panel(agreement, dark=dark, tag="C", show_labels=False)
-    ranking_row = disagreement_panel(disagreement, dark=dark, tag="D") | factor_panel(factors, dark=dark, tag="E")
-    composition = (plot_spacer() / census_row / ranking_row) + theme(
-        figure_size=(TEXT_WIDTH_IN, FIGURE_HEIGHT_IN), dpi=300
+    numbers = workflow_numbers(census, ranking, scope_audit)
+    workflow_pt = workflow_height_pt(workflow_boxes(numbers)) + 2 * WORKFLOW_MARGIN_PT
+    # Plotnine 0.15 measures plot margins as a fraction of the figure width.
+    reserve = theme(plot_margin_top=(WORKFLOW_TOP_PT + workflow_pt + WORKFLOW_GAP_PT) / (TEXT_WIDTH_IN * 72))
+    census_row = (decay_panel(decay, dark=dark, tag="B") + reserve) | (
+        axis_panel(agreement, dark=dark, tag="C", show_labels=False) + reserve
     )
+    ranking_row = disagreement_panel(disagreement, dark=dark, tag="D") | factor_panel(factors, dark=dark, tag="E")
+    # Every plot gets the figure size: Plotnine converts plot margins with each plot's own size.
+    composition = (census_row / ranking_row) & theme(figure_size=(TEXT_WIDTH_IN, FIGURE_HEIGHT_IN), dpi=300)
     figure = composition.draw()
     figure.set_facecolor(colors(dark)["background"])
-    spacer, *panels = figure.axes
-    spacer.set_visible(False)
-    figure.savefig(io.BytesIO(), dpi=300)  # run the Plotnine layout at output resolution to read panel positions
-    top = max(ax.get_position().y1 for ax in panels) + 0.035  # leave room for the panel tags of b and c
-    numbers = workflow_numbers(census, ranking, scope_audit)
-    draw_workflow(figure, (0.0, top, 1.0, 0.995 - top), numbers, dark=dark)
+    height_pt = FIGURE_HEIGHT_IN * 72
+    bottom = 1 - (WORKFLOW_TOP_PT + workflow_pt) / height_pt
+    draw_workflow(figure, (0.0, bottom, 1.0, workflow_pt / height_pt), numbers, dark=dark)
     return figure
 
 

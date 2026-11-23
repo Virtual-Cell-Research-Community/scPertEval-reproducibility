@@ -29,6 +29,9 @@ Writes `figures/evaluation-practice/evaluation-practice-{light,dark}.{png,pdf,sv
 and `figure-manifest.json` (the workflow numbers and SHA-256 of every input).
 The light PDF is the manuscript asset.
 
-Panel a is drawn with Matplotlib into the empty top row after the Plotnine
-layout has run, so that the workflow can use the full text width instead of
-being aligned to the panels below.
+Panel a is drawn with Matplotlib after the Plotnine layout has run, so that the
+workflow can use the full text width instead of being aligned to the panels
+below. Plotnine gives every row of a composition the same panel height, so panel
+a is not a spacer row: panels b and c reserve a top margin as tall as the
+workflow needs. Each workflow box is as tall as its rows, and its numbers are
+right-aligned in one column.
