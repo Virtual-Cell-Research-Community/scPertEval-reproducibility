@@ -374,8 +374,11 @@ def _spread_labels(values: list[float], *, minimum: float, maximum: float, gap: 
     return restored.tolist()
 
 
-def _bump_plot(rows: pd.DataFrame, *, dark: bool, tag: str) -> Any:
+def _bump_plot(rows: pd.DataFrame, *, dark: bool, tag: str, highlight_baselines: bool = True) -> Any:
+    """Ranks under two protocols; winners are coloured and labelled, and baselines too unless disabled."""
+
     colors = _colors(dark)
+    baselines = BASELINES if highlight_baselines else set()
     rows = rows.sort_values("rank_a").copy()
     first = rows.iloc[0]
     winners = set(rows.loc[rows["winner_a"].astype(bool), "model"]) | set(
@@ -386,10 +389,10 @@ def _bump_plot(rows: pd.DataFrame, *, dark: bool, tag: str) -> Any:
         lambda model: MODEL_COLORS.get(model, colors["muted"]) if model in winners else colors["muted"]
     )
     rows["line_size"] = rows["model"].map(
-        lambda model: 1.15 if model in winners else 0.55 if model in BASELINES else 0.35
+        lambda model: 1.15 if model in winners else 0.55 if model in baselines else 0.35
     )
     rows["line_alpha"] = rows["model"].map(
-        lambda model: 1.0 if model in winners else 0.8 if model in BASELINES else 0.4
+        lambda model: 1.0 if model in winners else 0.8 if model in baselines else 0.4
     )
     segments = rows.assign(x=0.0, xend=1.0)
     points = pd.concat(
@@ -399,7 +402,7 @@ def _bump_plot(rows: pd.DataFrame, *, dark: bool, tag: str) -> Any:
         ],
         ignore_index=True,
     )
-    labelled = rows[rows["model"].isin(winners | BASELINES)].copy()
+    labelled = rows[rows["model"].isin(winners | baselines)].copy()
     labelled["left_y"] = _spread_labels(labelled["rank_a"].tolist(), minimum=1, maximum=maximum)
     labelled["right_y"] = _spread_labels(labelled["rank_b"].tolist(), minimum=1, maximum=maximum)
     left_labels = labelled.assign(
