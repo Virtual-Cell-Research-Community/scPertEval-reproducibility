@@ -54,3 +54,27 @@ Writes `figures/ranking-supplement/ranking-{name}-{light,dark}.{png,pdf,svg}` an
 `figure-manifest.json`. Benchmark tasks are named by their census task, as in Fig. 2.
 `ranking-winner-shares` (tag A) and `ranking-level-contrasts` (tag B) are the two panels of one
 supplementary figure; the manuscript stacks the two files so that each keeps its own height.
+
+## Protocol-behavior tables and figures (`protocol_behavior.py`)
+
+| Figure | Manuscript | Source data |
+|---|---|---|
+| `drf-table-mean` | Main-text table of dynamic range fraction (DRF) per protocol and analysis unit (`tab:drf-empirical`) | `drf_table_mean.csv` |
+| `drf-table-median` | The same table with the median over perturbations | `drf_table_median.csv` |
+| `deg-method-comparison` | Supplementary figure: (A) concordance at k between Welch t-test and MWU rankings, (B) Jaccard index between DEG sets (`fig:deg-comparison`) | `deg_concordance.csv`, `deg_jaccard_with_counts.csv` |
+| `runtime-table` | Supplementary runtime table | `metric_timing_table.csv` |
+| `deg-set-sizes.tex` | Supplementary table of median DEG-set sizes (`tab:deg-set-sizes`) | `deg_jaccard_with_counts.csv` |
+
+The source CSVs are the `figures/` folder of the production-v2 result of
+`analyses/protocol_behavior`. The configuration columns of the DRF table come from
+scPertEval's concrete protocols and default calibration controls, and are also
+written to `protocol-configuration.csv`.
+
+```bash
+uv run python -m analyses.manuscript_figures.protocol_behavior \
+  --source /path/to/production-v2/figures
+```
+
+Writes `figures/protocol-behavior-manuscript/{name}-{light,dark}.{png,pdf}`,
+`deg-set-sizes.tex`, `protocol-configuration.csv` and `figure-manifest.json`
+(SHA-256 of every input). The light PDFs are the manuscript assets.
